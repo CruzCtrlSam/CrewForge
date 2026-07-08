@@ -64,12 +64,13 @@ button {
 }
 
 .gate-brand img {
-  width: 96px;
-  height: 96px;
+  width: min(520px, 100%);
+  height: auto;
   object-fit: contain;
   border: 2px solid var(--line);
   border-radius: 8px;
   background: #fff;
+  padding: 10px;
 }
 
 .eyebrow {
@@ -187,7 +188,7 @@ h3 {
 
 .brand-logo {
   object-fit: contain;
-  background: #fff;
+  background: #111820;
   border: 1px solid rgba(240, 166, 26, 0.45);
 }
 
@@ -414,11 +415,16 @@ textarea {
 }
 
 .add-worker-grid,
-.people-form {
+.people-form,
+.crew-add-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
   gap: 12px;
   align-items: end;
+}
+
+.crew-add-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(160px, 0.7fr) minmax(150px, 0.6fr) auto;
 }
 
 .foreman-panel .add-worker-grid {

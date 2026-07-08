@@ -1,4 +1,4 @@
-const STORAGE_KEY = "valor-ops-demo-v6";
+const STORAGE_KEY = "valor-ops-demo-v7";
 
 const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -75,6 +75,7 @@ const defaultState = {
   activeTab: "dashboard",
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
+  setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
   weeks: ["2026-07-03", "2026-07-10", "2026-07-17", "2026-07-24"],
@@ -192,6 +193,18 @@ function groupOptions() {
   return [...new Set(peopleForArea().map((person) => person.group).filter(Boolean))];
 }
 
+function crewNameForForeman(name) {
+  return `${name} Crew`;
+}
+
+function setupForemanName() {
+  const foremen = foremenForArea();
+  if (!foremen.some((person) => person.name === state.setupForeman)) {
+    state.setupForeman = foremen[0]?.name || "";
+  }
+  return state.setupForeman;
+}
+
 function sheetKey(week = state.selectedWeek, areaId = state.selectedArea) {
   return `${areaId}:${week}`;
 }
@@ -307,7 +320,7 @@ function renderGate() {
     <main class="area-gate">
       <section class="gate-header">
         <div class="gate-brand">
-          <img src="./assets/crewforge-logo.png" alt="CrewForge logo" />
+          <img src="./assets/crewforge-logo-lockup.png" alt="CrewForge logo" />
           <div>
             <p class="eyebrow">${appName}</p>
             <p class="sub">${appTagline}</p>
@@ -345,7 +358,7 @@ function renderShell() {
     <div class="shell ${isForemanMode() ? "foreman-shell" : "office-shell"}">
       <aside class="sidebar">
         <div class="brand">
-          <img class="brand-logo" src="./assets/crewforge-logo.png" alt="CrewForge logo" />
+          <img class="brand-logo" src="./assets/crewforge-app-icon.png" alt="CrewForge logo" />
           <div><strong>${appName}</strong><span>${appTagline}</span><small>${isForemanMode() ? "Foreman view" : "Office view"}</small></div>
         </div>
         <div class="area-badge">
@@ -750,25 +763,66 @@ function renderDeliverables() {
 
 function renderSetup() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
+  if (area().mode === "crew") return renderCrewSetup(admin);
+  return renderShiftSetup(admin);
+}
+
+function renderCrewSetup(admin) {
+  const foreman = setupForemanName();
+  const crew = crewNameForForeman(foreman);
+  const crewMembers = peopleForArea().filter((person) => person.group === crew);
+  const availableWorkers = peopleForArea().filter((person) => person.role !== "Foreman" && person.group !== crew);
   return `
     <section class="panel">
       <div class="split">
-        <div><h2>${t("People / Crews", "Personas / Cuadrillas")}</h2><p class="sub">Admin keeps default crews or shifts here. Foremen can still borrow a worker for one week only.</p></div>
+        <div><h2>${t("People / Crews", "Personas / Cuadrillas")}</h2><p class="sub">Select a foreman to manage the default crew assigned to that foreman.</p></div>
       </div>
       ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or crews. <span class="es">Solo Payroll/Admin puede cambiar cuadrillas permanentes.</span></div>` : ""}
+      <div class="form-grid section-gap">
+        <label>Foreman<span class="es">Mayordomo</span><select id="setupForemanSelect">${setOptions(foremenForArea().map((person) => person.name), foreman)}</select></label>
+        <label>Crew<span class="es">Cuadrilla</span><input value="${crew}" disabled /></label>
+        <label>Crew size<span class="es">Integrantes</span><input value="${crewMembers.length}" disabled /></label>
+      </div>
+      <div class="crew-add-grid section-gap">
+        <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!admin ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
+        <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!admin ? "disabled" : ""} /></label>
+        <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles.filter((role) => role !== "Foreman"), "Rodbuster")}</select></label>
+        <label class="check-label"><input id="crewNewDol" type="checkbox" ${!admin ? "disabled" : ""} /> DOL apprentice</label>
+        <button class="primary-action compact-add" id="addCrewPerson" type="button" ${!admin ? "disabled" : ""}>${t("Add", "Agregar")}</button>
+      </div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>DOL</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${crewMembers
+              .map((person) => `<tr><td><strong>${person.name}</strong></td><td>${person.role}</td><td>${person.group}</td><td>${person.dol ? "Yes" : "No"}</td><td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!admin ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td></tr>`)
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderShiftSetup(admin) {
+  return `
+    <section class="panel">
+      <div class="split">
+        <div><h2>${t("People / Shifts", "Personas / Turnos")}</h2><p class="sub">Admin keeps default day or night shift assignments here.</p></div>
+      </div>
+      ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or shifts. <span class="es">Solo Payroll/Admin puede cambiar turnos permanentes.</span></div>` : ""}
       <div class="people-form section-gap">
         <label>Name<span class="es">Nombre</span><input id="personName" ${!admin ? "disabled" : ""} /></label>
         <label>Role<span class="es">Puesto</span><select id="personRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
-        <label>${area().mode === "crew" ? "Default crew" : "Default shift"}<span class="es">${area().mode === "crew" ? "Cuadrilla" : "Turno"}</span><select id="personGroup" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
-        <label class="check-label ${area().dol ? "" : "hidden"}"><input id="personDol" type="checkbox" ${!admin ? "disabled" : ""} /> DOL apprentice</label>
+        <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
         <button class="primary-action" id="savePerson" type="button" ${!admin ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>${area().mode === "crew" ? "Crew" : "Shift"}</th>${area().dol ? "<th>DOL</th>" : ""}<th>Week action</th></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Actions</th></tr></thead>
           <tbody>
             ${peopleForArea()
-              .map((person) => `<tr><td><strong>${person.name}</strong></td><td>${person.role}</td><td>${person.group}</td>${area().dol ? `<td>${person.dol ? "Yes" : ""}</td>` : ""}<td><button class="text-button table-button" data-add-person="${person.name}" type="button">Add to week</button></td></tr>`)
+              .map((person) => `<tr><td><strong>${person.name}</strong></td><td>${person.role}</td><td>${person.group || ""}</td><td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!admin || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td></tr>`)
               .join("")}
           </tbody>
         </table>
@@ -835,8 +889,16 @@ function bindTabEvents() {
   if ($("submitSheet")) $("submitSheet").addEventListener("click", submitSheet);
   if ($("duplicateWeek")) $("duplicateWeek").addEventListener("click", duplicateWeek);
   if ($("savePerson")) $("savePerson").addEventListener("click", savePerson);
+  if ($("addCrewPerson")) $("addCrewPerson").addEventListener("click", addCrewPerson);
   if ($("saveJob")) $("saveJob").addEventListener("click", saveJob);
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
+  if ($("setupForemanSelect")) {
+    $("setupForemanSelect").addEventListener("change", (event) => {
+      state.setupForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
 
   document.querySelectorAll("[data-add-person]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -857,6 +919,14 @@ function bindTabEvents() {
       render();
       showToast(`${name} removed from this week`);
     });
+  });
+
+  document.querySelectorAll("[data-remove-crew-person]").forEach((button) => {
+    button.addEventListener("click", () => removeCrewPerson(button.dataset.removeCrewPerson));
+  });
+
+  document.querySelectorAll("[data-remove-person]").forEach((button) => {
+    button.addEventListener("click", () => removePerson(button.dataset.removePerson));
   });
 
   document.querySelectorAll("[data-prod]").forEach((input) => {
@@ -919,6 +989,59 @@ function addPersonRow(person, borrowed) {
   saveState();
   render();
   showToast(`${person.name} added to this week only`);
+}
+
+function addCrewPerson() {
+  const foreman = setupForemanName();
+  const crew = crewNameForForeman(foreman);
+  const selectedName = $("crewExistingWorker")?.value;
+  const newName = $("crewNewName")?.value.trim();
+  let person = selectedName ? personByName(selectedName) : null;
+
+  if (!person && newName) {
+    person = {
+      name: newName,
+      role: $("crewNewRole").value,
+      area: state.selectedArea,
+      group: crew,
+      dol: $("crewNewDol")?.checked || false
+    };
+    state.people.push(person);
+  } else if (person) {
+    person.group = crew;
+    person.area = state.selectedArea;
+    person.role = person.role === "Foreman" ? person.role : $("crewNewRole").value || person.role;
+    person.dol = $("crewNewDol")?.checked || person.dol || false;
+  }
+
+  if (!person) {
+    showToast("Select or type a worker");
+    return;
+  }
+
+  saveState();
+  render();
+  showToast(`${person.name} added to ${crew}`);
+}
+
+function removeCrewPerson(name) {
+  const person = personByName(name);
+  if (!person || person.role === "Foreman") return;
+  if (!confirm(`Remove ${name} from this crew?`)) return;
+  person.group = "";
+  saveState();
+  render();
+  showToast(`${name} removed from crew`);
+}
+
+function removePerson(name) {
+  const person = personByName(name);
+  if (!person || person.role === "Foreman") return;
+  if (!confirm(`Delete ${name}?`)) return;
+  state.people = state.people.filter((entry) => entry.name !== name || entry.area !== state.selectedArea);
+  saveState();
+  render();
+  showToast(`${name} deleted`);
 }
 
 function addProduction() {

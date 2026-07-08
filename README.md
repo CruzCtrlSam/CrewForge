@@ -18,7 +18,9 @@ Tagline: Crew time and job progress, forged into one.
 - `index.html` - app entry point
 - `styles.css` - visual styling
 - `script.js` - app behavior and demo data
-- `assets/crewforge-logo.png` - current logo image
+- `assets/crewforge-app-icon.png` - app/sidebar icon
+- `assets/crewforge-logo-lockup.png` - full logo lockup for the opening screen
+- `assets/crewforge-logo.png` - earlier logo concept kept as a fallback asset
 - `.nojekyll` - lets GitHub Pages serve the static files directly
 
 ## Publish With GitHub Pages
