@@ -725,6 +725,26 @@ tr:last-child td {
   background: linear-gradient(90deg, var(--steel), var(--gold));
 }
 
+.production-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.production-facts span {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+  padding: 8px 10px;
+}
+
+.production-facts strong {
+  color: var(--ink);
+}
+
 .production-controls {
   display: grid;
   grid-template-columns: repeat(6, minmax(130px, 1fr));

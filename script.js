@@ -70,6 +70,33 @@ const defaultPeople = [
   ["Solar Helper", "Helper", "solarPiles", "Night Shift", false]
 ].map(([name, role, area, group, dol]) => ({ name, role, area, group, dol }));
 
+const bakersfieldControlCodes = [
+  ["AFX", "DE6 / 4-78D", 18445],
+  ["AFY", "VW5 / 96-30D", 25363],
+  ["AFZ", "RT5 / 16-30D", 4228],
+  ["AG1", "RY5 / 127-30D", 46031],
+  ["AG2", "RX5 / 5-30D", 1812],
+  ["AG3", "LW5 / 8-36D", 3285],
+  ["AG4", "DY5 / 3-60D", 6385],
+  ["AG5", "MP5 / 1-96D", 8423],
+  ["AG7", "BR5 / 24-30D", 5888]
+].map(([code, description, planned], index) => ({
+  id: `bakersfield-${code.toLowerCase()}`,
+  area: "rebarInstall",
+  foreman: index < 5 ? "Lidio Barron" : "Huguer Vazquez",
+  jobId: "bakersfield",
+  code,
+  description,
+  planned,
+  quantity: quantityFromDescription(description),
+  completedQty: 0,
+  completed: 0,
+  weekly: 0,
+  delay: "No delay",
+  delayNote: "",
+  status: "Not Started"
+}));
+
 const defaultState = {
   selectedArea: "",
   activeTab: "dashboard",
@@ -89,8 +116,7 @@ const defaultState = {
   ],
   sheets: {},
   production: [
-    { id: "p1", area: "rebarInstall", foreman: "Lidio Barron", jobId: "bakersfield", code: "AFX", description: "DE6 / 4-78D", planned: 18445, completed: 8200, weekly: 2500, delay: "No delay", delayNote: "", status: "In Progress" },
-    { id: "p2", area: "rebarInstall", foreman: "Huguer Vazquez", jobId: "bakersfield", code: "AFY", description: "VW5 / 96-30D", planned: 25363, completed: 25363, weekly: 6300, delay: "No delay", delayNote: "", status: "Complete" },
+    ...bakersfieldControlCodes,
     { id: "p3", area: "rebarFab", foreman: "Lidio Barron", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
     { id: "p4", area: "rebarFab", foreman: "Huguer Vazquez", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
     { id: "p5", area: "solarPiles", foreman: "Gregorio Izaguirre", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
@@ -103,11 +129,28 @@ let toastTimer;
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!saved) return structuredClone(defaultState);
-    return { ...structuredClone(defaultState), ...saved };
+    if (!saved) return upgradeState(structuredClone(defaultState));
+    return upgradeState({ ...structuredClone(defaultState), ...saved });
   } catch {
-    return structuredClone(defaultState);
+    return upgradeState(structuredClone(defaultState));
   }
+}
+
+function upgradeState(next) {
+  next.production = next.production || [];
+  bakersfieldControlCodes.forEach((seedItem) => {
+    const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
+    if (!exists) next.production.push(structuredClone(seedItem));
+  });
+  next.production.forEach((item) => {
+    item.quantity = productionQuantity(item);
+    if (item.completedQty === undefined) {
+      const perPiece = unitWeight(item);
+      item.completedQty = perPiece ? Math.round(((Number(item.completed) || 0) / perPiece) * 100) / 100 : 0;
+    }
+    item.completed = completedWeight(item);
+  });
+  return next;
 }
 
 function saveState() {
@@ -128,6 +171,30 @@ function money(value) {
 
 function number(value) {
   return new Intl.NumberFormat("en-US").format(Math.round(Number(value) || 0));
+}
+
+function preciseNumber(value) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function quantityFromDescription(description = "") {
+  const match = String(description).match(/\/\s*(\d+)\s*-/);
+  return match ? Number(match[1]) : 0;
+}
+
+function productionQuantity(item) {
+  return Number(item.quantity) || quantityFromDescription(item.description);
+}
+
+function unitWeight(item) {
+  const quantity = productionQuantity(item);
+  return quantity ? (Number(item.planned) || 0) / quantity : 0;
+}
+
+function completedWeight(item) {
+  const completedQty = Number(item.completedQty);
+  if (Number.isFinite(completedQty) && productionQuantity(item)) return completedQty * unitWeight(item);
+  return Number(item.completed) || 0;
 }
 
 function area() {
@@ -281,7 +348,7 @@ function productionForArea() {
 function productionTotals() {
   const items = productionForArea();
   const planned = items.reduce((sum, item) => sum + (Number(item.planned) || 0), 0);
-  const completed = items.reduce((sum, item) => sum + (Number(item.completed) || 0), 0);
+  const completed = items.reduce((sum, item) => sum + completedWeight(item), 0);
   const delayed = items.filter((item) => item.delay !== "No delay").length;
   return { planned, completed, delayed, remaining: Math.max(planned - completed, 0) };
 }
@@ -468,10 +535,10 @@ function timesheetSummaryTable(sheet) {
 function productionSummaryTable() {
   return `
     <table>
-      <thead><tr><th>Code</th><th>Job</th><th>Completed</th><th>Delay</th></tr></thead>
+      <thead><tr><th>Code</th><th>Job</th><th>Amount</th><th>Completed weight</th><th>Delay</th></tr></thead>
       <tbody>
         ${productionForArea()
-          .map((item) => `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${number(item.completed)}</td><td>${item.delay}</td></tr>`)
+          .map((item) => `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`)
           .join("")}
       </tbody>
     </table>
@@ -681,7 +748,10 @@ function renderProductionAdder() {
 }
 
 function renderProductionCard(item) {
-  const pct = item.planned ? Math.min(100, Math.round((item.completed / item.planned) * 100)) : 0;
+  const quantity = productionQuantity(item);
+  const perPiece = unitWeight(item);
+  const weightDone = completedWeight(item);
+  const pct = item.planned ? Math.min(100, Math.round((weightDone / item.planned) * 100)) : 0;
   const isFab = state.selectedArea === "rebarFab";
   const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   return `
@@ -691,9 +761,14 @@ function renderProductionCard(item) {
         <strong>${pct}%</strong>
       </header>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="production-facts">
+        <span>Total weight: <strong>${number(item.planned)} lbs</strong></span>
+        ${quantity ? `<span>Total amount: <strong>${preciseNumber(quantity)}</strong></span><span>Each: <strong>${preciseNumber(perPiece)} lbs</strong></span>` : ""}
+      </div>
       <div class="production-controls">
-        <label>Completed<span class="es">Completado</span><input data-prod="${item.id}" data-field="completed" type="number" value="${item.completed}" ${!canEdit ? "disabled" : ""} /></label>
-        <label>Weekly<span class="es">Semanal</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
+        <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
+        <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
+        <label>This week weight<span class="es">Peso semanal</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
         ${isFab ? `<label>Bundle<span class="es">Paquete</span><input data-prod="${item.id}" data-field="bundle" value="${item.bundle || ""}" ${!canEdit ? "disabled" : ""} /></label>` : ""}
         ${isFab ? `<label>Bundle status<span class="es">Estado del paquete</span><select data-prod="${item.id}" data-field="bundleStatus" ${!canEdit ? "disabled" : ""}>${setOptions(bundleStatuses, item.bundleStatus || "Cut")}</select></label>` : ""}
         <label>Delay<span class="es">Retraso</span><select data-prod="${item.id}" data-field="delay" ${!canEdit ? "disabled" : ""}>${setOptions(delayReasons, item.delay || "No delay")}</select></label>
@@ -1047,6 +1122,7 @@ function removePerson(name) {
 function addProduction() {
   const code = $("newProdCode").value.trim();
   const description = $("newProdDescription").value.trim();
+  const quantity = quantityFromDescription(description);
   if (!code || !description) {
     showToast("Add a control code and description");
     return;
@@ -1059,6 +1135,8 @@ function addProduction() {
     code,
     description,
     planned: Number($("newProdPlanned").value) || 0,
+    quantity,
+    completedQty: 0,
     completed: 0,
     weekly: 0,
     bundle: state.selectedArea === "rebarFab" ? "" : undefined,
@@ -1137,9 +1215,13 @@ function updateProductionItem(event) {
   const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
   if (!item) return;
   const field = event.target.dataset.field;
-  item[field] = ["completed", "weekly"].includes(field) ? Number(event.target.value) : event.target.value;
+  item[field] = ["completed", "completedQty", "weekly"].includes(field) ? Number(event.target.value) : event.target.value;
+  item.quantity = productionQuantity(item);
+  item.completed = completedWeight(item);
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
   saveState();
+  const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
+  if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
 }
 
 function render() {
