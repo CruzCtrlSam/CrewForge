@@ -804,6 +804,12 @@ tr:last-child td {
   margin-bottom: 14px;
 }
 
+.compact-notice {
+  margin-top: 8px;
+  margin-bottom: 0;
+  padding: 10px 12px;
+}
+
 .production-board {
   display: grid;
   gap: 12px;

@@ -794,6 +794,7 @@ function renderTimesheetRow(row, index, editable) {
 function renderProduction() {
   const canAddProduction = state.selectedRole === "Foreman" || ["Admin", "Payroll"].includes(state.selectedRole);
   const jobOptions = selectedJobs();
+  const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
   return `
     <section class="panel">
       <div class="split">
@@ -803,6 +804,7 @@ function renderProduction() {
       <div class="form-grid section-gap">
         <label>Job filter<span class="es">Filtro de trabajo</span><select id="productionJobFilter"><option value="">All jobs</option>${setOptions(jobOptions, state.selectedProductionJob, (job) => job.name, (job) => job.id)}</select></label>
       </div>
+      ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
       ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este mayordomo.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
       <div class="production-board section-gap">
@@ -813,9 +815,10 @@ function renderProduction() {
 }
 
 function renderProductionAdder() {
+  const defaultJob = state.selectedProductionJob || selectedJobs()[0]?.id || "";
   return `
     <div class="production-add-grid section-gap">
-      <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), selectedJobs()[0]?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+      <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
       <label>Control code<span class="es">Codigo</span><input id="newProdCode" placeholder="ACA" /></label>
       <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
       <label>Total amount<span class="es">Cantidad total</span><input id="newProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
@@ -1344,6 +1347,9 @@ function saveJob() {
   });
   if (areaId === state.selectedArea && !currentSheet().jobId) {
     currentSheet().jobId = id;
+  }
+  if (areaId === state.selectedArea) {
+    state.selectedProductionJob = id;
   }
   saveState();
   render();
