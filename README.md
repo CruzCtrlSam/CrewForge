@@ -22,8 +22,7 @@ Tagline: Crew time and job progress, forged into one.
 
 ## Trial Access Codes
 
-- `LIDIO` - Lidio Barron foreman view
-- `HUGUER` - Huguer Vazquez foreman view
+- `FOREMAN` - choose the foreman name after entering the code
 - `PAYROLL` - payroll review view
 - `MANAGER` - management read/review view
 - `ADMIN` - admin setup view

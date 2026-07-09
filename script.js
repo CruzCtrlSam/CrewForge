@@ -40,12 +40,11 @@ const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site sh
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
-const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Willie Vargas", "Erik", "Paul Featherhat"];
+const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
 const trialAccounts = [
-  { code: "LIDIO", name: "Lidio Barron", role: "Foreman", foreman: "Lidio Barron" },
-  { code: "HUGUER", name: "Huguer Vazquez", role: "Foreman", foreman: "Huguer Vazquez" },
+  { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
   { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
   { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
@@ -248,11 +247,28 @@ function loadState() {
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
   next.production = next.production || [];
+  next.currentForeman = normalizeForemanName(next.currentForeman);
+  next.setupForeman = normalizeForemanName(next.setupForeman);
+  next.people = (next.people || []).map((person) => ({
+    ...person,
+    name: normalizeForemanName(person.name),
+    group: normalizeCrewName(person.group)
+  }));
+  next.sheets = next.sheets || {};
+  Object.values(next.sheets).forEach((sheet) => {
+    sheet.foreman = normalizeForemanName(sheet.foreman);
+    sheet.group = normalizeCrewName(sheet.group);
+    sheet.rows = (sheet.rows || []).map((row) => ({
+      ...row,
+      employee: normalizeForemanName(row.employee)
+    }));
+  });
   bakersfieldControlCodes.forEach((seedItem) => {
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
   });
   next.production.forEach((item) => {
+    item.foreman = normalizeForemanName(item.foreman);
     item.quantity = productionQuantity(item);
     if (item.completedQty === undefined) {
       const perPiece = unitWeight(item);
@@ -307,6 +323,14 @@ function completedWeight(item) {
   const completedQty = Number(item.completedQty);
   if (Number.isFinite(completedQty) && productionQuantity(item)) return completedQty * unitWeight(item);
   return Number(item.completed) || 0;
+}
+
+function normalizeForemanName(name) {
+  return name === "Willie Vargas" ? "Wilfredo Vargas" : name;
+}
+
+function normalizeCrewName(group) {
+  return group === "Willie Vargas Crew" ? "Wilfredo Vargas Crew" : group;
 }
 
 function area() {
@@ -502,13 +526,14 @@ function renderLogin() {
         <div>
           <p class="eyebrow">Trial access</p>
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
-          <p class="sub">Use the assigned trial code so each person only opens the correct view.</p>
+          <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="Example: LIDIO" /></label>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, PAYROLL, MANAGER, ADMIN" /></label>
+        <label id="foremanLoginField">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(foremanNames, foremanNames[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
-          <span>Foreman: LIDIO or HUGUER</span>
+          <span>Foremen: FOREMAN, then choose a name</span>
           <span>Office: PAYROLL, MANAGER, or ADMIN</span>
           <span class="es">Codigos de prueba para esta demo.</span>
         </div>
@@ -530,10 +555,12 @@ function loginWithCode() {
     showToast("Code not recognized");
     return;
   }
-  state.auth = { name: account.name, role: account.role, code: account.code };
+  const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
+  const displayName = account.needsForeman ? selectedForeman : account.name;
+  state.auth = { name: displayName, role: account.role, code: account.code };
   state.selectedRole = account.role;
-  state.currentForeman = account.foreman;
-  state.setupForeman = account.foreman;
+  state.currentForeman = selectedForeman || state.currentForeman;
+  state.setupForeman = selectedForeman || state.setupForeman;
   state.selectedArea = "";
   state.activeTab = account.role === "Foreman" ? "timesheet" : "dashboard";
   saveState();
@@ -650,8 +677,9 @@ function renderShell() {
     if (auth) {
       const account = trialAccounts.find((entry) => entry.code === auth.code);
       state.selectedRole = auth.role;
-      state.currentForeman = account?.foreman || state.currentForeman;
-      state.setupForeman = account?.foreman || state.setupForeman;
+      const foreman = auth.role === "Foreman" ? auth.name : account?.foreman;
+      state.currentForeman = foreman || state.currentForeman;
+      state.setupForeman = foreman || state.setupForeman;
     }
     saveState();
     render();
