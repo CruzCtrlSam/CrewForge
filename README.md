@@ -9,9 +9,19 @@ Tagline: Crew time and job progress, forged into one.
 - Operating areas: Rebar Fabrication, Solar Piles Fabrication, Rebar Installation
 - Foreman view with simplified timesheets and production updates
 - Office view with dashboard, timesheet review, production, jobs, deliverables, and people setup
+- Trial access screen with demo codes for foreman, payroll, management, and admin views
+- Responsive layout adjustments for phone, tablet, and desktop review
 - Bilingual English/Spanish labels
 - Local demo data saved in the browser with `localStorage`
 - PDF-style export using the browser print dialog
+
+## Trial Access Codes
+
+- `LIDIO` - Lidio Barron foreman view
+- `HUGUER` - Huguer Vazquez foreman view
+- `PAYROLL` - payroll review view
+- `MANAGER` - management read/review view
+- `ADMIN` - admin setup view
 
 ## Files
 

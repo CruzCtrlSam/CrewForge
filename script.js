@@ -43,6 +43,13 @@ const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Willie Vargas", "Erik", "Paul Featherhat"];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
+const trialAccounts = [
+  { code: "LIDIO", name: "Lidio Barron", role: "Foreman", foreman: "Lidio Barron" },
+  { code: "HUGUER", name: "Huguer Vazquez", role: "Foreman", foreman: "Huguer Vazquez" },
+  { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
+  { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
+  { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
+];
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
@@ -98,6 +105,7 @@ const bakersfieldControlCodes = [
 }));
 
 const defaultState = {
+  auth: null,
   selectedArea: "",
   activeTab: "dashboard",
   selectedWeek: "2026-07-03",
@@ -137,6 +145,7 @@ function loadState() {
 }
 
 function upgradeState(next) {
+  if (next.auth === undefined) next.auth = null;
   next.production = next.production || [];
   bakersfieldControlCodes.forEach((seedItem) => {
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
@@ -296,14 +305,14 @@ function blankRow(person) {
 }
 
 function seedSheet() {
-  const firstForeman = foremenForArea()[0]?.name || "";
-  const group = groupOptions()[0] || "";
-  const workers = peopleForArea().filter((person) => person.group === group || person.name === firstForeman);
+  const foreman = foremenForArea().some((person) => person.name === state.currentForeman) ? state.currentForeman : foremenForArea()[0]?.name || "";
+  const group = area().mode === "crew" ? crewNameForForeman(foreman) : groupOptions()[0] || "";
+  const workers = peopleForArea().filter((person) => person.group === group || person.name === foreman);
   return {
     area: state.selectedArea,
     week: state.selectedWeek,
     jobId: selectedJobs()[0]?.id || "",
-    foreman: firstForeman,
+    foreman,
     group,
     status: "Draft",
     rows: workers.map(blankRow)
@@ -382,6 +391,52 @@ function setOptions(values, selected, labeler = (value) => value, valueGetter = 
   return values.map((value) => `<option value="${valueGetter(value)}" ${valueGetter(value) === selected ? "selected" : ""}>${labeler(value)}</option>`).join("");
 }
 
+function renderLogin() {
+  $("app").innerHTML = `
+    <main class="login-screen">
+      <section class="login-card">
+        <img src="./assets/crewforge-logo-lockup.png" alt="CrewForge logo" />
+        <div>
+          <p class="eyebrow">Trial access</p>
+          <h1>${t("Sign in", "Iniciar sesion")}</h1>
+          <p class="sub">Use the assigned trial code so each person only opens the correct view.</p>
+        </div>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="Example: LIDIO" /></label>
+        <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
+        <div class="trial-note">
+          <strong>Trial codes</strong>
+          <span>Foreman: LIDIO or HUGUER</span>
+          <span>Office: PAYROLL, MANAGER, or ADMIN</span>
+          <span class="es">Codigos de prueba para esta demo.</span>
+        </div>
+        <p class="sub login-limit">This is trial access for workflow testing. Real company use still needs hosted login and server-side permissions.</p>
+      </section>
+    </main>
+  `;
+  $("loginButton").addEventListener("click", loginWithCode);
+  $("accessCode").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loginWithCode();
+  });
+  $("accessCode").focus();
+}
+
+function loginWithCode() {
+  const code = $("accessCode").value.trim().toUpperCase();
+  const account = trialAccounts.find((entry) => entry.code === code);
+  if (!account) {
+    showToast("Code not recognized");
+    return;
+  }
+  state.auth = { name: account.name, role: account.role, code: account.code };
+  state.selectedRole = account.role;
+  state.currentForeman = account.foreman;
+  state.setupForeman = account.foreman;
+  state.selectedArea = "";
+  state.activeTab = account.role === "Foreman" ? "timesheet" : "dashboard";
+  saveState();
+  render();
+}
+
 function renderGate() {
   $("app").innerHTML = `
     <main class="area-gate">
@@ -395,6 +450,7 @@ function renderGate() {
         </div>
         <h1>${t("Choose operating area", "Escoja area de trabajo")}</h1>
         <p class="sub">Start simple: pick the side of the company, then fill out time, production, and reports for that area only.</p>
+        <button class="text-button gate-logout" id="gateLogout" type="button">Log out<span class="es">Salir</span></button>
       </section>
       <section class="area-grid">
         ${Object.entries(areas)
@@ -414,10 +470,19 @@ function renderGate() {
     </main>
   `;
   document.querySelectorAll("[data-area]").forEach((button) => button.addEventListener("click", () => setArea(button.dataset.area)));
+  $("gateLogout").addEventListener("click", () => {
+    state.auth = null;
+    state.selectedArea = "";
+    saveState();
+    render();
+  });
 }
 
 function renderShell() {
   ensureAreaForeman();
+  if (state.auth) {
+    state.selectedRole = state.auth.role;
+  }
   const tabs = availableTabs();
   if (!tabs.some(([id]) => id === state.activeTab)) state.activeTab = tabs[0][0];
 
@@ -436,7 +501,13 @@ function renderShell() {
           ${tabs.map(([id, en, es]) => `<button class="nav-tab ${state.activeTab === id ? "active" : ""}" data-tab="${id}" type="button">${en}<span class="es">${es}</span></button>`).join("")}
         </nav>
         <div class="sidebar-footer">
+          <div class="signed-in">
+            <span>Signed in</span>
+            <strong>${state.auth?.name || state.selectedRole}</strong>
+            <small>${state.selectedRole}</small>
+          </div>
           <button class="text-button" id="changeArea" type="button">Change area<span class="es">Cambiar area</span></button>
+          <button class="text-button" id="logout" type="button">Log out<span class="es">Salir</span></button>
           <button class="text-button" id="resetDemo" type="button">Reset demo<span class="es">Reiniciar demo</span></button>
         </div>
       </aside>
@@ -448,7 +519,7 @@ function renderShell() {
             ${isForemanMode() ? `<p class="sub">${state.currentForeman} · ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
-            <label class="select-label">Viewing as<span class="es">Viendo como</span><select id="roleSelect">${setOptions(appRoles, state.selectedRole)}</select></label>
+            <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
             <label class="select-label">Week ending<span class="es">Semana termina</span><select id="weekSelect">${setOptions(state.weeks, state.selectedWeek, (week) => week)}</select></label>
           </div>
         </header>
@@ -463,15 +534,22 @@ function renderShell() {
     saveState();
     render();
   });
-  $("resetDemo").addEventListener("click", () => {
-    state = structuredClone(defaultState);
+  $("logout").addEventListener("click", () => {
+    state.auth = null;
+    state.selectedArea = "";
     saveState();
     render();
   });
-  $("roleSelect").addEventListener("change", (event) => {
-    state.selectedRole = event.target.value;
-    const nextTabs = availableTabs();
-    if (!nextTabs.some(([id]) => id === state.activeTab)) state.activeTab = nextTabs[0][0];
+  $("resetDemo").addEventListener("click", () => {
+    const auth = state.auth;
+    state = structuredClone(defaultState);
+    state.auth = auth;
+    if (auth) {
+      const account = trialAccounts.find((entry) => entry.code === auth.code);
+      state.selectedRole = auth.role;
+      state.currentForeman = account?.foreman || state.currentForeman;
+      state.setupForeman = account?.foreman || state.setupForeman;
+    }
     saveState();
     render();
   });
@@ -1225,7 +1303,8 @@ function updateProductionItem(event) {
 }
 
 function render() {
-  if (!state.selectedArea) renderGate();
+  if (!state.auth) renderLogin();
+  else if (!state.selectedArea) renderGate();
   else renderShell();
 }
 

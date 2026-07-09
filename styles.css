@@ -5,6 +5,7 @@
   --wash: #e4e7e8;
   --panel: #ffffff;
   --field: #f0f2f3;
+  --soft: #eef1f2;
   --green: #6fb6d8;
   --green-dark: #2f6f8e;
   --blue: #6fb6d8;
@@ -40,6 +41,53 @@ button {
 
 .app {
   min-height: 100vh;
+}
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 18px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.login-card img {
+  width: min(360px, 100%);
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.trial-note {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--steel-dark);
+  padding: 12px;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.trial-note span {
+  color: var(--muted);
+}
+
+.login-limit {
+  margin-bottom: 0;
+  font-size: 0.9rem;
 }
 
 .area-gate {
@@ -250,6 +298,30 @@ h3 {
   gap: 10px;
 }
 
+.signed-in {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  padding-top: 12px;
+  color: #b7c0c7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.signed-in strong,
+.signed-in small {
+  display: block;
+}
+
+.signed-in strong {
+  margin-top: 4px;
+  color: #fff;
+  font-size: 15px;
+}
+
+.signed-in small {
+  margin-top: 2px;
+  color: var(--gold);
+}
+
 .workspace {
   min-width: 0;
   padding: 26px;
@@ -257,7 +329,7 @@ h3 {
 
 .foreman-shell .workspace {
   width: 100%;
-  min-width: 1280px;
+  min-width: 0;
 }
 
 .foreman-panel {
@@ -279,6 +351,33 @@ h3 {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.login-pill {
+  min-width: 170px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-pill strong,
+.login-pill small {
+  display: block;
+}
+
+.login-pill strong {
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.login-pill small {
+  margin-top: 2px;
+  color: var(--blue-dark);
 }
 
 .panel,
@@ -396,6 +495,11 @@ textarea {
   padding: 0;
   text-align: left;
   font-weight: 800;
+}
+
+.gate-logout {
+  color: var(--blue-dark);
+  margin-top: 8px;
 }
 
 .table-button {
@@ -825,6 +929,7 @@ tr:last-child td {
   .report-grid,
   .form-grid,
   .add-worker-grid,
+  .crew-add-grid,
   .people-form,
   .mini-grid,
   .day-grid {
@@ -841,7 +946,42 @@ tr:last-child td {
   }
 }
 
+@media (max-width: 760px) {
+  .brand {
+    align-items: flex-start;
+  }
+
+  .gate-brand {
+    display: grid;
+  }
+
+  .foreman-entry-grid {
+    min-width: 920px;
+  }
+
+  .worker-name-cell {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .production-facts {
+    display: grid;
+  }
+}
+
 @media (max-width: 560px) {
+  h1 {
+    font-size: 34px;
+  }
+
+  .login-screen {
+    padding: 14px;
+  }
+
+  .login-card {
+    padding: 16px;
+  }
+
   .workspace,
   .area-gate {
     padding: 14px;
@@ -857,6 +997,27 @@ tr:last-child td {
   .action-row > *,
   .button-group > * {
     width: 100%;
+  }
+
+  .top-actions {
+    display: grid;
+  }
+
+  .nav-tabs {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+
+  .foreman-entry-grid {
+    min-width: 840px;
+  }
+
+  input,
+  select,
+  textarea,
+  .primary-action,
+  .secondary-action,
+  .danger-action {
+    min-height: 46px;
   }
 }
 
