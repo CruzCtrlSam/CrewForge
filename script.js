@@ -38,7 +38,7 @@ const areas = {
 
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
-const jobStatuses = ["Active", "On Hold", "Complete"];
+const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
