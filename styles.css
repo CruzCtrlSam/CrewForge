@@ -511,6 +511,12 @@ textarea {
   padding: 0 11px;
 }
 
+.table-select {
+  min-height: 36px;
+  width: 150px;
+  padding: 0 9px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

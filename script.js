@@ -38,6 +38,7 @@ const areas = {
 
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
+const jobStatuses = ["Active", "On Hold", "Complete"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
@@ -1062,15 +1063,22 @@ function renderJobs() {
         <label>Job name<span class="es">Nombre del trabajo</span><input id="jobNameInput" placeholder="Project name" ${!admin ? "disabled" : ""} /></label>
         <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
         <label>Customer<span class="es">Cliente</span><input id="jobCustomerInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
-        <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(["Active", "On Hold", "Complete"], "Active")}</select></label>
+        <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, "Active")}</select></label>
         <button class="primary-action" id="saveJob" type="button" ${!admin ? "disabled" : ""}>${t("Add job", "Agregar trabajo")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Job</th><th>Area</th><th>Number</th><th>Customer</th><th>Status</th></tr></thead>
+          <thead><tr><th>Job</th><th>Area</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${state.jobs
-              .map((job) => `<tr><td><strong>${job.name}</strong></td><td>${areas[job.area]?.label || job.area}</td><td>${job.number || ""}</td><td>${job.customer || ""}</td><td><span class="tag">${job.status || "Active"}</span></td></tr>`)
+              .map((job) => `<tr>
+                <td><strong>${job.name}</strong></td>
+                <td>${areas[job.area]?.label || job.area}</td>
+                <td>${job.number || ""}</td>
+                <td>${job.customer || ""}</td>
+                <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
+                <td><button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+              </tr>`)
               .join("")}
           </tbody>
         </table>
@@ -1285,6 +1293,14 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-remove-production]").forEach((button) => {
     button.addEventListener("click", () => removeProductionItem(button.dataset.removeProduction));
+  });
+
+  document.querySelectorAll("[data-job-status]").forEach((select) => {
+    select.addEventListener("change", () => updateJobStatus(select.dataset.jobStatus, select.value));
+  });
+
+  document.querySelectorAll("[data-delete-job]").forEach((button) => {
+    button.addEventListener("click", () => deleteJob(button.dataset.deleteJob));
   });
 
   document.querySelectorAll("[data-prod]").forEach((input) => {
@@ -1523,6 +1539,39 @@ function saveJob() {
   saveState();
   render();
   showToast(`${name} added`);
+}
+
+function updateJobStatus(jobId, status) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return;
+  job.status = status;
+  if (state.selectedProductionJob === jobId && status !== "Active") {
+    state.selectedProductionJob = "";
+  }
+  saveState();
+  render();
+  showToast(`${job.name} marked ${status}`);
+}
+
+function deleteJob(jobId) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return;
+  const productionCount = state.production.filter((item) => item.jobId === jobId).length;
+  const warning = productionCount ? ` This will also remove ${productionCount} production item(s) tied to it.` : "";
+  if (!confirm(`Delete ${job.name}?${warning}`)) return;
+  state.jobs = state.jobs.filter((entry) => entry.id !== jobId);
+  state.production = state.production.filter((item) => item.jobId !== jobId);
+  Object.values(state.sheets || {}).forEach((sheet) => {
+    if (sheet.jobId === jobId) {
+      sheet.jobId = state.jobs.find((entry) => entry.area === sheet.area && (entry.status || "Active") === "Active")?.id || "";
+    }
+  });
+  if (state.selectedProductionJob === jobId) state.selectedProductionJob = "";
+  saveState();
+  render();
+  showToast(`${job.name} deleted`);
 }
 
 function duplicateWeek() {
