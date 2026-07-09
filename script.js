@@ -1,5 +1,98 @@
 const STORAGE_KEY = "valor-ops-demo-v7";
 
+/* ============================================================
+   SHARED CLOUD SYNC (Supabase)
+   Everyone using the same WORKSPACE_ID shares one live dataset,
+   so a foreman's phone in the field and the office screen stay
+   in sync. Fill in your project URL and anon key below.
+   ============================================================ */
+const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co"; // Valor / CrewForge project
+const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF"; // public (publishable) key
+const WORKSPACE_ID = "crewforge-demo";                        // one shared dataset for this demo
+
+const cloud =
+  window.supabase && SUPABASE_URL.startsWith("https://YOUR") === false
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+let cloudSaveTimer = null;
+let lastPushed = "";
+let pendingRemote = null;
+
+function pushCloud() {
+  if (!cloud) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    const snapshot = structuredClone(state);
+    lastPushed = JSON.stringify(snapshot);
+    try {
+      await cloud
+        .from("app_state")
+        .upsert({ id: WORKSPACE_ID, data: snapshot, updated_at: new Date().toISOString() });
+    } catch (err) {
+      console.warn("Cloud save failed (working offline):", err);
+    }
+  }, 500);
+}
+
+function applyRemote(remote) {
+  if (!remote) return;
+  const merged = upgradeState({ ...structuredClone(defaultState), ...remote });
+  const active = document.activeElement;
+  const isEditing =
+    active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName);
+  if (isEditing) {
+    // Don't yank the screen out from under someone who is typing;
+    // apply the update as soon as they finish (see focusout handler).
+    pendingRemote = merged;
+    return;
+  }
+  state = merged;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+}
+
+async function initCloud() {
+  if (!cloud) {
+    console.warn("Supabase not configured — running in local-only mode.");
+    return;
+  }
+  try {
+    const { data, error } = await cloud
+      .from("app_state")
+      .select("data")
+      .eq("id", WORKSPACE_ID)
+      .maybeSingle();
+    if (error) throw error;
+    if (data && data.data) applyRemote(data.data);
+    else pushCloud(); // no shared row yet: seed it with the current state
+  } catch (err) {
+    console.warn("Cloud load failed (working offline):", err);
+  }
+
+  cloud
+    .channel("app_state_" + WORKSPACE_ID)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "app_state", filter: `id=eq.${WORKSPACE_ID}` },
+      (payload) => {
+        const incoming = payload.new && payload.new.data;
+        if (!incoming) return;
+        if (JSON.stringify(incoming) === lastPushed) return; // ignore our own echo
+        applyRemote(incoming);
+      }
+    )
+    .subscribe();
+}
+
+document.addEventListener("focusout", () => {
+  if (!pendingRemote) return;
+  const next = pendingRemote;
+  pendingRemote = null;
+  state = next;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+});
+
 const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -164,6 +257,7 @@ function upgradeState(next) {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  pushCloud();
 }
 
 function $(id) {
@@ -1450,3 +1544,4 @@ function render() {
 }
 
 render();
+initCloud();
