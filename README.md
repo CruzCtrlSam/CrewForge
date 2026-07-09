@@ -14,6 +14,7 @@ Tagline: Crew time and job progress, forged into one.
 - Production entries collect both total amount and total weight, then calculate completed weight
 - Redesigned production cards with grouped setup, progress, delay, and remove actions
 - Production job filter also controls the default job for new production entries
+- Production entries can be submitted for office review
 - Bilingual English/Spanish labels
 - Local demo data saved in the browser with `localStorage`
 - PDF-style export using the browser print dialog

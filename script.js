@@ -795,6 +795,8 @@ function renderProduction() {
   const canAddProduction = state.selectedRole === "Foreman" || ["Admin", "Payroll"].includes(state.selectedRole);
   const jobOptions = selectedJobs();
   const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
+  const visibleProduction = productionForArea();
+  const submittedCount = visibleProduction.filter((item) => item.reviewStatus === "Submitted").length;
   return `
     <section class="panel">
       <div class="split">
@@ -808,8 +810,17 @@ function renderProduction() {
       ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este mayordomo.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
       <div class="production-board section-gap">
-        ${productionForArea().map(renderProductionCard).join("") || `<div class="empty-state">No production items for this job yet.<span class="es">No hay produccion para este trabajo.</span></div>`}
+        ${visibleProduction.map(renderProductionCard).join("") || `<div class="empty-state">No production items for this job yet.<span class="es">No hay produccion para este trabajo.</span></div>`}
       </div>
+      ${visibleProduction.length ? `
+        <div class="production-submit-row section-gap">
+          <div>
+            <strong>${submittedCount} of ${visibleProduction.length} submitted</strong>
+            <span class="es">${submittedCount} de ${visibleProduction.length} enviados</span>
+          </div>
+          <button class="primary-action" id="submitProduction" type="button">${t("Submit Production", "Enviar produccion")}</button>
+        </div>
+      ` : ""}
     </section>
   `;
 }
@@ -852,6 +863,7 @@ function renderProductionCard(item) {
         <div>
           <h3>${item.code} - ${item.description}</h3>
           <p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p>
+          <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
         </div>
         <div class="production-status">
           <strong data-prod-pct="${item.id}">${pct}%</strong>
@@ -1090,6 +1102,7 @@ function bindTabEvents() {
 
   if ($("addWorker")) $("addWorker").addEventListener("click", addWorkerToWeek);
   if ($("submitSheet")) $("submitSheet").addEventListener("click", submitSheet);
+  if ($("submitProduction")) $("submitProduction").addEventListener("click", submitProduction);
   if ($("duplicateWeek")) $("duplicateWeek").addEventListener("click", duplicateWeek);
   if ($("savePerson")) $("savePerson").addEventListener("click", savePerson);
   if ($("addCrewPerson")) $("addCrewPerson").addEventListener("click", addCrewPerson);
@@ -1174,6 +1187,32 @@ function submitSheet() {
   saveState();
   render();
   showToast("Week submitted");
+}
+
+function submitProduction() {
+  const items = productionForArea().filter((item) => {
+    if (["Admin", "Payroll"].includes(state.selectedRole)) return true;
+    return state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman;
+  });
+  if (!items.length) {
+    showToast("No production to submit");
+    return;
+  }
+  const stamp = new Date().toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+  items.forEach((item) => {
+    item.reviewStatus = "Submitted";
+    item.submittedAt = stamp;
+    item.submittedBy = state.auth?.name || state.currentForeman || state.selectedRole;
+  });
+  saveState();
+  render();
+  showToast("Production submitted");
 }
 
 function addWorkerToWeek() {
@@ -1297,6 +1336,7 @@ function addProduction() {
     completedQty: 0,
     completed: 0,
     weekly: 0,
+    reviewStatus: "Draft",
     bundle: state.selectedArea === "rebarFab" ? "" : undefined,
     bundleStatus: state.selectedArea === "rebarFab" ? "Cut" : undefined,
     delay: "No delay",
@@ -1380,6 +1420,9 @@ function updateProductionItem(event) {
   item.quantity = productionQuantity(item);
   item.completed = completedWeight(item);
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
+  item.reviewStatus = "Draft";
+  item.submittedAt = "";
+  item.submittedBy = "";
   saveState();
   const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
   if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
@@ -1398,6 +1441,8 @@ function updateProductionItem(event) {
   }
   const fill = document.querySelector(`[data-prod="${item.id}"]`)?.closest(".production-card")?.querySelector(".progress-fill");
   if (fill) fill.style.width = `${pct}%`;
+  const reviewTag = document.querySelector(`[data-prod-review="${item.id}"]`);
+  if (reviewTag) reviewTag.textContent = item.reviewStatus;
 }
 
 function render() {
