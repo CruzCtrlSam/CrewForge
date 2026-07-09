@@ -531,6 +531,13 @@ textarea {
   grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(160px, 0.7fr) minmax(150px, 0.6fr) auto;
 }
 
+.production-add-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(130px, 0.75fr) minmax(180px, 1fr) minmax(130px, 0.65fr) minmax(130px, 0.75fr) minmax(160px, 0.9fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
 .foreman-panel .add-worker-grid {
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(140px, 0.75fr) minmax(180px, 1fr) minmax(135px, 0.55fr) auto;
   align-items: end;
@@ -930,6 +937,7 @@ tr:last-child td {
   .form-grid,
   .add-worker-grid,
   .crew-add-grid,
+  .production-add-grid,
   .people-form,
   .mini-grid,
   .day-grid {
@@ -1005,6 +1013,36 @@ tr:last-child td {
 
   .nav-tabs {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+
+  .foreman-panel .add-worker-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+
+  .worker-add-existing {
+    grid-column: 1;
+  }
+
+  .worker-add-name {
+    grid-column: 2;
+  }
+
+  .worker-add-role {
+    grid-column: 1;
+  }
+
+  .worker-add-group {
+    grid-column: 2;
+  }
+
+  .worker-add-dol {
+    grid-column: 1;
+  }
+
+  .worker-add-button {
+    grid-column: 2;
+    width: 100%;
   }
 
   .foreman-entry-grid {

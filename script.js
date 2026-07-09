@@ -755,12 +755,12 @@ function renderWorkerAdder(editable) {
   const allWorkers = peopleForArea().map((person) => person.name);
   return `
     <div class="add-worker-grid section-gap">
-      <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="borrowWorker"><option value="">Select worker</option>${setOptions(allWorkers, "")}</select></label>
-      <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="manualWorker" placeholder="Name" /></label>
-      <label>Role<span class="es">Puesto</span><select id="manualRole">${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
-      <label>${area().mode === "crew" ? "Crew" : "Shift"}<span class="es">${area().mode === "crew" ? "Cuadrilla" : "Turno"}</span><select id="manualGroup">${setOptions(groupOptions(), currentSheet().group)}</select></label>
-      <label class="check-label ${area().dol ? "" : "hidden"}"><input id="manualDol" type="checkbox" /> DOL apprentice</label>
-      <button class="secondary-action compact-add" id="addWorker" type="button">${t("Add", "Agregar")}</button>
+      <label class="worker-add-existing">Add existing worker<span class="es">Agregar trabajador existente</span><select id="borrowWorker"><option value="">Select worker</option>${setOptions(allWorkers, "")}</select></label>
+      <label class="worker-add-name">Or type new name<span class="es">O escriba nombre nuevo</span><input id="manualWorker" placeholder="Name" /></label>
+      <label class="worker-add-role">Role<span class="es">Puesto</span><select id="manualRole">${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
+      <label class="worker-add-group">${area().mode === "crew" ? "Crew" : "Shift"}<span class="es">${area().mode === "crew" ? "Cuadrilla" : "Turno"}</span><select id="manualGroup">${setOptions(groupOptions(), currentSheet().group)}</select></label>
+      <label class="check-label worker-add-dol ${area().dol ? "" : "hidden"}"><input id="manualDol" type="checkbox" /> DOL apprentice</label>
+      <button class="secondary-action compact-add worker-add-button" id="addWorker" type="button">${t("Add", "Agregar")}</button>
     </div>
   `;
 }
@@ -814,14 +814,24 @@ function renderProduction() {
 
 function renderProductionAdder() {
   return `
-    <div class="add-worker-grid section-gap">
+    <div class="production-add-grid section-gap">
       <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), selectedJobs()[0]?.id || "", (job) => job.name, (job) => job.id)}</select></label>
       <label>Control code<span class="es">Codigo</span><input id="newProdCode" placeholder="ACA" /></label>
-      <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="Bundle, cage, batch" /></label>
-      <label>Planned total<span class="es">Total planeado</span><input id="newProdPlanned" type="number" min="0" value="0" /></label>
+      <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
+      <label>Total amount<span class="es">Cantidad total</span><input id="newProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
+      <label>Total weight<span class="es">Peso total</span><input id="newProdWeight" type="number" min="0" step="1" placeholder="18445" /></label>
       <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
       <button class="secondary-action" id="addProduction" type="button">${t("Add production", "Agregar produccion")}</button>
     </div>
+  `;
+}
+
+function productionFactsMarkup(item) {
+  const quantity = productionQuantity(item);
+  const perPiece = unitWeight(item);
+  return `
+    <span>Total weight: <strong>${number(item.planned)} lbs</strong></span>
+    ${quantity ? `<span>Total amount: <strong>${preciseNumber(quantity)}</strong></span><span>Each: <strong>${preciseNumber(perPiece)} lbs</strong></span>` : ""}
   `;
 }
 
@@ -839,11 +849,12 @@ function renderProductionCard(item) {
         <strong>${pct}%</strong>
       </header>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="production-facts">
-        <span>Total weight: <strong>${number(item.planned)} lbs</strong></span>
-        ${quantity ? `<span>Total amount: <strong>${preciseNumber(quantity)}</strong></span><span>Each: <strong>${preciseNumber(perPiece)} lbs</strong></span>` : ""}
+      <div class="production-facts" data-prod-facts="${item.id}">
+        ${productionFactsMarkup(item)}
       </div>
       <div class="production-controls">
+        <label>Total amount<span class="es">Cantidad total</span><input data-prod="${item.id}" data-field="quantity" type="number" min="0" step="1" value="${quantity || 0}" ${!canEdit ? "disabled" : ""} /></label>
+        <label>Total weight<span class="es">Peso total</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="1" value="${item.planned || 0}" ${!canEdit ? "disabled" : ""} /></label>
         <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
         <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
         <label>This week weight<span class="es">Peso semanal</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
@@ -1045,6 +1056,14 @@ function bindTabEvents() {
   if ($("addCrewPerson")) $("addCrewPerson").addEventListener("click", addCrewPerson);
   if ($("saveJob")) $("saveJob").addEventListener("click", saveJob);
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
+  if ($("newProdDescription")) {
+    $("newProdDescription").addEventListener("input", (event) => {
+      const parsedQuantity = quantityFromDescription(event.target.value);
+      if (parsedQuantity && $("newProdQuantity") && !$("newProdQuantity").value) {
+        $("newProdQuantity").value = parsedQuantity;
+      }
+    });
+  }
   if ($("setupForemanSelect")) {
     $("setupForemanSelect").addEventListener("change", (event) => {
       state.setupForeman = event.target.value;
@@ -1200,9 +1219,15 @@ function removePerson(name) {
 function addProduction() {
   const code = $("newProdCode").value.trim();
   const description = $("newProdDescription").value.trim();
-  const quantity = quantityFromDescription(description);
+  const parsedQuantity = quantityFromDescription(description);
+  const quantity = Number($("newProdQuantity").value) || parsedQuantity || 0;
+  const totalWeight = Number($("newProdWeight").value) || 0;
   if (!code || !description) {
     showToast("Add a control code and description");
+    return;
+  }
+  if (!quantity || !totalWeight) {
+    showToast("Add total amount and total weight");
     return;
   }
   state.production.push({
@@ -1212,7 +1237,7 @@ function addProduction() {
     jobId: $("newProdJob").value,
     code,
     description,
-    planned: Number($("newProdPlanned").value) || 0,
+    planned: totalWeight,
     quantity,
     completedQty: 0,
     completed: 0,
@@ -1293,13 +1318,15 @@ function updateProductionItem(event) {
   const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
   if (!item) return;
   const field = event.target.dataset.field;
-  item[field] = ["completed", "completedQty", "weekly"].includes(field) ? Number(event.target.value) : event.target.value;
+  item[field] = ["completed", "completedQty", "weekly", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
   item.quantity = productionQuantity(item);
   item.completed = completedWeight(item);
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
   saveState();
   const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
   if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
+  const facts = document.querySelector(`[data-prod-facts="${item.id}"]`);
+  if (facts) facts.innerHTML = productionFactsMarkup(item);
 }
 
 function render() {
