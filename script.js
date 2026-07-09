@@ -888,10 +888,9 @@ function renderProductionCard(item) {
         </div>
         <div class="production-fieldset">
           <h4>Progress<span class="es">Avance</span></h4>
-          <div class="production-fields three-up">
+          <div class="production-fields two-up">
             <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
             <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
-            <label>Weight completed this week<span class="es">Peso terminado esta semana</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
           </div>
         </div>
         ${isFab ? `
@@ -1335,7 +1334,6 @@ function addProduction() {
     quantity,
     completedQty: 0,
     completed: 0,
-    weekly: 0,
     reviewStatus: "Draft",
     bundle: state.selectedArea === "rebarFab" ? "" : undefined,
     bundleStatus: state.selectedArea === "rebarFab" ? "Cut" : undefined,
@@ -1416,7 +1414,7 @@ function updateProductionItem(event) {
   const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
   if (!item) return;
   const field = event.target.dataset.field;
-  item[field] = ["completed", "completedQty", "weekly", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
+  item[field] = ["completed", "completedQty", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
   item.quantity = productionQuantity(item);
   item.completed = completedWeight(item);
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";

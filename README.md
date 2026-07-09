@@ -11,7 +11,7 @@ Tagline: Crew time and job progress, forged into one.
 - Office view with dashboard, timesheet review, production, jobs, deliverables, and people setup
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
-- Production entries collect both total amount and total weight, then calculate completed weight
+- Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Redesigned production cards with grouped setup, progress, delay, and remove actions
 - Production job filter also controls the default job for new production entries
 - Production entries can be submitted for office review
