@@ -12,6 +12,7 @@ Tagline: Crew time and job progress, forged into one.
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Production entries collect both total amount and total weight, then calculate completed weight
+- Redesigned production cards with grouped setup, progress, delay, and remove actions
 - Bilingual English/Spanish labels
 - Local demo data saved in the browser with `localStorage`
 - PDF-style export using the browser print dialog

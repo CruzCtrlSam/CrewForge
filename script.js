@@ -840,28 +840,64 @@ function renderProductionCard(item) {
   const perPiece = unitWeight(item);
   const weightDone = completedWeight(item);
   const pct = item.planned ? Math.min(100, Math.round((weightDone / item.planned) * 100)) : 0;
+  const remaining = Math.max((Number(item.planned) || 0) - weightDone, 0);
   const isFab = state.selectedArea === "rebarFab";
   const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   return `
     <article class="production-card">
-      <header>
-        <div><h3>${item.code} - ${item.description}</h3><p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p></div>
-        <strong>${pct}%</strong>
+      <header class="production-card-header">
+        <div>
+          <h3>${item.code} - ${item.description}</h3>
+          <p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p>
+        </div>
+        <div class="production-status">
+          <strong data-prod-pct="${item.id}">${pct}%</strong>
+          <span data-prod-progress-text="${item.id}">${number(weightDone)} / ${number(item.planned)} lbs</span>
+        </div>
       </header>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="production-equation" data-prod-equation="${item.id}">
+        ${quantity ? `${preciseNumber(quantity)} total x ${preciseNumber(perPiece)} lbs each = ${number(item.planned)} lbs` : `Total weight: ${number(item.planned)} lbs`}
+      </div>
       <div class="production-facts" data-prod-facts="${item.id}">
         ${productionFactsMarkup(item)}
+        <span>Remaining: <strong data-prod-remaining="${item.id}">${number(remaining)} lbs</strong></span>
       </div>
-      <div class="production-controls">
-        <label>Total amount<span class="es">Cantidad total</span><input data-prod="${item.id}" data-field="quantity" type="number" min="0" step="1" value="${quantity || 0}" ${!canEdit ? "disabled" : ""} /></label>
-        <label>Total weight<span class="es">Peso total</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="1" value="${item.planned || 0}" ${!canEdit ? "disabled" : ""} /></label>
-        <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
-        <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
-        <label>This week weight<span class="es">Peso semanal</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
-        ${isFab ? `<label>Bundle<span class="es">Paquete</span><input data-prod="${item.id}" data-field="bundle" value="${item.bundle || ""}" ${!canEdit ? "disabled" : ""} /></label>` : ""}
-        ${isFab ? `<label>Bundle status<span class="es">Estado del paquete</span><select data-prod="${item.id}" data-field="bundleStatus" ${!canEdit ? "disabled" : ""}>${setOptions(bundleStatuses, item.bundleStatus || "Cut")}</select></label>` : ""}
-        <label>Delay<span class="es">Retraso</span><select data-prod="${item.id}" data-field="delay" ${!canEdit ? "disabled" : ""}>${setOptions(delayReasons, item.delay || "No delay")}</select></label>
-        <label>Why<span class="es">Por que</span><input data-prod="${item.id}" data-field="delayNote" value="${item.delayNote || ""}" ${!canEdit ? "disabled" : ""} /></label>
+      <div class="production-controls-v2">
+        <div class="production-fieldset">
+          <h4>Setup<span class="es">Datos base</span></h4>
+          <div class="production-fields two-up">
+            <label>Total amount<span class="es">Cantidad total</span><input data-prod="${item.id}" data-field="quantity" type="number" min="0" step="1" value="${quantity || 0}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Total weight<span class="es">Peso total</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="1" value="${item.planned || 0}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        <div class="production-fieldset">
+          <h4>Progress<span class="es">Avance</span></h4>
+          <div class="production-fields three-up">
+            <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
+            <label>Weight completed this week<span class="es">Peso terminado esta semana</span><input data-prod="${item.id}" data-field="weekly" type="number" value="${item.weekly}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        ${isFab ? `
+          <div class="production-fieldset">
+            <h4>Bundle<span class="es">Paquete</span></h4>
+            <div class="production-fields two-up">
+              <label>Bundle<span class="es">Paquete</span><input data-prod="${item.id}" data-field="bundle" value="${item.bundle || ""}" ${!canEdit ? "disabled" : ""} /></label>
+              <label>Bundle status<span class="es">Estado del paquete</span><select data-prod="${item.id}" data-field="bundleStatus" ${!canEdit ? "disabled" : ""}>${setOptions(bundleStatuses, item.bundleStatus || "Cut")}</select></label>
+            </div>
+          </div>
+        ` : ""}
+        <div class="production-fieldset delay-fieldset">
+          <h4>Delay<span class="es">Retraso</span></h4>
+          <div class="production-fields two-up">
+            <label>Delay reason<span class="es">Razon de retraso</span><select data-prod="${item.id}" data-field="delay" ${!canEdit ? "disabled" : ""}>${setOptions(delayReasons, item.delay || "No delay")}</select></label>
+            <label>Why / notes<span class="es">Por que / notas</span><input data-prod="${item.id}" data-field="delayNote" value="${item.delayNote || ""}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        <div class="production-card-actions">
+          <button class="danger-action table-action" data-remove-production="${item.id}" type="button" ${!canEdit ? "disabled" : ""}>Remove item<span class="es">Quitar partida</span></button>
+        </div>
       </div>
     </article>
   `;
@@ -1101,6 +1137,10 @@ function bindTabEvents() {
     button.addEventListener("click", () => removePerson(button.dataset.removePerson));
   });
 
+  document.querySelectorAll("[data-remove-production]").forEach((button) => {
+    button.addEventListener("click", () => removeProductionItem(button.dataset.removeProduction));
+  });
+
   document.querySelectorAll("[data-prod]").forEach((input) => {
     input.addEventListener("input", updateProductionItem);
     input.addEventListener("change", updateProductionItem);
@@ -1216,6 +1256,18 @@ function removePerson(name) {
   showToast(`${name} deleted`);
 }
 
+function removeProductionItem(id) {
+  const item = state.production.find((entry) => entry.id === id);
+  if (!item) return;
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  if (!canEdit) return;
+  if (!confirm(`Remove ${item.code} from production?`)) return;
+  state.production = state.production.filter((entry) => entry.id !== id);
+  saveState();
+  render();
+  showToast(`${item.code} removed`);
+}
+
 function addProduction() {
   const code = $("newProdCode").value.trim();
   const description = $("newProdDescription").value.trim();
@@ -1326,7 +1378,20 @@ function updateProductionItem(event) {
   const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
   if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
   const facts = document.querySelector(`[data-prod-facts="${item.id}"]`);
-  if (facts) facts.innerHTML = productionFactsMarkup(item);
+  const remaining = Math.max((Number(item.planned) || 0) - item.completed, 0);
+  if (facts) facts.innerHTML = `${productionFactsMarkup(item)}<span>Remaining: <strong data-prod-remaining="${item.id}">${number(remaining)} lbs</strong></span>`;
+  const pct = item.planned ? Math.min(100, Math.round((item.completed / item.planned) * 100)) : 0;
+  const pctBox = document.querySelector(`[data-prod-pct="${item.id}"]`);
+  if (pctBox) pctBox.textContent = `${pct}%`;
+  const progressText = document.querySelector(`[data-prod-progress-text="${item.id}"]`);
+  if (progressText) progressText.textContent = `${number(item.completed)} / ${number(item.planned)} lbs`;
+  const equation = document.querySelector(`[data-prod-equation="${item.id}"]`);
+  if (equation) {
+    const quantity = productionQuantity(item);
+    equation.textContent = quantity ? `${preciseNumber(quantity)} total x ${preciseNumber(unitWeight(item))} lbs each = ${number(item.planned)} lbs` : `Total weight: ${number(item.planned)} lbs`;
+  }
+  const fill = document.querySelector(`[data-prod="${item.id}"]`)?.closest(".production-card")?.querySelector(".progress-fill");
+  if (fill) fill.style.width = `${pct}%`;
 }
 
 function render() {
