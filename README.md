@@ -9,6 +9,11 @@ Tagline: Crew time and job progress, forged into one.
 - Operating areas: Rebar Fabrication, Solar Piles Fabrication, Rebar Installation
 - Foreman view with simplified timesheets and production updates
 - Office view with dashboard, timesheet review, production, jobs, deliverables, and people setup
+- Installation timesheets are selected by foreman; the matching crew fills automatically
+- Field workers and foremen can still be borrowed into a week and have their role changed for that week
+- Fabrication timesheets use day/night shifts instead of crews
+- Fabrication roles include foreman, machine operator, helper, quality control, and cleaning
+- Fabrication timesheets include light-duty checkboxes for each day
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight

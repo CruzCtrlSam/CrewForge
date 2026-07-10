@@ -633,6 +633,13 @@ tr:last-child td {
   vertical-align: top;
 }
 
+.foreman-entry-grid th small {
+  display: block;
+  margin-top: 3px;
+  color: var(--blue-dark);
+  font-weight: 900;
+}
+
 .foreman-entry-grid td {
   padding: 9px;
   vertical-align: top;
@@ -690,6 +697,23 @@ tr:last-child td {
 
 .money-input input {
   padding-left: 24px;
+}
+
+.mini-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.mini-check input {
+  width: 16px !important;
+  min-height: 16px !important;
+  height: 16px;
+  padding: 0;
 }
 
 .icon-action {

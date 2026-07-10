@@ -8,7 +8,7 @@ const areas = {
     label: "Rebar Fabrication",
     es: "Fabricacion de varilla",
     mode: "shift",
-    roles: ["Foreman", "Machine Operator", "Helper"],
+    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning"],
     pto: true,
     sick: true,
     perDiem: false,
@@ -18,7 +18,7 @@ const areas = {
     label: "Solar Piles Fabrication",
     es: "Fabricacion de pilotes solares",
     mode: "shift",
-    roles: ["Foreman", "Machine Operator", "Helper"],
+    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning"],
     pto: true,
     sick: true,
     perDiem: false,
@@ -42,6 +42,9 @@ const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
+const rebarFabForemen = ["Rebar Fabrication Day Foreman", "Rebar Fabrication Night Foreman"];
+const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman"];
+const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
 const trialAccounts = [
@@ -58,8 +61,8 @@ const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production"];
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
-  ...foremanNames.map((name) => [name, "Foreman", "rebarFab", "", false]),
-  ...foremanNames.map((name) => [name, "Foreman", "solarPiles", "", false]),
+  ...rebarFabForemen.map((name, index) => [name, "Foreman", "rebarFab", shifts[index] || shifts[0], false]),
+  ...solarPilesForemen.map((name, index) => [name, "Foreman", "solarPiles", shifts[index] || shifts[0], false]),
   ["Cruz Orosco", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
   ["Otilio Juarez", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
   ["Ubaldo Juarez", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
@@ -78,8 +81,12 @@ const defaultPeople = [
   ["Felipe Jimenez", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
   ["Jose Machine Operator", "Machine Operator", "rebarFab", "Day Shift", false],
   ["Carlos Helper", "Helper", "rebarFab", "Day Shift", false],
+  ["Rebar QC", "Quality Control", "rebarFab", "Day Shift", false],
+  ["Rebar Cleaning", "Cleaning", "rebarFab", "Night Shift", false],
   ["Solar Operator", "Machine Operator", "solarPiles", "Day Shift", false],
-  ["Solar Helper", "Helper", "solarPiles", "Night Shift", false]
+  ["Solar Helper", "Helper", "solarPiles", "Night Shift", false],
+  ["Solar QC", "Quality Control", "solarPiles", "Day Shift", false],
+  ["Solar Cleaning", "Cleaning", "solarPiles", "Night Shift", false]
 ].map(([name, role, area, group, dol]) => ({ name, role, area, group, dol }));
 
 const bakersfieldControlCodes = [
@@ -130,9 +137,9 @@ const defaultState = {
   sheets: {},
   production: [
     ...bakersfieldControlCodes,
-    { id: "p3", area: "rebarFab", foreman: "Lidio Barron", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
-    { id: "p4", area: "rebarFab", foreman: "Huguer Vazquez", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
-    { id: "p5", area: "solarPiles", foreman: "Gregorio Izaguirre", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
+    { id: "p3", area: "rebarFab", foreman: "Rebar Fabrication Day Foreman", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
+    { id: "p4", area: "rebarFab", foreman: "Rebar Fabrication Night Foreman", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
+    { id: "p5", area: "solarPiles", foreman: "Solar Piles Day Foreman", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
   ]
 };
 
@@ -255,13 +262,31 @@ function upgradeState(next) {
     name: normalizeForemanName(person.name),
     group: normalizeCrewName(person.group)
   }));
+  next.people = next.people.filter((person) => {
+    const isFabricationArea = ["rebarFab", "solarPiles"].includes(person.area);
+    const isInstallationForeman = foremanNames.includes(person.name) && person.role === "Foreman";
+    return !(isFabricationArea && isInstallationForeman);
+  });
+  defaultPeople.forEach((person) => {
+    const exists = next.people.some((entry) => entry.area === person.area && entry.name === person.name);
+    if (!exists) next.people.push(structuredClone(person));
+  });
   next.sheets = next.sheets || {};
+  Object.entries(next.sheets).forEach(([key, sheet]) => {
+    const parts = key.split(":");
+    if (parts.length !== 2) return;
+    const sheetForeman = normalizeForemanName(sheet.foreman || "");
+    const migratedKey = `${parts[0]}:${parts[1]}:${sheetForeman}`;
+    if (sheetForeman && !next.sheets[migratedKey]) next.sheets[migratedKey] = sheet;
+    delete next.sheets[key];
+  });
   Object.values(next.sheets).forEach((sheet) => {
     sheet.foreman = normalizeForemanName(sheet.foreman);
     sheet.group = normalizeCrewName(sheet.group);
     sheet.rows = (sheet.rows || []).map((row) => ({
       ...row,
-      employee: normalizeForemanName(row.employee)
+      employee: normalizeForemanName(row.employee),
+      lightDuty: row.lightDuty || {}
     }));
   });
   bakersfieldControlCodes.forEach((seedItem) => {
@@ -270,6 +295,12 @@ function upgradeState(next) {
   });
   next.production.forEach((item) => {
     item.foreman = normalizeForemanName(item.foreman);
+    if (item.area === "rebarFab" && foremanNames.includes(item.foreman)) {
+      item.foreman = rebarFabForemen[0];
+    }
+    if (item.area === "solarPiles" && foremanNames.includes(item.foreman)) {
+      item.foreman = solarPilesForemen[0];
+    }
     item.quantity = productionQuantity(item);
     if (item.completedQty === undefined) {
       const perPiece = unitWeight(item);
@@ -409,8 +440,8 @@ function setupForemanName() {
   return state.setupForeman;
 }
 
-function sheetKey(week = state.selectedWeek, areaId = state.selectedArea) {
-  return `${areaId}:${week}`;
+function sheetKey(week = state.selectedWeek, areaId = state.selectedArea, foreman = state.currentForeman) {
+  return `${areaId}:${week}:${normalizeForemanName(foreman || "")}`;
 }
 
 function blankRow(person) {
@@ -427,6 +458,7 @@ function blankRow(person) {
     pto: 0,
     sick: 0,
     perDiem: 0,
+    lightDuty: {},
     borrowed: false,
     notes: ""
   };
@@ -447,10 +479,26 @@ function seedSheet() {
   };
 }
 
+function setSheetForeman(sheet, foreman) {
+  sheet.foreman = foreman;
+  sheet.group = area().mode === "crew" ? crewNameForForeman(foreman) : sheet.group || groupOptions()[0] || "";
+  const workers = peopleForArea().filter((person) => person.group === sheet.group || person.name === foreman);
+  sheet.rows = workers.map(blankRow);
+  sheet.status = "Draft";
+  sheet.submittedAt = "";
+  sheet.submittedBy = "";
+}
+
 function currentSheet() {
+  ensureAreaForeman();
   const key = sheetKey();
   if (!state.sheets[key]) state.sheets[key] = seedSheet();
-  return state.sheets[key];
+  const sheet = state.sheets[key];
+  const validForemen = foremenForArea().map((person) => person.name);
+  if (validForemen.length && !validForemen.includes(sheet.foreman)) {
+    setSheetForeman(sheet, validForemen[0]);
+  }
+  return sheet;
 }
 
 function rowHours(row) {
@@ -530,7 +578,7 @@ function renderLogin() {
           <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
         </div>
         <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(foremanNames, foremanNames[0])}</select></label>
+        <label id="foremanLoginField">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(trialForemanNames, trialForemanNames[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
@@ -758,12 +806,12 @@ function productionSummaryTable() {
 function renderTimesheet() {
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
-  const groupingLabel = area().mode === "crew" ? "Crew" : "Shift";
   const useCards = isForemanMode();
   const showTimesheetJob = state.selectedArea === "rebarInstall";
+  const isCrewArea = area().mode === "crew";
   const helperText =
-    area().mode === "crew"
-      ? t("Choose a crew and it auto-fills the assigned workers.", "Escoja una cuadrilla y se llenan los trabajadores asignados.")
+    isCrewArea
+      ? t("Choose a foreman and that foreman's crew fills in automatically.", "Escoja un mayordomo y se llena su cuadrilla automaticamente.")
       : t("Choose day or night shift; no crews needed for shop fabrication.", "Escoja turno de dia o noche; no se necesitan cuadrillas para fabricacion.");
   return `
     ${!editable ? `<div class="notice">Read only for this login. Payroll/Admin can edit all records. <span class="es">Solo lectura para este usuario.</span></div>` : ""}
@@ -775,7 +823,7 @@ function renderTimesheet() {
       <div class="form-grid section-gap">
         ${showTimesheetJob ? `<label>Job<span class="es">Trabajo</span><select id="sheetJob" ${!editable ? "disabled" : ""}>${setOptions(selectedJobs(), sheet.jobId, (job) => job.name, (job) => job.id)}</select></label>` : ""}
         <label>Foreman<span class="es">Mayordomo</span><select id="sheetForeman" ${!editable || state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), sheet.foreman)}</select></label>
-        <label>${groupingLabel}<span class="es">${area().mode === "crew" ? "Cuadrilla" : "Turno"}</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>
+        ${isCrewArea ? `<label>Crew<span class="es">Cuadrilla</span><input value="${sheet.group || crewNameForForeman(sheet.foreman)}" disabled /></label>` : `<label>Shift<span class="es">Turno</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>`}
         <label>Status<span class="es">Estado</span><select id="sheetStatus" ${!roleIsElevated() ? "disabled" : ""}>${setOptions(["Draft", "Submitted", "Approved"], sheet.status)}</select></label>
       </div>
       ${renderWorkerAdder(editable)}
@@ -805,13 +853,14 @@ function renderTimesheet() {
 }
 
 function renderForemanTimeCards(sheet, editable) {
+  const lightDuty = !area().dol;
   return `
     <div class="foreman-grid-wrap section-gap ${!editable ? "locked" : ""}">
       <table class="foreman-entry-grid">
         <thead>
           <tr>
             <th>Worker<span class="es">Trabajador</span></th>
-            ${dayLabels.map((label, index) => `<th>${label}<span class="es">${["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][index]}</span></th>`).join("")}
+            ${dayLabels.map((label, index) => `<th>${label}<span class="es">${["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][index]}</span>${lightDuty ? '<small>LD</small>' : ""}</th>`).join("")}
             <th>PTO<span class="es">Permiso</span></th>
             <th>Sick<span class="es">Enfermo</span></th>
             ${area().perDiem ? `<th>Per diem<span class="es">Viatico</span></th>` : ""}
@@ -842,7 +891,7 @@ function renderForemanTimeRow(row, index, editable) {
           ${area().dol ? `<span class="tag">${person.dol ? "DOL" : "No DOL"}</span>` : ""}
         </div>
       </td>
-      ${days.map((day) => `<td><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} /></td>`).join("")}
+      ${days.map((day) => `<td><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} />${!area().dol ? `<label class="mini-check"><input data-row="${index}" data-field="lightDuty.${day}" type="checkbox" ${row.lightDuty?.[day] ? "checked" : ""} ${disabled} /> LD</label>` : ""}</td>`).join("")}
       <td><input data-row="${index}" data-field="pto" type="number" min="0" step="0.25" value="${row.pto || 0}" ${disabled} /></td>
       <td><input data-row="${index}" data-field="sick" type="number" min="0" step="0.25" value="${row.sick || 0}" ${disabled} /></td>
       ${area().perDiem ? `<td><div class="money-input"><span>$</span><input data-row="${index}" data-field="perDiem" type="number" min="0" step="1" value="${row.perDiem || 0}" ${disabled} /></div></td>` : ""}
@@ -867,7 +916,7 @@ function renderWorkerCard(row, index, editable) {
         <strong>${number(rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0))} hrs</strong>
       </header>
       <div class="mini-grid day-grid">
-        ${days.map((day, dayIndex) => `<label>${dayLabels[dayIndex]}<span class="es">${["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][dayIndex]}</span><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} /></label>`).join("")}
+        ${days.map((day, dayIndex) => `<label>${dayLabels[dayIndex]}<span class="es">${["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][dayIndex]}</span><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} />${!area().dol ? `<span class="mini-check"><input data-row="${index}" data-field="lightDuty.${day}" type="checkbox" ${row.lightDuty?.[day] ? "checked" : ""} ${disabled} /> LD</span>` : ""}</label>`).join("")}
       </div>
       <div class="mini-grid">
         <label>Role<span class="es">Puesto</span><select data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(area().roles, row.roleOverride || "")}</select></label>
@@ -885,12 +934,13 @@ function renderWorkerCard(row, index, editable) {
 function renderWorkerAdder(editable) {
   if (!editable) return "";
   const allWorkers = peopleForArea().map((person) => person.name);
+  const isCrewArea = area().mode === "crew";
   return `
     <div class="add-worker-grid section-gap">
       <label class="worker-add-existing">Add existing worker<span class="es">Agregar trabajador existente</span><select id="borrowWorker"><option value="">Select worker</option>${setOptions(allWorkers, "")}</select></label>
       <label class="worker-add-name">Or type new name<span class="es">O escriba nombre nuevo</span><input id="manualWorker" placeholder="Name" /></label>
       <label class="worker-add-role">Role<span class="es">Puesto</span><select id="manualRole">${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
-      <label class="worker-add-group">${area().mode === "crew" ? "Crew" : "Shift"}<span class="es">${area().mode === "crew" ? "Cuadrilla" : "Turno"}</span><select id="manualGroup">${setOptions(groupOptions(), currentSheet().group)}</select></label>
+      ${isCrewArea ? `<label class="worker-add-group">Crew<span class="es">Cuadrilla</span><input id="manualGroup" value="${currentSheet().group}" disabled /></label>` : `<label class="worker-add-group">Shift<span class="es">Turno</span><select id="manualGroup">${setOptions(groupOptions(), currentSheet().group)}</select></label>`}
       <label class="check-label worker-add-dol ${area().dol ? "" : "hidden"}"><input id="manualDol" type="checkbox" /> DOL apprentice</label>
       <button class="secondary-action compact-add worker-add-button" id="addWorker" type="button">${t("Add", "Agregar")}</button>
     </div>
@@ -911,7 +961,7 @@ function renderTimesheetRow(row, index, editable) {
         ${row.borrowed ? '<span class="tag">Week only</span>' : ""}
       </td>
       <td><select class="role-select" data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(area().roles, row.roleOverride || "")}</select></td>
-      ${days.map((day) => `<td><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} /></td>`).join("")}
+      ${days.map((day) => `<td><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} />${!area().dol ? `<label class="mini-check"><input data-row="${index}" data-field="lightDuty.${day}" type="checkbox" ${row.lightDuty?.[day] ? "checked" : ""} ${disabled} /> LD</label>` : ""}</td>`).join("")}
       <td><input data-row="${index}" data-field="pto" type="number" min="0" step="0.25" value="${row.pto || 0}" ${disabled} /></td>
       <td><input data-row="${index}" data-field="sick" type="number" min="0" step="0.25" value="${row.sick || 0}" ${disabled} /></td>
       ${area().perDiem ? `<td><div class="money-input"><span>$</span><input data-row="${index}" data-field="perDiem" type="number" min="0" step="1" value="${row.perDiem || 0}" ${disabled} /></div></td>` : ""}
@@ -1195,7 +1245,14 @@ function bindTabEvents() {
   const editable = canEditSheet(sheet);
 
   if ($("sheetJob")) $("sheetJob").addEventListener("change", (event) => updateSheet({ jobId: event.target.value }));
-  if ($("sheetForeman")) $("sheetForeman").addEventListener("change", (event) => updateSheet({ foreman: event.target.value }));
+  if ($("sheetForeman")) {
+    $("sheetForeman").addEventListener("change", (event) => {
+      if (!editable) return;
+      state.currentForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
   if ($("productionJobFilter")) {
     $("productionJobFilter").addEventListener("change", (event) => {
       state.selectedProductionJob = event.target.value;
@@ -1206,12 +1263,9 @@ function bindTabEvents() {
   if ($("sheetGroup")) {
     $("sheetGroup").addEventListener("change", (event) => {
       if (!editable) return;
-      const group = event.target.value;
-      const foreman = sheet.foreman;
-      const workers = peopleForArea().filter((person) => person.group === group || person.name === foreman);
-      sheet.group = group;
-      sheet.rows = workers.map(blankRow);
-      sheet.status = "Draft";
+      if (area().mode === "crew") return;
+      sheet.group = event.target.value;
+      setSheetForeman(sheet, sheet.foreman);
       saveState();
       render();
     });
@@ -1224,7 +1278,13 @@ function bindTabEvents() {
       const row = sheet.rows[Number(event.target.dataset.row)];
       const field = event.target.dataset.field;
       const textFields = ["notes", "employee", "roleOverride"];
-      row[field] = textFields.includes(field) ? event.target.value : Number(event.target.value);
+      if (field.startsWith("lightDuty.")) {
+        const day = field.split(".")[1];
+        row.lightDuty = row.lightDuty || {};
+        row.lightDuty[day] = event.target.checked;
+      } else {
+        row[field] = textFields.includes(field) ? event.target.value : Number(event.target.value);
+      }
       if (field === "employee") {
         row.employee = event.target.value;
         row.roleOverride = "";
@@ -1366,7 +1426,8 @@ function addWorkerToWeek() {
   const manualName = $("manualWorker")?.value.trim();
   let person = selected ? personByName(selected) : null;
   if (!person && manualName) {
-    person = { name: manualName, role: $("manualRole").value, area: state.selectedArea, group: $("manualGroup").value, dol: $("manualDol")?.checked || false };
+    const sheet = currentSheet();
+    person = { name: manualName, role: $("manualRole").value, area: state.selectedArea, group: area().mode === "crew" ? sheet.group : $("manualGroup").value, dol: $("manualDol")?.checked || false };
     state.people.push(person);
   }
   if (!person) {
@@ -1582,7 +1643,7 @@ function duplicateWeek() {
   const copy = structuredClone(currentSheet());
   copy.week = week;
   copy.status = "Draft";
-  state.sheets[sheetKey(week)] = copy;
+  state.sheets[sheetKey(week, state.selectedArea, copy.foreman)] = copy;
   if (!state.weeks.includes(week)) state.weeks.push(week);
   state.weeks.sort();
   state.selectedWeek = week;
