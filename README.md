@@ -17,6 +17,10 @@ Tagline: Crew time and job progress, forged into one.
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
+- Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
+- Installation jobs use a job-type dropdown: Wind Farm, T-line Substation, or Data Center
+- Rebar fabrication jobs use those same types plus Commercial
+- Solar Piles jobs use admin-maintained dropdown lists for client and saved job names
 - Redesigned production cards with grouped setup, progress, delay, and remove actions
 - Production job filter also controls the default job for new production entries
 - Production entries can be submitted for office review

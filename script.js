@@ -39,6 +39,8 @@ const areas = {
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
+const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
+const fabricationJobTypes = [...installationJobTypes, "Commercial"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
@@ -57,7 +59,7 @@ const trialAccounts = [
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists"];
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
@@ -127,11 +129,15 @@ const defaultState = {
   currentForeman: "Lidio Barron",
   weeks: ["2026-07-03", "2026-07-10", "2026-07-17", "2026-07-24"],
   people: defaultPeople,
+  jobLists: {
+    solarClients: ["Solar"],
+    solarJobNames: ["Solar Piles Demo Job"]
+  },
   jobs: [
-    { id: "concho", name: "Concho Field Install", number: "CON-2026", customer: "Concho", area: "rebarInstall", status: "Active" },
-    { id: "bakersfield", name: "VS26-BRSFL - Bakersfield Sub Station", number: "VS26-BRSFL", customer: "Bakersfield", area: "rebarInstall", status: "Active" },
-    { id: "buffalo-gap", name: "Buffalo Gap - IRA", number: "BG-IRA", customer: "Buffalo Gap", area: "rebarFab", status: "Active" },
-    { id: "laurel", name: "Laurel", number: "LAU-2026", customer: "Laurel", area: "rebarFab", status: "Active" },
+    { id: "concho", name: "Concho Field Install", number: "CON-2026", customer: "Concho", area: "rebarInstall", jobType: "Wind Farm", status: "Active" },
+    { id: "bakersfield", name: "VS26-BRSFL - Bakersfield Sub Station", number: "VS26-BRSFL", customer: "Bakersfield", area: "rebarInstall", jobType: "T-line Substation", status: "Active" },
+    { id: "buffalo-gap", name: "Buffalo Gap - IRA", number: "BG-IRA", customer: "Buffalo Gap", area: "rebarFab", jobType: "Wind Farm", status: "Active" },
+    { id: "laurel", name: "Laurel", number: "LAU-2026", customer: "Laurel", area: "rebarFab", jobType: "Commercial", status: "Active" },
     { id: "solar-demo", name: "Solar Piles Demo Job", number: "SP-100", customer: "Solar", area: "solarPiles", status: "Active" }
   ],
   sheets: {},
@@ -255,8 +261,16 @@ function loadState() {
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
   next.production = next.production || [];
+  next.jobLists = {
+    solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
+    solarJobNames: next.jobLists?.solarJobNames?.length ? next.jobLists.solarJobNames : structuredClone(defaultState.jobLists.solarJobNames)
+  };
   next.currentForeman = normalizeForemanName(next.currentForeman);
   next.setupForeman = normalizeForemanName(next.setupForeman);
+  next.jobs = (next.jobs || []).map((job) => ({
+    ...job,
+    jobType: job.jobType || defaultJobTypeForArea(job.area)
+  }));
   next.people = (next.people || []).map((person) => ({
     ...person,
     name: normalizeForemanName(person.name),
@@ -402,6 +416,16 @@ function canEditSheet(sheet) {
 
 function selectedJobs() {
   return state.jobs.filter((job) => job.area === state.selectedArea && (job.status || "Active") === "Active");
+}
+
+function jobTypeOptionsForArea(areaId = state.selectedArea) {
+  if (areaId === "rebarInstall") return installationJobTypes;
+  if (areaId === "rebarFab") return fabricationJobTypes;
+  return [];
+}
+
+function defaultJobTypeForArea(areaId = state.selectedArea) {
+  return jobTypeOptionsForArea(areaId)[0] || "";
 }
 
 function allJobsForArea() {
@@ -1102,6 +1126,8 @@ function renderProductionCard(item) {
 function renderJobs() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
   const areaOptions = Object.entries(areas).map(([id, info]) => ({ id, name: info.label }));
+  const isSolar = state.selectedArea === "solarPiles";
+  const jobTypes = jobTypeOptionsForArea();
   return `
     <section class="panel">
       <div class="split">
@@ -1110,20 +1136,45 @@ function renderJobs() {
       ${!admin ? `<div class="notice">Only Payroll/Admin can add or change jobs. <span class="es">Solo Payroll/Admin puede agregar o cambiar trabajos.</span></div>` : ""}
       <div class="form-grid section-gap">
         <label>Operating area<span class="es">Area de trabajo</span><select id="jobArea" ${!admin ? "disabled" : ""}>${setOptions(areaOptions, state.selectedArea, (item) => item.name, (item) => item.id)}</select></label>
-        <label>Job name<span class="es">Nombre del trabajo</span><input id="jobNameInput" placeholder="Project name" ${!admin ? "disabled" : ""} /></label>
-        <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
-        <label>Customer<span class="es">Cliente</span><input id="jobCustomerInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
+        ${isSolar ? `
+          <label>Client<span class="es">Cliente</span><select id="jobCustomerInput" ${!admin ? "disabled" : ""}>${setOptions(state.jobLists.solarClients, state.jobLists.solarClients[0] || "")}</select></label>
+          <label>Job name list<span class="es">Lista de trabajos</span><select id="solarJobNameSelect" ${!admin ? "disabled" : ""}><option value="">Select saved job</option>${setOptions(state.jobLists.solarJobNames, "")}</select></label>
+          <label>Or type job name<span class="es">O escriba trabajo</span><input id="jobNameInput" placeholder="Job name" ${!admin ? "disabled" : ""} /></label>
+          <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
+        ` : `
+          <label>Job type<span class="es">Tipo de trabajo</span><select id="jobTypeInput" ${!admin ? "disabled" : ""}>${setOptions(jobTypes, jobTypes[0] || "")}</select></label>
+          <label>Job name<span class="es">Nombre del trabajo</span><input id="jobNameInput" placeholder="Project name" ${!admin ? "disabled" : ""} /></label>
+          <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
+          <label>Customer<span class="es">Cliente</span><input id="jobCustomerInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
+        `}
         <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, "Active")}</select></label>
         <button class="primary-action" id="saveJob" type="button" ${!admin ? "disabled" : ""}>${t("Add job", "Agregar trabajo")}</button>
       </div>
+      ${admin && isSolar ? renderSolarListsSetup() : ""}
+      ${admin ? `
+        <div class="job-production-setup section-gap">
+          <div>
+            <h3>${t("Optional production setup", "Configuracion opcional de produccion")}</h3>
+            <p class="sub">Add the first control code now so the assigned foreman can update daily progress right away.</p>
+          </div>
+          <div class="form-grid compact-form-grid">
+            <label>Assign to foreman<span class="es">Asignar a mayordomo</span><select id="jobProdForeman">${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+            <label>Control code<span class="es">Codigo</span><input id="jobProdCode" placeholder="ACA" /></label>
+            <label>Description<span class="es">Descripcion</span><input id="jobProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
+            <label>Total amount<span class="es">Cantidad total</span><input id="jobProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
+            <label>Total weight<span class="es">Peso total</span><input id="jobProdWeight" type="number" min="0" step="1" placeholder="18445" /></label>
+          </div>
+        </div>
+      ` : ""}
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Job</th><th>Area</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${state.jobs
               .map((job) => `<tr>
                 <td><strong>${job.name}</strong></td>
                 <td>${areas[job.area]?.label || job.area}</td>
+                <td>${job.jobType || ""}</td>
                 <td>${job.number || ""}</td>
                 <td>${job.customer || ""}</td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
@@ -1134,6 +1185,29 @@ function renderJobs() {
         </table>
       </div>
     </section>
+  `;
+}
+
+function renderSolarListsSetup() {
+  return `
+    <div class="job-list-setup section-gap">
+      <div>
+        <h3>${t("Solar Piles lists", "Listas de pilotes solares")}</h3>
+        <p class="sub">Admin maintains the client and job-name choices used for Solar Piles jobs.</p>
+      </div>
+      <div class="job-list-grid">
+        <label>Add client<span class="es">Agregar cliente</span><input id="solarClientName" placeholder="Client name" /></label>
+        <button class="secondary-action compact-add" id="addSolarClient" type="button">${t("Add client", "Agregar cliente")}</button>
+        <label>Add job name<span class="es">Agregar trabajo</span><input id="solarSavedJobName" placeholder="Job name" /></label>
+        <button class="secondary-action compact-add" id="addSolarJobName" type="button">${t("Add job name", "Agregar trabajo")}</button>
+      </div>
+      <div class="list-chip-row">
+        ${state.jobLists.solarClients.map((client) => `<span class="tag">${client}</span>`).join("")}
+      </div>
+      <div class="list-chip-row">
+        ${state.jobLists.solarJobNames.map((jobName) => `<span class="tag">${jobName}</span>`).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -1305,12 +1379,31 @@ function bindTabEvents() {
   if ($("savePerson")) $("savePerson").addEventListener("click", savePerson);
   if ($("addCrewPerson")) $("addCrewPerson").addEventListener("click", addCrewPerson);
   if ($("saveJob")) $("saveJob").addEventListener("click", saveJob);
+  if ($("addSolarClient")) $("addSolarClient").addEventListener("click", () => addSolarListValue("solarClients", "solarClientName", "Client added"));
+  if ($("addSolarJobName")) $("addSolarJobName").addEventListener("click", () => addSolarListValue("solarJobNames", "solarSavedJobName", "Job name added"));
+  if ($("jobArea")) {
+    $("jobArea").addEventListener("change", (event) => {
+      state.selectedArea = event.target.value;
+      state.activeTab = "jobs";
+      ensureAreaForeman();
+      saveState();
+      render();
+    });
+  }
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
   if ($("newProdDescription")) {
     $("newProdDescription").addEventListener("input", (event) => {
       const parsedQuantity = quantityFromDescription(event.target.value);
       if (parsedQuantity && $("newProdQuantity") && !$("newProdQuantity").value) {
         $("newProdQuantity").value = parsedQuantity;
+      }
+    });
+  }
+  if ($("jobProdDescription")) {
+    $("jobProdDescription").addEventListener("input", (event) => {
+      const parsedQuantity = quantityFromDescription(event.target.value);
+      if (parsedQuantity && $("jobProdQuantity") && !$("jobProdQuantity").value) {
+        $("jobProdQuantity").value = parsedQuantity;
       }
     });
   }
@@ -1554,6 +1647,20 @@ function addProduction() {
   showToast("Production item added");
 }
 
+function addSolarListValue(listKey, inputId, message) {
+  const value = $(inputId)?.value.trim();
+  if (!value) {
+    showToast("Enter a value first");
+    return;
+  }
+  state.jobLists[listKey] = state.jobLists[listKey] || [];
+  if (!state.jobLists[listKey].includes(value)) state.jobLists[listKey].push(value);
+  state.jobLists[listKey].sort((a, b) => a.localeCompare(b));
+  saveState();
+  render();
+  showToast(message);
+}
+
 function savePerson() {
   const name = $("personName").value.trim();
   if (!name) {
@@ -1570,7 +1677,10 @@ function savePerson() {
 }
 
 function saveJob() {
-  const name = $("jobNameInput").value.trim();
+  const areaId = $("jobArea").value;
+  const typedName = $("jobNameInput")?.value.trim() || "";
+  const savedSolarName = $("solarJobNameSelect")?.value || "";
+  const name = areaId === "solarPiles" ? typedName || savedSolarName : typedName;
   if (!name) {
     showToast("Enter a job name");
     return;
@@ -1582,15 +1692,50 @@ function saveJob() {
     id = `${baseId}-${counter}`;
     counter += 1;
   }
-  const areaId = $("jobArea").value;
+  const customer = areaId === "solarPiles" ? $("jobCustomerInput")?.value || "" : $("jobCustomerInput")?.value.trim() || "";
+  const productionCode = $("jobProdCode")?.value.trim() || "";
+  const productionDescription = $("jobProdDescription")?.value.trim() || "";
+  const parsedQuantity = quantityFromDescription(productionDescription);
+  const productionQuantityValue = Number($("jobProdQuantity")?.value) || parsedQuantity || 0;
+  const productionWeight = Number($("jobProdWeight")?.value) || 0;
+  const hasProductionSetup = productionCode || productionDescription || productionQuantityValue || productionWeight;
+  if (hasProductionSetup && (!productionCode || !productionDescription || !productionQuantityValue || !productionWeight)) {
+    showToast("Production setup needs code, description, amount, and weight");
+    return;
+  }
+  if (areaId === "solarPiles" && typedName && !state.jobLists.solarJobNames.includes(typedName)) {
+    state.jobLists.solarJobNames.push(typedName);
+    state.jobLists.solarJobNames.sort((a, b) => a.localeCompare(b));
+  }
   state.jobs.push({
     id,
     name,
     number: $("jobNumberInput").value.trim(),
-    customer: $("jobCustomerInput").value.trim(),
+    customer,
     area: areaId,
+    jobType: areaId === "solarPiles" ? "" : $("jobTypeInput")?.value || defaultJobTypeForArea(areaId),
     status: $("jobStatusInput").value
   });
+  if (hasProductionSetup) {
+    state.production.push({
+      id: `p${Date.now()}`,
+      area: areaId,
+      foreman: $("jobProdForeman")?.value || foremenForArea(areaId)[0]?.name || state.currentForeman,
+      jobId: id,
+      code: productionCode,
+      description: productionDescription,
+      planned: productionWeight,
+      quantity: productionQuantityValue,
+      completedQty: 0,
+      completed: 0,
+      reviewStatus: "Draft",
+      bundle: areaId === "rebarFab" ? "" : undefined,
+      bundleStatus: areaId === "rebarFab" ? "Cut" : undefined,
+      delay: "No delay",
+      delayNote: "",
+      status: "Not Started"
+    });
+  }
   if (areaId === state.selectedArea && !currentSheet().jobId) {
     currentSheet().jobId = id;
   }
@@ -1599,7 +1744,7 @@ function saveJob() {
   }
   saveState();
   render();
-  showToast(`${name} added`);
+  showToast(hasProductionSetup ? `${name} added with production setup` : `${name} added`);
 }
 
 function updateJobStatus(jobId, status) {

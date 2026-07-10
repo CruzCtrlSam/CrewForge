@@ -524,6 +524,50 @@ textarea {
   margin-bottom: 16px;
 }
 
+.job-production-setup {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #f6f8f9;
+}
+
+.job-list-setup {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff8e5;
+}
+
+.job-production-setup h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.job-list-setup h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.job-list-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.list-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.compact-form-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
 .add-worker-grid,
 .people-form,
 .crew-add-grid {
@@ -1053,6 +1097,8 @@ tr:last-child td {
   .area-grid,
   .report-grid,
   .form-grid,
+  .compact-form-grid,
+  .job-list-grid,
   .add-worker-grid,
   .crew-add-grid,
   .production-add-grid,
