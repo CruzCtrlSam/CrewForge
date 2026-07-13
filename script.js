@@ -125,6 +125,7 @@ const defaultState = {
   activeTab: "dashboard",
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
+  jobDraftType: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -261,6 +262,7 @@ function loadState() {
 
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
+  next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.jobLists = {
     solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
@@ -1191,7 +1193,7 @@ function renderProductionCard(item) {
       <header class="production-card-header">
         <div>
           <h3>${item.code} - ${item.description}</h3>
-          <p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p>
+          <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
           <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
         </div>
         <div class="production-status">
@@ -1253,7 +1255,7 @@ function renderFoundationProductionCard(item) {
       <header class="production-card-header">
         <div>
           <h3>${item.foundationId} - ${item.component}</h3>
-          <p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p>
+          <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
           <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
         </div>
         <div class="production-status">
@@ -1291,6 +1293,7 @@ function renderJobs() {
   const areaOptions = Object.entries(areas).map(([id, info]) => ({ id, name: info.label }));
   const isSolar = state.selectedArea === "solarPiles";
   const jobTypes = jobTypeOptionsForArea();
+  const selectedJobType = isSolar ? "" : state.jobDraftType || jobTypes[0] || "";
   return `
     <section class="panel">
       <div class="split">
@@ -1305,7 +1308,7 @@ function renderJobs() {
           <label>Or type job name<span class="es">O escriba trabajo</span><input id="jobNameInput" placeholder="Job name" ${!admin ? "disabled" : ""} /></label>
           <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
         ` : `
-          <label>Job type<span class="es">Tipo de trabajo</span><select id="jobTypeInput" ${!admin ? "disabled" : ""}>${setOptions(jobTypes, jobTypes[0] || "")}</select></label>
+          <label>Job type<span class="es">Tipo de trabajo</span><select id="jobTypeInput" ${!admin ? "disabled" : ""}>${setOptions(jobTypes, selectedJobType)}</select></label>
           <label>Job name<span class="es">Nombre del trabajo</span><input id="jobNameInput" placeholder="Project name" ${!admin ? "disabled" : ""} /></label>
           <label>Job number<span class="es">Numero</span><input id="jobNumberInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
           <label>Customer<span class="es">Cliente</span><input id="jobCustomerInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
@@ -1313,7 +1316,7 @@ function renderJobs() {
         <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, "Active")}</select></label>
         <button class="primary-action" id="saveJob" type="button" ${!admin ? "disabled" : ""}>${t("Add job", "Agregar trabajo")}</button>
       </div>
-      ${admin && state.selectedArea === "rebarInstall" ? `
+      ${admin && state.selectedArea === "rebarInstall" && selectedJobType === "Wind Farm" ? `
         <div class="job-list-setup section-gap">
           <div>
             <h3>${t("Wind farm foundation IDs", "IDs de cimentaciones")}</h3>
@@ -1328,14 +1331,14 @@ function renderJobs() {
         </div>
       ` : ""}
       ${admin && isSolar ? renderSolarListsSetup() : ""}
-      ${admin ? `
+      ${admin && selectedJobType !== "Wind Farm" ? `
         <div class="job-production-setup section-gap">
           <div>
             <h3>${t("Optional production setup", "Configuracion opcional de produccion")}</h3>
-            <p class="sub">Add the first control code now so the assigned foreman can update daily progress right away.</p>
+            <p class="sub">Add the first control code now if it is ready. Foreman assignment can be left blank and handled later.</p>
           </div>
           <div class="form-grid compact-form-grid">
-            <label>Assign to foreman<span class="es">Asignar a mayordomo</span><select id="jobProdForeman">${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+            <label>Assign to foreman<span class="es">Asignar a mayordomo</span><select id="jobProdForeman"><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), "")}</select></label>
             <label>Control code<span class="es">Codigo</span><input id="jobProdCode" placeholder="ACA" /></label>
             <label>Description<span class="es">Descripcion</span><input id="jobProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
             <label>Total amount<span class="es">Cantidad total</span><input id="jobProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
@@ -1580,7 +1583,15 @@ function bindTabEvents() {
     $("jobArea").addEventListener("change", (event) => {
       state.selectedArea = event.target.value;
       state.activeTab = "jobs";
+      state.jobDraftType = "";
       ensureAreaForeman();
+      saveState();
+      render();
+    });
+  }
+  if ($("jobTypeInput")) {
+    $("jobTypeInput").addEventListener("change", (event) => {
+      state.jobDraftType = event.target.value;
       saveState();
       render();
     });
@@ -1992,8 +2003,8 @@ function saveJob() {
   const productionQuantityValue = Number($("jobProdQuantity")?.value) || parsedQuantity || 0;
   const productionWeight = Number($("jobProdWeight")?.value) || 0;
   const hasProductionSetup = productionCode || productionDescription || productionQuantityValue || productionWeight;
-  if (hasProductionSetup && (!productionCode || !productionDescription || !productionQuantityValue || !productionWeight)) {
-    showToast("Production setup needs code, description, amount, and weight");
+  if (hasProductionSetup && !productionCode) {
+    showToast("Optional production setup needs at least a control code");
     return;
   }
   if (areaId === "solarPiles" && typedName && !state.jobLists.solarJobNames.includes(typedName)) {
@@ -2014,10 +2025,10 @@ function saveJob() {
     state.production.push({
       id: `p${Date.now()}`,
       area: areaId,
-      foreman: $("jobProdForeman")?.value || foremenForArea(areaId)[0]?.name || state.currentForeman,
+      foreman: $("jobProdForeman")?.value || "",
       jobId: id,
       code: productionCode,
-      description: productionDescription,
+      description: productionDescription || productionCode,
       planned: productionWeight,
       quantity: productionQuantityValue,
       completedQty: 0,
@@ -2036,6 +2047,7 @@ function saveJob() {
   if (areaId === state.selectedArea) {
     state.selectedProductionJob = id;
   }
+  state.jobDraftType = "";
   saveState();
   render();
   showToast(hasProductionSetup ? `${name} added with production setup` : `${name} added`);

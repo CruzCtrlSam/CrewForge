@@ -18,6 +18,9 @@ Tagline: Crew time and job progress, forged into one.
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
+- Optional production setup can be left unassigned when a job is created
+- Wind Farm jobs do not require description, control code, or weight during job creation
+- Optional production setup for weighted work can be started with a control code and completed later
 - Payroll deliverables can be exported as CSV
 - Admin/payroll can enter hourly rates for employees in People / Crews or People / Shifts
 - Admin/payroll can adjust crew members by adding/removing workers and editing roles/rates
