@@ -18,7 +18,13 @@ Tagline: Crew time and job progress, forged into one.
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
+- Payroll deliverables can be exported as CSV
+- Admin/payroll can enter hourly rates for employees in People / Crews or People / Shifts
+- Admin/payroll can adjust crew members by adding/removing workers and editing roles/rates
+- Production submit is available near the top and bottom of the Production view when production items exist
 - Installation jobs use a job-type dropdown: Wind Farm, T-line Substation, or Data Center
+- Wind Farm installation jobs can generate foundation IDs, such as `T001` through `T082`, for foremen to pick from a dropdown
+- Wind Farm production tracks Bottom Mat, Top, and Pedestal completion by foundation ID, with completed and partial foundation lists
 - Rebar fabrication jobs use those same types plus Commercial
 - Solar Piles jobs use admin-maintained dropdown lists for client and saved job names
 - Redesigned production cards with grouped setup, progress, delay, and remove actions

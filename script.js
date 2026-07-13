@@ -41,6 +41,7 @@ const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
 const fabricationJobTypes = [...installationJobTypes, "Commercial"];
+const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
@@ -89,7 +90,7 @@ const defaultPeople = [
   ["Solar Helper", "Helper", "solarPiles", "Night Shift", false],
   ["Solar QC", "Quality Control", "solarPiles", "Day Shift", false],
   ["Solar Cleaning", "Cleaning", "solarPiles", "Night Shift", false]
-].map(([name, role, area, group, dol]) => ({ name, role, area, group, dol }));
+].map(([name, role, area, group, dol]) => ({ name, role, area, group, dol, hourlyRate: 0 }));
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -269,12 +270,14 @@ function upgradeState(next) {
   next.setupForeman = normalizeForemanName(next.setupForeman);
   next.jobs = (next.jobs || []).map((job) => ({
     ...job,
-    jobType: job.jobType || defaultJobTypeForArea(job.area)
+    jobType: job.jobType || defaultJobTypeForArea(job.area),
+    foundationIds: job.foundationIds || []
   }));
   next.people = (next.people || []).map((person) => ({
     ...person,
     name: normalizeForemanName(person.name),
-    group: normalizeCrewName(person.group)
+    group: normalizeCrewName(person.group),
+    hourlyRate: Number(person.hourlyRate) || 0
   }));
   next.people = next.people.filter((person) => {
     const isFabricationArea = ["rebarFab", "solarPiles"].includes(person.area);
@@ -351,6 +354,23 @@ function preciseNumber(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(value) || 0);
 }
 
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadFile(filename, content, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function quantityFromDescription(description = "") {
   const match = String(description).match(/\/\s*(\d+)\s*-/);
   return match ? Number(match[1]) : 0;
@@ -416,6 +436,22 @@ function canEditSheet(sheet) {
 
 function selectedJobs() {
   return state.jobs.filter((job) => job.area === state.selectedArea && (job.status || "Active") === "Active");
+}
+
+function jobById(jobId) {
+  return state.jobs.find((job) => job.id === jobId);
+}
+
+function isWindFarmJob(jobId) {
+  return jobById(jobId)?.jobType === "Wind Farm";
+}
+
+function generateFoundationIds(prefix, from, to) {
+  const start = Number(from);
+  const end = Number(to);
+  if (!prefix || !start || !end || end < start) return [];
+  const width = Math.max(String(from).length, String(to).length, 3);
+  return Array.from({ length: end - start + 1 }, (_, index) => `${prefix}${String(start + index).padStart(width, "0")}`);
 }
 
 function jobTypeOptionsForArea(areaId = state.selectedArea) {
@@ -556,8 +592,8 @@ function productionForArea() {
 
 function productionTotals() {
   const items = productionForArea();
-  const planned = items.reduce((sum, item) => sum + (Number(item.planned) || 0), 0);
-  const completed = items.reduce((sum, item) => sum + completedWeight(item), 0);
+  const planned = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : Number(item.planned) || 0), 0);
+  const completed = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : completedWeight(item)), 0);
   const delayed = items.filter((item) => item.delay !== "No delay").length;
   return { planned, completed, delayed, remaining: Math.max(planned - completed, 0) };
 }
@@ -817,13 +853,81 @@ function timesheetSummaryTable(sheet) {
 function productionSummaryTable() {
   return `
     <table>
-      <thead><tr><th>Code</th><th>Job</th><th>Amount</th><th>Completed weight</th><th>Delay</th></tr></thead>
+      <thead><tr><th>Code / ID</th><th>Job</th><th>Amount / Part</th><th>Progress</th><th>Delay</th></tr></thead>
       <tbody>
         ${productionForArea()
-          .map((item) => `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`)
+          .map((item) => {
+            if (item.productionMode === "foundation") {
+              return `<tr><td><strong>${item.foundationId}</strong></td><td>${jobName(item.jobId)}</td><td>${item.component}</td><td>Complete</td><td>${item.delay}</td></tr>`;
+            }
+            return `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`;
+          })
           .join("")}
       </tbody>
     </table>
+  `;
+}
+
+function windFoundationStats(items) {
+  const byFoundation = {};
+  items
+    .filter((item) => item.productionMode === "foundation")
+    .forEach((item) => {
+      byFoundation[item.foundationId] = byFoundation[item.foundationId] || {};
+      byFoundation[item.foundationId][item.component] = true;
+    });
+  const ids = Object.keys(byFoundation).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const completed = ids.filter((id) => windFoundationComponents.every((component) => byFoundation[id][component]));
+  const partial = ids.filter((id) => !completed.includes(id));
+  return {
+    byFoundation,
+    completed,
+    partial,
+    byComponent: windFoundationComponents.reduce((acc, component) => {
+      acc[component] = ids.filter((id) => byFoundation[id][component]);
+      return acc;
+    }, {})
+  };
+}
+
+function renderFoundationList(title, ids) {
+  return `
+    <div>
+      <h4>${title}</h4>
+      <div class="foundation-chip-list">
+        ${ids.length ? ids.map((id) => `<span class="tag">${id}</span>`).join("") : '<span class="sub">None yet</span>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderWindFoundationSummary(items) {
+  const foundationItems = items.filter((item) => item.productionMode === "foundation");
+  if (!foundationItems.length) return "";
+  const stats = windFoundationStats(foundationItems);
+  const selectedJob = state.selectedProductionJob ? jobById(state.selectedProductionJob) : null;
+  const totalFoundations = selectedJob?.foundationIds?.length || 0;
+  return `
+    <div class="wind-summary section-gap">
+      <div class="split">
+        <div>
+          <h3>${t("Wind farm foundation progress", "Avance de cimentaciones")}</h3>
+          <p class="sub">${totalFoundations ? `${stats.completed.length} of ${totalFoundations} full foundations complete` : `${stats.completed.length} full foundations complete`}</p>
+        </div>
+        <div class="foundation-metrics">
+          <span>Bottom: <strong>${stats.byComponent["Bottom Mat"].length}${totalFoundations ? ` / ${totalFoundations}` : ""}</strong></span>
+          <span>Top: <strong>${stats.byComponent.Top.length}${totalFoundations ? ` / ${totalFoundations}` : ""}</strong></span>
+          <span>Pedestal: <strong>${stats.byComponent.Pedestal.length}${totalFoundations ? ` / ${totalFoundations}` : ""}</strong></span>
+        </div>
+      </div>
+      <div class="foundation-lists">
+        ${renderFoundationList("Completed foundations", stats.completed)}
+        ${renderFoundationList("Partial foundations", stats.partial)}
+        ${renderFoundationList("Bottom mat done", stats.byComponent["Bottom Mat"])}
+        ${renderFoundationList("Top done", stats.byComponent.Top)}
+        ${renderFoundationList("Pedestal done", stats.byComponent.Pedestal)}
+      </div>
+    </div>
   `;
 }
 
@@ -1007,7 +1111,10 @@ function renderProduction() {
     <section class="panel">
       <div class="split">
         <div><h2>${t(isForemanMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track jobs, control codes, bundles, status, and delays.</p></div>
-        <button class="secondary-action" data-print="production">${t("Export PDF", "Exportar PDF")}</button>
+        <div class="button-pair">
+          ${visibleProduction.length ? `<button class="primary-action" data-submit-production type="button">${t("Submit Production", "Enviar produccion")}</button>` : ""}
+          <button class="secondary-action" data-print="production">${t("Export PDF", "Exportar PDF")}</button>
+        </div>
       </div>
       <div class="form-grid section-gap">
         <label>Job filter<span class="es">Filtro de trabajo</span><select id="productionJobFilter"><option value="">All jobs</option>${setOptions(jobOptions, state.selectedProductionJob, (job) => job.name, (job) => job.id)}</select></label>
@@ -1015,6 +1122,7 @@ function renderProduction() {
       ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
       ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este mayordomo.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
+      ${renderWindFoundationSummary(visibleProduction)}
       <div class="production-board section-gap">
         ${visibleProduction.map(renderProductionCard).join("") || `<div class="empty-state">No production items for this job yet.<span class="es">No hay produccion para este trabajo.</span></div>`}
       </div>
@@ -1024,7 +1132,7 @@ function renderProduction() {
             <strong>${submittedCount} of ${visibleProduction.length} submitted</strong>
             <span class="es">${submittedCount} de ${visibleProduction.length} enviados</span>
           </div>
-          <button class="primary-action" id="submitProduction" type="button">${t("Submit Production", "Enviar produccion")}</button>
+          <button class="primary-action" data-submit-production type="button">${t("Submit Production", "Enviar produccion")}</button>
         </div>
       ` : ""}
     </section>
@@ -1033,6 +1141,20 @@ function renderProduction() {
 
 function renderProductionAdder() {
   const defaultJob = state.selectedProductionJob || selectedJobs()[0]?.id || "";
+  const selectedJob = jobById(defaultJob);
+  const isWind = selectedJob?.jobType === "Wind Farm";
+  if (isWind) {
+    const foundationIds = selectedJob.foundationIds || [];
+    return `
+      <div class="production-add-grid wind-production-add section-gap">
+        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
+        <label>Foundation ID<span class="es">Cimentacion</span><select id="newFoundationId">${foundationIds.length ? setOptions(foundationIds, foundationIds[0]) : '<option value="">No IDs set up</option>'}</select></label>
+        <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
+        <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>
+      </div>
+    `;
+  }
   return `
     <div class="production-add-grid section-gap">
       <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
@@ -1056,6 +1178,7 @@ function productionFactsMarkup(item) {
 }
 
 function renderProductionCard(item) {
+  if (item.productionMode === "foundation") return renderFoundationProductionCard(item);
   const quantity = productionQuantity(item);
   const perPiece = unitWeight(item);
   const weightDone = completedWeight(item);
@@ -1123,6 +1246,46 @@ function renderProductionCard(item) {
   `;
 }
 
+function renderFoundationProductionCard(item) {
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  return `
+    <article class="production-card foundation-card">
+      <header class="production-card-header">
+        <div>
+          <h3>${item.foundationId} - ${item.component}</h3>
+          <p class="sub">${jobName(item.jobId)} · ${item.foreman || state.currentForeman}</p>
+          <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
+        </div>
+        <div class="production-status">
+          <strong>Done</strong>
+          <span>${item.completedAt || state.selectedWeek}</span>
+        </div>
+      </header>
+      <div class="progress-track"><div class="progress-fill" style="width:100%"></div></div>
+      <div class="production-controls-v2">
+        <div class="production-fieldset">
+          <h4>Foundation<span class="es">Cimentacion</span></h4>
+          <div class="production-fields three-up">
+            <label>Foundation ID<span class="es">Cimentacion</span><input data-prod="${item.id}" data-field="foundationId" value="${item.foundationId || ""}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Component<span class="es">Parte</span><select data-prod="${item.id}" data-field="component" ${!canEdit ? "disabled" : ""}>${setOptions(windFoundationComponents, item.component || windFoundationComponents[0])}</select></label>
+            <label>Date completed<span class="es">Fecha terminada</span><input data-prod="${item.id}" data-field="completedAt" type="date" value="${item.completedAt || state.selectedWeek}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        <div class="production-fieldset delay-fieldset">
+          <h4>Delay<span class="es">Retraso</span></h4>
+          <div class="production-fields two-up">
+            <label>Delay reason<span class="es">Razon de retraso</span><select data-prod="${item.id}" data-field="delay" ${!canEdit ? "disabled" : ""}>${setOptions(delayReasons, item.delay || "No delay")}</select></label>
+            <label>Why / notes<span class="es">Por que / notas</span><input data-prod="${item.id}" data-field="delayNote" value="${item.delayNote || ""}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        <div class="production-card-actions">
+          <button class="danger-action table-action" data-remove-production="${item.id}" type="button" ${!canEdit ? "disabled" : ""}>Remove item<span class="es">Quitar partida</span></button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function renderJobs() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
   const areaOptions = Object.entries(areas).map(([id, info]) => ({ id, name: info.label }));
@@ -1150,6 +1313,20 @@ function renderJobs() {
         <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, "Active")}</select></label>
         <button class="primary-action" id="saveJob" type="button" ${!admin ? "disabled" : ""}>${t("Add job", "Agregar trabajo")}</button>
       </div>
+      ${admin && state.selectedArea === "rebarInstall" ? `
+        <div class="job-list-setup section-gap">
+          <div>
+            <h3>${t("Wind farm foundation IDs", "IDs de cimentaciones")}</h3>
+            <p class="sub">For wind farm jobs, generate the foundation list once so foremen choose from a dropdown instead of typing IDs.</p>
+          </div>
+          <div class="form-grid compact-form-grid">
+            <label>Prefix<span class="es">Prefijo</span><input id="foundationPrefix" placeholder="T" value="T" /></label>
+            <label>From<span class="es">Desde</span><input id="foundationFrom" type="number" min="1" step="1" placeholder="1" /></label>
+            <label>To<span class="es">Hasta</span><input id="foundationTo" type="number" min="1" step="1" placeholder="82" /></label>
+            <label>Preview<span class="es">Vista previa</span><input value="Example: T001 to T082" disabled /></label>
+          </div>
+        </div>
+      ` : ""}
       ${admin && isSolar ? renderSolarListsSetup() : ""}
       ${admin ? `
         <div class="job-production-setup section-gap">
@@ -1168,13 +1345,14 @@ function renderJobs() {
       ` : ""}
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${state.jobs
               .map((job) => `<tr>
                 <td><strong>${job.name}</strong></td>
                 <td>${areas[job.area]?.label || job.area}</td>
                 <td>${job.jobType || ""}</td>
+                <td>${job.foundationIds?.length || ""}</td>
                 <td>${job.number || ""}</td>
                 <td>${job.customer || ""}</td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
@@ -1213,6 +1391,7 @@ function renderSolarListsSetup() {
 
 function renderDeliverables() {
   const sheet = currentSheet();
+  const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
   return `
     <section class="panel">
       <div class="split">
@@ -1223,6 +1402,7 @@ function renderDeliverables() {
         <label>From week<span class="es">Desde semana</span><select id="fromWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
         <label>To week<span class="es">Hasta semana</span><select id="toWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
         <button class="secondary-action" data-print="deliverables">${t("Export PDF", "Exportar PDF")}</button>
+        ${canExportPayroll ? `<button class="secondary-action" id="exportPayrollCsv" type="button">${t("Export Payroll CSV", "Exportar CSV nomina")}</button>` : ""}
       </div>
       <div class="metric-grid section-gap">
         <article class="metric"><span>Hours</span><strong>${number(totalHours(sheet))}</strong><small>Selected week</small></article>
@@ -1264,15 +1444,23 @@ function renderCrewSetup(admin) {
         <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!admin ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
         <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!admin ? "disabled" : ""} /></label>
         <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles.filter((role) => role !== "Foreman"), "Rodbuster")}</select></label>
+        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="crewHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!admin ? "disabled" : ""} /></div></label>
         <label class="check-label"><input id="crewNewDol" type="checkbox" ${!admin ? "disabled" : ""} /> DOL apprentice</label>
         <button class="primary-action compact-add" id="addCrewPerson" type="button" ${!admin ? "disabled" : ""}>${t("Add", "Agregar")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>DOL</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>Hourly rate</th><th>DOL</th><th>Actions</th></tr></thead>
           <tbody>
             ${crewMembers
-              .map((person) => `<tr><td><strong>${person.name}</strong></td><td>${person.role}</td><td>${person.group}</td><td>${person.dol ? "Yes" : "No"}</td><td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!admin ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td></tr>`)
+              .map((person) => `<tr>
+                <td><strong>${person.name}</strong></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!admin || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td>${person.group}</td>
+                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!admin ? "disabled" : ""} /></div></td>
+                <td>${person.dol ? "Yes" : "No"}</td>
+                <td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!admin ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td>
+              </tr>`)
               .join("")}
           </tbody>
         </table>
@@ -1292,14 +1480,21 @@ function renderShiftSetup(admin) {
         <label>Name<span class="es">Nombre</span><input id="personName" ${!admin ? "disabled" : ""} /></label>
         <label>Role<span class="es">Puesto</span><select id="personRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
         <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
+        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="personHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!admin ? "disabled" : ""} /></div></label>
         <button class="primary-action" id="savePerson" type="button" ${!admin ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Hourly rate</th><th>Actions</th></tr></thead>
           <tbody>
             ${peopleForArea()
-              .map((person) => `<tr><td><strong>${person.name}</strong></td><td>${person.role}</td><td>${person.group || ""}</td><td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!admin || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td></tr>`)
+              .map((person) => `<tr>
+                <td><strong>${person.name}</strong></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!admin || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
+                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!admin ? "disabled" : ""} /></div></td>
+                <td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!admin || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+              </tr>`)
               .join("")}
           </tbody>
         </table>
@@ -1374,7 +1569,7 @@ function bindTabEvents() {
 
   if ($("addWorker")) $("addWorker").addEventListener("click", addWorkerToWeek);
   if ($("submitSheet")) $("submitSheet").addEventListener("click", submitSheet);
-  if ($("submitProduction")) $("submitProduction").addEventListener("click", submitProduction);
+  document.querySelectorAll("[data-submit-production]").forEach((button) => button.addEventListener("click", submitProduction));
   if ($("duplicateWeek")) $("duplicateWeek").addEventListener("click", duplicateWeek);
   if ($("savePerson")) $("savePerson").addEventListener("click", savePerson);
   if ($("addCrewPerson")) $("addCrewPerson").addEventListener("click", addCrewPerson);
@@ -1391,6 +1586,7 @@ function bindTabEvents() {
     });
   }
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
+  if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
   if ($("newProdDescription")) {
     $("newProdDescription").addEventListener("input", (event) => {
       const parsedQuantity = quantityFromDescription(event.target.value);
@@ -1438,6 +1634,10 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-remove-crew-person]").forEach((button) => {
     button.addEventListener("click", () => removeCrewPerson(button.dataset.removeCrewPerson));
+  });
+
+  document.querySelectorAll("[data-person-field]").forEach((input) => {
+    input.addEventListener("change", updatePersonField);
   });
 
   document.querySelectorAll("[data-remove-person]").forEach((button) => {
@@ -1514,13 +1714,48 @@ function submitProduction() {
   showToast("Production submitted");
 }
 
+function exportPayrollCsv() {
+  const sheet = currentSheet();
+  const headers = ["Area", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Notes"];
+  const rows = sheet.rows.map((row) => {
+    const person = personByName(row.employee) || {};
+    const regular = rowHours(row);
+    const pto = Number(row.pto) || 0;
+    const sick = Number(row.sick) || 0;
+    const total = regular + pto + sick;
+    const perDiem = Number(row.perDiem) || 0;
+    const rate = Number(person.hourlyRate) || 0;
+    const gross = total * rate + perDiem;
+    return [
+      area().label,
+      sheet.week,
+      sheet.foreman,
+      jobName(sheet.jobId),
+      row.employee,
+      rowRole(row),
+      regular,
+      pto,
+      sick,
+      total,
+      perDiem,
+      rate,
+      gross.toFixed(2),
+      row.notes || ""
+    ];
+  });
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const filename = `crewforge-payroll-${state.selectedArea}-${state.selectedWeek}.csv`;
+  downloadFile(filename, csv);
+  showToast("Payroll CSV exported");
+}
+
 function addWorkerToWeek() {
   const selected = $("borrowWorker")?.value;
   const manualName = $("manualWorker")?.value.trim();
   let person = selected ? personByName(selected) : null;
   if (!person && manualName) {
     const sheet = currentSheet();
-    person = { name: manualName, role: $("manualRole").value, area: state.selectedArea, group: area().mode === "crew" ? sheet.group : $("manualGroup").value, dol: $("manualDol")?.checked || false };
+    person = { name: manualName, role: $("manualRole").value, area: state.selectedArea, group: area().mode === "crew" ? sheet.group : $("manualGroup").value, dol: $("manualDol")?.checked || false, hourlyRate: 0 };
     state.people.push(person);
   }
   if (!person) {
@@ -1558,7 +1793,8 @@ function addCrewPerson() {
       role: $("crewNewRole").value,
       area: state.selectedArea,
       group: crew,
-      dol: $("crewNewDol")?.checked || false
+      dol: $("crewNewDol")?.checked || false,
+      hourlyRate: Number($("crewHourlyRate")?.value) || 0
     };
     state.people.push(person);
   } else if (person) {
@@ -1566,6 +1802,7 @@ function addCrewPerson() {
     person.area = state.selectedArea;
     person.role = person.role === "Foreman" ? person.role : $("crewNewRole").value || person.role;
     person.dol = $("crewNewDol")?.checked || person.dol || false;
+    if ($("crewHourlyRate")?.value) person.hourlyRate = Number($("crewHourlyRate").value) || 0;
   }
 
   if (!person) {
@@ -1586,6 +1823,16 @@ function removeCrewPerson(name) {
   saveState();
   render();
   showToast(`${name} removed from crew`);
+}
+
+function updatePersonField(event) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  const person = personByName(event.target.dataset.personName);
+  if (!person) return;
+  const field = event.target.dataset.personField;
+  person[field] = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
+  saveState();
+  showToast(`${person.name} updated`);
 }
 
 function removePerson(name) {
@@ -1611,6 +1858,45 @@ function removeProductionItem(id) {
 }
 
 function addProduction() {
+  const selectedJobId = $("newProdJob").value;
+  const selectedJob = jobById(selectedJobId);
+  if (selectedJob?.jobType === "Wind Farm") {
+    const foundationId = $("newFoundationId")?.value;
+    const component = $("newFoundationComponent")?.value;
+    if (!foundationId || !component) {
+      showToast("Choose a foundation ID and component");
+      return;
+    }
+    const duplicate = state.production.some((item) => item.jobId === selectedJobId && item.foundationId === foundationId && item.component === component);
+    if (duplicate) {
+      showToast(`${foundationId} ${component} is already recorded`);
+      return;
+    }
+    state.production.push({
+      id: `p${Date.now()}`,
+      area: state.selectedArea,
+      productionMode: "foundation",
+      foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
+      jobId: selectedJobId,
+      foundationId,
+      component,
+      code: foundationId,
+      description: component,
+      planned: 1,
+      completed: 1,
+      completedQty: 1,
+      quantity: 1,
+      completedAt: state.selectedWeek,
+      reviewStatus: "Draft",
+      delay: "No delay",
+      delayNote: "",
+      status: "Complete"
+    });
+    saveState();
+    render();
+    showToast(`${foundationId} ${component} added`);
+    return;
+  }
   const code = $("newProdCode").value.trim();
   const description = $("newProdDescription").value.trim();
   const parsedQuantity = quantityFromDescription(description);
@@ -1668,7 +1954,7 @@ function savePerson() {
     return;
   }
   const existing = personByName(name);
-  const next = { name, role: $("personRole").value, area: state.selectedArea, group: $("personGroup").value, dol: $("personDol")?.checked || false };
+  const next = { name, role: $("personRole").value, area: state.selectedArea, group: $("personGroup").value, dol: $("personDol")?.checked || false, hourlyRate: Number($("personHourlyRate")?.value) || 0 };
   if (existing) Object.assign(existing, next);
   else state.people.push(next);
   saveState();
@@ -1693,6 +1979,13 @@ function saveJob() {
     counter += 1;
   }
   const customer = areaId === "solarPiles" ? $("jobCustomerInput")?.value || "" : $("jobCustomerInput")?.value.trim() || "";
+  const jobType = areaId === "solarPiles" ? "" : $("jobTypeInput")?.value || defaultJobTypeForArea(areaId);
+  const foundationIds = jobType === "Wind Farm" ? generateFoundationIds($("foundationPrefix")?.value.trim() || "T", $("foundationFrom")?.value, $("foundationTo")?.value) : [];
+  const hasFoundationRange = $("foundationFrom")?.value || $("foundationTo")?.value;
+  if (jobType === "Wind Farm" && hasFoundationRange && !foundationIds.length) {
+    showToast("Check the foundation ID range");
+    return;
+  }
   const productionCode = $("jobProdCode")?.value.trim() || "";
   const productionDescription = $("jobProdDescription")?.value.trim() || "";
   const parsedQuantity = quantityFromDescription(productionDescription);
@@ -1713,7 +2006,8 @@ function saveJob() {
     number: $("jobNumberInput").value.trim(),
     customer,
     area: areaId,
-    jobType: areaId === "solarPiles" ? "" : $("jobTypeInput")?.value || defaultJobTypeForArea(areaId),
+    jobType,
+    foundationIds,
     status: $("jobStatusInput").value
   });
   if (hasProductionSetup) {
