@@ -273,7 +273,8 @@ function upgradeState(next) {
   next.jobs = (next.jobs || []).map((job) => ({
     ...job,
     jobType: job.jobType || defaultJobTypeForArea(job.area),
-    foundationIds: job.foundationIds || []
+    foundationIds: job.foundationIds || [],
+    customTracking: job.customTracking || []
   }));
   next.people = (next.people || []).map((person) => ({
     ...person,
@@ -595,7 +596,7 @@ function productionForArea() {
 function productionTotals() {
   const items = productionForArea();
   const planned = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : Number(item.planned) || 0), 0);
-  const completed = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : completedWeight(item)), 0);
+  const completed = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : item.productionMode === "custom" ? Number(item.completedQty) || 0 : completedWeight(item)), 0);
   const delayed = items.filter((item) => item.delay !== "No delay").length;
   return { planned, completed, delayed, remaining: Math.max(planned - completed, 0) };
 }
@@ -861,6 +862,9 @@ function productionSummaryTable() {
           .map((item) => {
             if (item.productionMode === "foundation") {
               return `<tr><td><strong>${item.foundationId}</strong></td><td>${jobName(item.jobId)}</td><td>${item.component}</td><td>Complete</td><td>${item.delay}</td></tr>`;
+            }
+            if (item.productionMode === "custom") {
+              return `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} ${item.unit || ""}</td><td>${preciseNumber(item.completedQty || 0)} / ${preciseNumber(item.planned || 0)} ${item.unit || ""}</td><td>${item.delay}</td></tr>`;
             }
             return `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`;
           })
@@ -1145,6 +1149,7 @@ function renderProductionAdder() {
   const defaultJob = state.selectedProductionJob || selectedJobs()[0]?.id || "";
   const selectedJob = jobById(defaultJob);
   const isWind = selectedJob?.jobType === "Wind Farm";
+  const isCustom = selectedJob?.customTracking?.length;
   if (isWind) {
     const foundationIds = selectedJob.foundationIds || [];
     return `
@@ -1154,6 +1159,17 @@ function renderProductionAdder() {
         <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
         <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
         <button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>
+      </div>
+    `;
+  }
+  if (isCustom) {
+    return `
+      <div class="production-add-grid commercial-production-add section-gap">
+        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
+        <label>Tracking item<span class="es">Partida</span><select id="newCustomTracking">${setOptions(selectedJob.customTracking, selectedJob.customTracking[0]?.id || "", (item) => `${item.name} (${item.unit})`, (item) => item.id)}</select></label>
+        <label>Amount completed<span class="es">Cantidad terminada</span><input id="newCustomCompleted" type="number" min="0" step="0.01" placeholder="0" /></label>
+        <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <button class="secondary-action" id="addProduction" type="button">${t("Add progress", "Agregar avance")}</button>
       </div>
     `;
   }
@@ -1181,6 +1197,7 @@ function productionFactsMarkup(item) {
 
 function renderProductionCard(item) {
   if (item.productionMode === "foundation") return renderFoundationProductionCard(item);
+  if (item.productionMode === "custom") return renderCustomProductionCard(item);
   const quantity = productionQuantity(item);
   const perPiece = unitWeight(item);
   const weightDone = completedWeight(item);
@@ -1233,6 +1250,49 @@ function renderProductionCard(item) {
             </div>
           </div>
         ` : ""}
+        <div class="production-fieldset delay-fieldset">
+          <h4>Delay<span class="es">Retraso</span></h4>
+          <div class="production-fields two-up">
+            <label>Delay reason<span class="es">Razon de retraso</span><select data-prod="${item.id}" data-field="delay" ${!canEdit ? "disabled" : ""}>${setOptions(delayReasons, item.delay || "No delay")}</select></label>
+            <label>Why / notes<span class="es">Por que / notas</span><input data-prod="${item.id}" data-field="delayNote" value="${item.delayNote || ""}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
+        <div class="production-card-actions">
+          <button class="danger-action table-action" data-remove-production="${item.id}" type="button" ${!canEdit ? "disabled" : ""}>Remove item<span class="es">Quitar partida</span></button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderCustomProductionCard(item) {
+  const planned = Number(item.planned) || 0;
+  const completed = Number(item.completedQty) || 0;
+  const pct = planned ? Math.min(100, Math.round((completed / planned) * 100)) : 0;
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  return `
+    <article class="production-card">
+      <header class="production-card-header">
+        <div>
+          <h3>${item.description}</h3>
+          <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
+          <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
+        </div>
+        <div class="production-status">
+          <strong data-prod-pct="${item.id}">${pct}%</strong>
+          <span data-prod-progress-text="${item.id}">${preciseNumber(completed)} / ${preciseNumber(planned)} ${item.unit || ""}</span>
+        </div>
+      </header>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="production-controls-v2">
+        <div class="production-fieldset">
+          <h4>Progress<span class="es">Avance</span></h4>
+          <div class="production-fields three-up">
+            <label>Total planned<span class="es">Total planeado</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="0.01" value="${planned}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="0.01" value="${completed}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Unit<span class="es">Unidad</span><input data-prod="${item.id}" data-field="unit" value="${item.unit || ""}" ${!canEdit ? "disabled" : ""} /></label>
+          </div>
+        </div>
         <div class="production-fieldset delay-fieldset">
           <h4>Delay<span class="es">Retraso</span></h4>
           <div class="production-fields two-up">
@@ -1327,6 +1387,25 @@ function renderJobs() {
             <label>From<span class="es">Desde</span><input id="foundationFrom" type="number" min="1" step="1" placeholder="1" /></label>
             <label>To<span class="es">Hasta</span><input id="foundationTo" type="number" min="1" step="1" placeholder="82" /></label>
             <label>Preview<span class="es">Vista previa</span><input value="Example: T001 to T082" disabled /></label>
+          </div>
+        </div>
+      ` : ""}
+      ${admin && selectedJobType === "Commercial" ? `
+        <div class="job-list-setup section-gap">
+          <div>
+            <h3>${t("Custom production tracking", "Seguimiento personalizado")}</h3>
+            <p class="sub">For commercial work, define the production items this job needs. Foremen will enter completed amounts against these lines.</p>
+          </div>
+          <div class="custom-tracking-grid">
+            ${[1, 2, 3]
+              .map(
+                (index) => `
+                  <label>Tracking item ${index}<span class="es">Partida ${index}</span><input id="customTrackName${index}" placeholder="Embed plates" /></label>
+                  <label>Unit<span class="es">Unidad</span><input id="customTrackUnit${index}" placeholder="pieces, LF, each" /></label>
+                  <label>Total planned<span class="es">Total planeado</span><input id="customTrackPlanned${index}" type="number" min="0" step="0.01" placeholder="0" /></label>
+                `
+              )
+              .join("")}
           </div>
         </div>
       ` : ""}
@@ -1908,6 +1987,42 @@ function addProduction() {
     showToast(`${foundationId} ${component} added`);
     return;
   }
+  if (selectedJob?.customTracking?.length) {
+    const trackingId = $("newCustomTracking")?.value;
+    const tracking = selectedJob.customTracking.find((item) => item.id === trackingId);
+    const completed = Number($("newCustomCompleted")?.value) || 0;
+    if (!tracking) {
+      showToast("Choose a tracking item");
+      return;
+    }
+    if (!completed) {
+      showToast("Enter amount completed");
+      return;
+    }
+    state.production.push({
+      id: `p${Date.now()}`,
+      area: state.selectedArea,
+      productionMode: "custom",
+      foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
+      jobId: selectedJobId,
+      customTrackingId: tracking.id,
+      code: tracking.name,
+      description: tracking.name,
+      unit: tracking.unit,
+      planned: Number(tracking.planned) || 0,
+      quantity: Number(tracking.planned) || 0,
+      completedQty: completed,
+      completed,
+      reviewStatus: "Draft",
+      delay: "No delay",
+      delayNote: "",
+      status: completed >= (Number(tracking.planned) || 0) && Number(tracking.planned) ? "Complete" : "In Progress"
+    });
+    saveState();
+    render();
+    showToast(`${tracking.name} progress added`);
+    return;
+  }
   const code = $("newProdCode").value.trim();
   const description = $("newProdDescription").value.trim();
   const parsedQuantity = quantityFromDescription(description);
@@ -1992,6 +2107,17 @@ function saveJob() {
   const customer = areaId === "solarPiles" ? $("jobCustomerInput")?.value || "" : $("jobCustomerInput")?.value.trim() || "";
   const jobType = areaId === "solarPiles" ? "" : $("jobTypeInput")?.value || defaultJobTypeForArea(areaId);
   const foundationIds = jobType === "Wind Farm" ? generateFoundationIds($("foundationPrefix")?.value.trim() || "T", $("foundationFrom")?.value, $("foundationTo")?.value) : [];
+  const customTracking =
+    jobType === "Commercial"
+      ? [1, 2, 3]
+          .map((index) => ({
+            id: `ct-${Date.now()}-${index}`,
+            name: $(`customTrackName${index}`)?.value.trim() || "",
+            unit: $(`customTrackUnit${index}`)?.value.trim() || "each",
+            planned: Number($(`customTrackPlanned${index}`)?.value) || 0
+          }))
+          .filter((item) => item.name)
+      : [];
   const hasFoundationRange = $("foundationFrom")?.value || $("foundationTo")?.value;
   if (jobType === "Wind Farm" && hasFoundationRange && !foundationIds.length) {
     showToast("Check the foundation ID range");
@@ -2019,6 +2145,7 @@ function saveJob() {
     area: areaId,
     jobType,
     foundationIds,
+    customTracking,
     status: $("jobStatusInput").value
   });
   if (hasProductionSetup) {
@@ -2107,6 +2234,25 @@ function updateProductionItem(event) {
   if (!item) return;
   const field = event.target.dataset.field;
   item[field] = ["completed", "completedQty", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
+  if (item.productionMode === "custom") {
+    item.completed = Number(item.completedQty) || 0;
+    item.quantity = Number(item.planned) || 0;
+    item.status = item.planned && item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
+    item.reviewStatus = "Draft";
+    item.submittedAt = "";
+    item.submittedBy = "";
+    saveState();
+    const pct = item.planned ? Math.min(100, Math.round((item.completed / item.planned) * 100)) : 0;
+    const pctBox = document.querySelector(`[data-prod-pct="${item.id}"]`);
+    if (pctBox) pctBox.textContent = `${pct}%`;
+    const progressText = document.querySelector(`[data-prod-progress-text="${item.id}"]`);
+    if (progressText) progressText.textContent = `${preciseNumber(item.completed)} / ${preciseNumber(item.planned)} ${item.unit || ""}`;
+    const fill = document.querySelector(`[data-prod="${item.id}"]`)?.closest(".production-card")?.querySelector(".progress-fill");
+    if (fill) fill.style.width = `${pct}%`;
+    const reviewTag = document.querySelector(`[data-prod-review="${item.id}"]`);
+    if (reviewTag) reviewTag.textContent = item.reviewStatus;
+    return;
+  }
   item.quantity = productionQuantity(item);
   item.completed = completedWeight(item);
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";

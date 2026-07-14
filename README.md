@@ -29,6 +29,7 @@ Tagline: Crew time and job progress, forged into one.
 - Wind Farm installation jobs can generate foundation IDs, such as `T001` through `T082`, for foremen to pick from a dropdown
 - Wind Farm production tracks Bottom Mat, Top, and Pedestal completion by foundation ID, with completed and partial foundation lists
 - Rebar fabrication jobs use those same types plus Commercial
+- Commercial jobs can define custom production tracking items with a name, unit, and total planned amount
 - Solar Piles jobs use admin-maintained dropdown lists for client and saved job names
 - Redesigned production cards with grouped setup, progress, delay, and remove actions
 - Production job filter also controls the default job for new production entries
