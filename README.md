@@ -24,6 +24,7 @@ Tagline: Crew time and job progress, forged into one.
 - Payroll deliverables can be exported as CSV
 - Admin/payroll can enter hourly rates for employees in People / Crews or People / Shifts
 - Admin/payroll can adjust crew members by adding/removing workers and editing roles/rates
+- Weekly installation timesheets re-sync with the current default crew while preserving entered hours and borrowed workers
 - Production submit is available near the top and bottom of the Production view when production items exist
 - Installation jobs use a job-type dropdown: Wind Farm, T-line Substation, or Data Center
 - Wind Farm installation jobs can generate foundation IDs, such as `T001` through `T082`, for foremen to pick from a dropdown

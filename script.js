@@ -527,6 +527,65 @@ function blankRow(person) {
   };
 }
 
+function rowHasEnteredData(row) {
+  return (
+    days.some((day) => Number(row[day]) || row.lightDuty?.[day]) ||
+    Number(row.pto) ||
+    Number(row.sick) ||
+    Number(row.perDiem) ||
+    Boolean((row.notes || "").trim())
+  );
+}
+
+function syncSheetCrewRows(sheet, areaId = sheet.area || state.selectedArea) {
+  if (!sheet || areas[areaId]?.mode !== "crew") return false;
+  let changed = false;
+  sheet.foreman = normalizeForemanName(sheet.foreman);
+  const crew = crewNameForForeman(sheet.foreman);
+  if (sheet.group !== crew) {
+    sheet.group = crew;
+    changed = true;
+  }
+
+  const expectedPeople = state.people.filter((person) => person.area === areaId && (person.group === crew || person.name === sheet.foreman));
+  const expectedNames = new Set(expectedPeople.map((person) => person.name));
+  const existingNames = new Set((sheet.rows || []).map((row) => row.employee));
+
+  expectedPeople.forEach((person) => {
+    if (!existingNames.has(person.name)) {
+      sheet.rows.push(blankRow(person));
+      changed = true;
+    }
+  });
+
+  const nextRows = [];
+  (sheet.rows || []).forEach((row) => {
+    const isDefaultCrew = expectedNames.has(row.employee);
+    if (isDefaultCrew || row.borrowed) {
+      nextRows.push(row);
+      return;
+    }
+    if (rowHasEnteredData(row)) {
+      row.borrowed = true;
+      nextRows.push(row);
+    }
+    changed = true;
+  });
+
+  if (nextRows.length !== sheet.rows.length) changed = true;
+  sheet.rows = nextRows;
+  return changed;
+}
+
+function syncSheetsForCrew(areaId, crew) {
+  let changed = false;
+  Object.values(state.sheets || {}).forEach((sheet) => {
+    if (sheet.area !== areaId || sheet.group !== crew) return;
+    changed = syncSheetCrewRows(sheet, areaId) || changed;
+  });
+  return changed;
+}
+
 function seedSheet() {
   const foreman = foremenForArea().some((person) => person.name === state.currentForeman) ? state.currentForeman : foremenForArea()[0]?.name || "";
   const group = area().mode === "crew" ? crewNameForForeman(foreman) : groupOptions()[0] || "";
@@ -561,6 +620,7 @@ function currentSheet() {
   if (validForemen.length && !validForemen.includes(sheet.foreman)) {
     setSheetForeman(sheet, validForemen[0]);
   }
+  if (syncSheetCrewRows(sheet)) saveState();
   return sheet;
 }
 
@@ -1900,6 +1960,7 @@ function addCrewPerson() {
     return;
   }
 
+  syncSheetsForCrew(state.selectedArea, crew);
   saveState();
   render();
   showToast(`${person.name} added to ${crew}`);
@@ -1909,7 +1970,9 @@ function removeCrewPerson(name) {
   const person = personByName(name);
   if (!person || person.role === "Foreman") return;
   if (!confirm(`Remove ${name} from this crew?`)) return;
+  const oldCrew = person.group;
   person.group = "";
+  if (oldCrew) syncSheetsForCrew(state.selectedArea, oldCrew);
   saveState();
   render();
   showToast(`${name} removed from crew`);
