@@ -18,6 +18,7 @@ Tagline: Crew time and job progress, forged into one.
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Updated CrewForge logo, favicon, and thumbnail assets from the latest logo PDF
 - Separate post-login operating area icons for Rebar Fabrication and Solar Piles Fabrication
+- Persistent CrewForge branding on login, area selection, sidebar, and app top bar
 - Tablet-landscape layout adjusts earlier so iPad sideways view has more room for the work area
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman

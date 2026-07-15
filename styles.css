@@ -62,12 +62,28 @@ button {
   padding: 24px;
 }
 
-.login-card img {
-  width: min(360px, 100%);
-  height: auto;
-  border: 1px solid rgba(167, 123, 34, 0.45);
+.login-logo-stack {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
   background: var(--steel-dark);
+  padding: 8px 12px;
+}
+
+.login-icon {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.login-wordmark {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
 }
 
 .trial-note {
@@ -260,12 +276,16 @@ h3 {
   display: flex;
   gap: 12px;
   align-items: center;
+  border: 1px solid rgba(167, 123, 34, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px;
 }
 
 .mark,
 .brand-logo {
-  width: 42px;
-  height: 42px;
+  width: 52px;
+  height: 52px;
   border-radius: 8px;
 }
 
@@ -385,6 +405,33 @@ h3 {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.topbar-title {
+  display: grid;
+  gap: 8px;
+}
+
+.topbar-brandlockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  border: 1px solid rgba(167, 123, 34, 0.45);
+  border-radius: 8px;
+  background: #071426;
+  color: #f4f7f8;
+  padding: 6px 10px 6px 7px;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.topbar-brandlockup img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 6px;
 }
 
 .top-actions,

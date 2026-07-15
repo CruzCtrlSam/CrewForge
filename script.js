@@ -699,7 +699,10 @@ function renderLogin() {
   $("app").innerHTML = `
     <main class="login-screen">
       <section class="login-card">
-        <img src="./assets/crewforge-logo-lockup.png" alt="CrewForge logo" />
+        <div class="login-logo-stack">
+          <img class="login-icon" src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
+          <img class="login-wordmark" src="./assets/crewforge-logo-lockup.png" alt="CrewForge" />
+        </div>
         <div>
           <p class="eyebrow">Trial access</p>
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
@@ -824,7 +827,11 @@ function renderShell() {
       </aside>
       <main class="workspace">
         <header class="topbar">
-          <div>
+          <div class="topbar-title">
+            <div class="topbar-brandlockup">
+              <img src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
+              <strong>${appName}</strong>
+            </div>
             <p class="eyebrow">${area().label}</p>
             <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
             ${isForemanMode() ? `<p class="sub">${state.currentForeman} · ${state.selectedWeek}</p>` : ""}
