@@ -749,8 +749,11 @@ function renderGate() {
     <main class="area-gate">
       <section class="gate-header">
         <div class="gate-brand">
-          <img src="./assets/crewforge-logo-lockup.png" alt="CrewForge logo" />
-          <div>
+          <div class="gate-logo-stack">
+            <img class="gate-icon" src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
+            <img class="gate-wordmark" src="./assets/crewforge-logo-lockup.png" alt="CrewForge" />
+          </div>
+          <div class="gate-copy">
             <p class="eyebrow">${appName}</p>
             <p class="sub">${appTagline}</p>
           </div>

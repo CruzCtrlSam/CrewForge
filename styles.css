@@ -105,6 +105,14 @@ button {
   max-width: 780px;
 }
 
+.gate-header h1 {
+  color: #f4f7f8;
+}
+
+.gate-header > .sub {
+  color: #c4ccd2;
+}
+
 .gate-brand {
   display: flex;
   align-items: center;
@@ -112,13 +120,38 @@ button {
   margin-bottom: 18px;
 }
 
-.gate-brand img {
-  width: min(520px, 100%);
-  height: auto;
-  object-fit: contain;
+.gate-logo-stack {
+  width: min(620px, 100%);
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
   border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
   background: var(--steel-dark);
+  padding: 8px 12px;
+}
+
+.gate-icon {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.gate-wordmark {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.gate-copy .eyebrow {
+  color: #d8dde0;
+}
+
+.gate-copy .sub {
+  color: #d8dde0;
+  max-width: 280px;
 }
 
 .eyebrow {
