@@ -63,17 +63,19 @@ button {
 }
 
 .login-logo-stack {
-  display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
+  width: min(440px, 100%);
+  display: flex;
   align-items: center;
   gap: 12px;
   border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
   background: var(--steel-dark);
   padding: 8px 12px;
+  overflow: hidden;
 }
 
 .login-icon {
+  flex: 0 0 54px;
   width: 58px;
   height: 58px;
   object-fit: contain;
@@ -81,7 +83,11 @@ button {
 }
 
 .login-wordmark {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: calc(100% - 70px);
+  max-height: 62px;
   height: auto;
   object-fit: contain;
 }
@@ -130,33 +136,40 @@ button {
 }
 
 .gate-brand {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(180px, 280px);
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   margin-bottom: 18px;
 }
 
 .gate-logo-stack {
-  width: min(620px, 100%);
-  display: grid;
-  grid-template-columns: 74px minmax(0, 1fr);
+  width: min(560px, 100%);
+  max-height: 92px;
+  display: flex;
   align-items: center;
   gap: 12px;
   border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
   background: var(--steel-dark);
   padding: 8px 12px;
+  overflow: hidden;
 }
 
 .gate-icon {
-  width: 62px;
-  height: 62px;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
   border-radius: 8px;
 }
 
 .gate-wordmark {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: calc(100% - 74px);
+  max-height: 70px;
   height: auto;
   object-fit: contain;
 }
@@ -1314,7 +1327,16 @@ tr:last-child td {
   }
 
   .gate-brand {
-    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .gate-logo-stack {
+    width: 100%;
+  }
+
+  .gate-copy .sub {
+    max-width: none;
   }
 
   .foreman-entry-grid {
@@ -1370,6 +1392,25 @@ tr:last-child td {
 
   .login-card {
     padding: 16px;
+  }
+
+  .login-logo-stack,
+  .gate-logo-stack {
+    gap: 10px;
+    padding: 8px;
+  }
+
+  .login-icon,
+  .gate-icon {
+    flex-basis: 48px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .login-wordmark,
+  .gate-wordmark {
+    max-width: calc(100% - 58px);
+    max-height: 54px;
   }
 
   .workspace,
