@@ -759,6 +759,7 @@ function renderGate() {
           .map(
             ([id, info]) => `
             <button class="area-card" type="button" data-area="${id}">
+              <img class="area-card-thumb" src="./assets/crewforge-thumbnail.png" alt="" />
               <span>
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>

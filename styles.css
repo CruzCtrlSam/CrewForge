@@ -1,20 +1,21 @@
 :root {
-  --ink: #111820;
-  --muted: #5c646b;
-  --line: #aeb7bd;
-  --wash: #e4e7e8;
+  --ink: #071426;
+  --muted: #59636b;
+  --line: #9ea8ad;
+  --wash: #d7dde1;
   --panel: #ffffff;
-  --field: #f0f2f3;
-  --soft: #eef1f2;
-  --green: #6fb6d8;
-  --green-dark: #2f6f8e;
-  --blue: #6fb6d8;
-  --blue-dark: #2f6f8e;
-  --gold: #f0a61a;
-  --steel: #2d3842;
-  --steel-dark: #151c24;
+  --field: #eef2f4;
+  --soft: #e8edf0;
+  --green: #5eaed2;
+  --green-dark: #2c789d;
+  --blue: #5eaed2;
+  --blue-dark: #2c789d;
+  --gold: #a77b22;
+  --gold-bright: #f3ad17;
+  --steel: #565e65;
+  --steel-dark: #071426;
   --red: #b6382e;
-  --shadow: 0 14px 38px rgba(17, 24, 32, 0.16);
+  --shadow: 0 14px 38px rgba(7, 20, 38, 0.18);
 }
 
 * {
@@ -23,7 +24,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #071426, #0d2035);
+  background: linear-gradient(180deg, #071426, #0b2036 55%, #071426);
   color: var(--ink);
   font-family: Inter, Arial, sans-serif;
 }
@@ -64,9 +65,9 @@ button {
 .login-card img {
   width: min(360px, 100%);
   height: auto;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(167, 123, 34, 0.45);
   border-radius: 8px;
-  background: #fff;
+  background: var(--steel-dark);
 }
 
 .trial-note {
@@ -115,15 +116,14 @@ button {
   width: min(520px, 100%);
   height: auto;
   object-fit: contain;
-  border: 2px solid var(--line);
+  border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
-  background: #fff;
-  padding: 10px;
+  background: var(--steel-dark);
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: var(--steel);
+  color: var(--steel-dark);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
@@ -184,6 +184,16 @@ h3 {
   align-content: space-between;
 }
 
+.area-card-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 2px solid rgba(167, 123, 34, 0.55);
+  border-radius: 8px;
+  background: var(--steel-dark);
+  margin-bottom: 18px;
+}
+
 .area-card strong {
   display: block;
   margin-bottom: 8px;
@@ -191,7 +201,7 @@ h3 {
 }
 
 .area-card:hover {
-  border-color: var(--gold);
+  border-color: var(--gold-bright);
 }
 
 .shell {
@@ -236,7 +246,7 @@ h3 {
 
 .brand-logo {
   object-fit: contain;
-  background: #111820;
+  background: #071426;
   border: 1px solid rgba(240, 166, 26, 0.45);
 }
 
@@ -477,7 +487,7 @@ textarea {
 }
 
 .secondary-action {
-  background: var(--gold);
+  background: var(--gold-bright);
   color: var(--steel-dark);
   border-color: #c98208;
 }
@@ -1136,6 +1146,35 @@ tr:last-child td {
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+@media (max-width: 1180px) {
+  .shell {
+    display: block;
+    overflow-x: visible;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .nav-tabs {
+    grid-template-columns: repeat(5, minmax(118px, 1fr));
+    overflow-x: auto;
+  }
+
+  .nav-tab {
+    min-height: 64px;
+  }
+
+  .workspace {
+    padding: 20px;
+  }
+
+  .topbar {
+    display: grid;
+  }
 }
 
 @media (max-width: 1000px) {

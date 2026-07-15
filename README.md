@@ -16,6 +16,8 @@ Tagline: Crew time and job progress, forged into one.
 - Fabrication timesheets include light-duty checkboxes for each day
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
+- Updated CrewForge logo, favicon, and thumbnail assets from the latest logo PDF
+- Tablet-landscape layout adjusts earlier so iPad sideways view has more room for the work area
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
 - Optional production setup can be left unassigned when a job is created
