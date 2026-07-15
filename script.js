@@ -50,6 +50,11 @@ const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman
 const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
+const areaArtwork = {
+  rebarFab: "./assets/crewforge-rebar-fabrication.png",
+  solarPiles: "./assets/crewforge-solar-piles.png",
+  rebarInstall: "./assets/crewforge-thumbnail.png"
+};
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
@@ -759,7 +764,7 @@ function renderGate() {
           .map(
             ([id, info]) => `
             <button class="area-card" type="button" data-area="${id}">
-              <img class="area-card-thumb" src="./assets/crewforge-thumbnail.png" alt="" />
+              <img class="area-card-thumb" src="${areaArtwork[id] || "./assets/crewforge-thumbnail.png"}" alt="" />
               <span>
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>

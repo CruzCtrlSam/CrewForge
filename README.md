@@ -17,6 +17,7 @@ Tagline: Crew time and job progress, forged into one.
 - Trial access screen with demo codes for foreman, payroll, management, and admin views
 - Responsive layout adjustments for phone, tablet, and desktop review
 - Updated CrewForge logo, favicon, and thumbnail assets from the latest logo PDF
+- Separate post-login operating area icons for Rebar Fabrication and Solar Piles Fabrication
 - Tablet-landscape layout adjusts earlier so iPad sideways view has more room for the work area
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
@@ -57,6 +58,10 @@ Tagline: Crew time and job progress, forged into one.
 - `script.js` - app behavior and demo data
 - `assets/crewforge-app-icon.png` - app/sidebar icon
 - `assets/crewforge-logo-lockup.png` - full logo lockup for the opening screen
+- `assets/crewforge-favicon.png` - browser tab icon
+- `assets/crewforge-thumbnail.png` - Rebar Installation operating area icon
+- `assets/crewforge-rebar-fabrication.png` - Rebar Fabrication operating area icon
+- `assets/crewforge-solar-piles.png` - Solar Piles Fabrication operating area icon
 - `assets/crewforge-logo.png` - earlier logo concept kept as a fallback asset
 - `SUPABASE_SETUP.md` - shared trial setup notes
 - `.nojekyll` - lets GitHub Pages serve the static files directly

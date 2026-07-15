@@ -185,8 +185,8 @@ h3 {
 }
 
 .area-card-thumb {
-  width: 64px;
-  height: 64px;
+  width: 88px;
+  height: 88px;
   object-fit: cover;
   border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
