@@ -50,10 +50,12 @@ const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman
 const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
+const assetVersion = "64";
+const asset = (path) => `${path}?v=${assetVersion}`;
 const areaArtwork = {
-  rebarFab: "./assets/crewforge-rebar-fabrication.png",
-  solarPiles: "./assets/crewforge-solar-piles.png",
-  rebarInstall: "./assets/crewforge-thumbnail.png"
+  rebarFab: asset("./assets/crewforge-rebar-fabrication.png"),
+  solarPiles: asset("./assets/crewforge-solar-piles.png"),
+  rebarInstall: asset("./assets/crewforge-thumbnail.png")
 };
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
@@ -130,6 +132,10 @@ const defaultState = {
   activeTab: "dashboard",
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
+  selectedEmployeeReport: "",
+  selectedEmployeeReportArea: "all",
+  selectedEmployeeReportFromWeek: "2026-07-03",
+  selectedEmployeeReportToWeek: "2026-07-03",
   jobDraftType: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
@@ -267,6 +273,10 @@ function loadState() {
 
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
+  next.selectedEmployeeReport = next.selectedEmployeeReport || "";
+  next.selectedEmployeeReportArea = next.selectedEmployeeReportArea || "all";
+  next.selectedEmployeeReportFromWeek = next.selectedEmployeeReportFromWeek || next.selectedWeek || defaultState.selectedWeek;
+  next.selectedEmployeeReportToWeek = next.selectedEmployeeReportToWeek || next.selectedWeek || defaultState.selectedWeek;
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.jobLists = {
@@ -700,8 +710,8 @@ function renderLogin() {
     <main class="login-screen">
       <section class="login-card">
         <div class="login-logo-stack">
-          <img class="login-icon" src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
-          <img class="login-wordmark" src="./assets/crewforge-logo-lockup.png" alt="CrewForge" />
+          <img class="login-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+          <img class="login-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
         </div>
         <div>
           <p class="eyebrow">Trial access</p>
@@ -709,7 +719,7 @@ function renderLogin() {
           <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
         </div>
         <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(trialForemanNames, trialForemanNames[0])}</select></label>
+        <label id="foremanLoginField" class="hidden">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(trialForemanNames, trialForemanNames[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
@@ -722,10 +732,18 @@ function renderLogin() {
     </main>
   `;
   $("loginButton").addEventListener("click", loginWithCode);
+  $("accessCode").addEventListener("input", updateForemanLoginVisibility);
   $("accessCode").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithCode();
   });
+  updateForemanLoginVisibility();
   $("accessCode").focus();
+}
+
+function updateForemanLoginVisibility() {
+  const code = $("accessCode")?.value.trim().toUpperCase();
+  const showForemen = code === "FOREMAN";
+  $("foremanLoginField")?.classList.toggle("hidden", !showForemen);
 }
 
 function loginWithCode() {
@@ -735,6 +753,7 @@ function loginWithCode() {
     showToast("Code not recognized");
     return;
   }
+  updateForemanLoginVisibility();
   const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
   const displayName = account.needsForeman ? selectedForeman : account.name;
   state.auth = { name: displayName, role: account.role, code: account.code };
@@ -753,8 +772,8 @@ function renderGate() {
       <section class="gate-header">
         <div class="gate-brand">
           <div class="gate-logo-stack">
-            <img class="gate-icon" src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
-            <img class="gate-wordmark" src="./assets/crewforge-logo-lockup.png" alt="CrewForge" />
+            <img class="gate-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+            <img class="gate-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
           </div>
           <div class="gate-copy">
             <p class="eyebrow">${appName}</p>
@@ -770,7 +789,7 @@ function renderGate() {
           .map(
             ([id, info]) => `
             <button class="area-card" type="button" data-area="${id}">
-              <img class="area-card-thumb" src="${areaArtwork[id] || "./assets/crewforge-thumbnail.png"}" alt="" />
+              <img class="area-card-thumb" src="${areaArtwork[id] || asset("./assets/crewforge-thumbnail.png")}" alt="" />
               <span>
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>
@@ -804,7 +823,7 @@ function renderShell() {
     <div class="shell ${isForemanMode() ? "foreman-shell" : "office-shell"}">
       <aside class="sidebar">
         <div class="brand">
-          <img class="brand-logo" src="./assets/crewforge-app-icon.png" alt="CrewForge logo" />
+          <img class="brand-logo" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge logo" />
           <div><strong>${appName}</strong><span>${appTagline}</span><small>${isForemanMode() ? "Foreman view" : "Office view"}</small></div>
         </div>
         <div class="area-badge">
@@ -829,7 +848,7 @@ function renderShell() {
         <header class="topbar">
           <div class="topbar-title">
             <div class="topbar-brandlockup">
-              <img src="./assets/crewforge-app-icon.png" alt="CrewForge icon" />
+              <img src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
               <strong>${appName}</strong>
             </div>
             <p class="eyebrow">${area().label}</p>
@@ -944,6 +963,103 @@ function productionSummaryTable() {
             }
             return `<tr><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`;
           })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function uniqueEmployees() {
+  return [...new Set(state.people.map((person) => person.name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function weekInRange(week, fromWeek, toWeek) {
+  if (fromWeek && week < fromWeek) return false;
+  if (toWeek && week > toWeek) return false;
+  return true;
+}
+
+function employeeReportRecords(employee, fromWeek = state.selectedWeek, toWeek = state.selectedWeek, areaFilter = "all") {
+  if (!employee) return [];
+  return Object.values(state.sheets || [])
+    .flatMap((sheet) => {
+      if (!weekInRange(sheet.week, fromWeek, toWeek)) return [];
+      if (areaFilter !== "all" && sheet.area !== areaFilter) return [];
+      return (sheet.rows || [])
+        .filter((row) => row.employee === employee)
+        .map((row) => {
+          const person = personByName(row.employee) || {};
+          const regular = rowHours(row);
+          const pto = Number(row.pto) || 0;
+          const sick = Number(row.sick) || 0;
+          const perDiem = Number(row.perDiem) || 0;
+          const rate = Number(person.hourlyRate) || 0;
+          const lightDutyDays = days.filter((day) => row.lightDuty?.[day]).map((day) => dayLabels[days.indexOf(day)]);
+          return {
+            areaId: sheet.area,
+            areaLabel: areas[sheet.area]?.label || sheet.area,
+            week: sheet.week,
+            foreman: sheet.foreman,
+            group: sheet.group,
+            job: jobName(sheet.jobId),
+            status: sheet.status,
+            employee: row.employee,
+            role: rowRole(row),
+            regular,
+            pto,
+            sick,
+            total: regular + pto + sick,
+            perDiem,
+            rate,
+            gross: (regular + pto + sick) * rate + perDiem,
+            borrowed: row.borrowed,
+            dol: person.dol,
+            lightDutyDays,
+            notes: row.notes || ""
+          };
+        });
+    })
+    .sort((a, b) => a.week.localeCompare(b.week) || a.areaLabel.localeCompare(b.areaLabel) || a.foreman.localeCompare(b.foreman));
+}
+
+function employeeReportTotals(records) {
+  const uniqueWeeks = new Set(records.map((record) => record.week));
+  return {
+    weeks: uniqueWeeks.size,
+    regular: records.reduce((sum, record) => sum + record.regular, 0),
+    pto: records.reduce((sum, record) => sum + record.pto, 0),
+    sick: records.reduce((sum, record) => sum + record.sick, 0),
+    total: records.reduce((sum, record) => sum + record.total, 0),
+    perDiem: records.reduce((sum, record) => sum + record.perDiem, 0),
+    gross: records.reduce((sum, record) => sum + record.gross, 0)
+  };
+}
+
+function employeeReportTable(records) {
+  if (!records.length) {
+    return `<div class="empty-state">No timesheet records found for this employee and period. <span class="es">No hay registros para este trabajador y periodo.</span></div>`;
+  }
+  return `
+    <table>
+      <thead>
+        <tr><th>Week</th><th>Area</th><th>Job</th><th>Foreman</th><th>Role</th><th>Hours</th><th>PTO</th><th>Sick</th><th>Per diem</th><th>Rate</th><th>Gross est.</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        ${records
+          .map((record) => `<tr>
+            <td>${record.week}</td>
+            <td>${record.areaLabel}</td>
+            <td>${record.job || ""}</td>
+            <td>${record.foreman || ""}</td>
+            <td>${record.role || ""}${record.borrowed ? '<span class="tag">Borrowed</span>' : ""}${record.dol ? '<span class="tag">DOL</span>' : ""}${record.lightDutyDays.length ? `<span class="tag">Light duty: ${record.lightDutyDays.join(", ")}</span>` : ""}</td>
+            <td>${preciseNumber(record.total)}</td>
+            <td>${preciseNumber(record.pto)}</td>
+            <td>${preciseNumber(record.sick)}</td>
+            <td>${money(record.perDiem)}</td>
+            <td>${money(record.rate)}</td>
+            <td>${money(record.gross)}</td>
+            <td>${record.notes}</td>
+          </tr>`)
           .join("")}
       </tbody>
     </table>
@@ -1550,6 +1666,14 @@ function renderSolarListsSetup() {
 function renderDeliverables() {
   const sheet = currentSheet();
   const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
+  const canExportEmployee = roleIsElevated();
+  const employees = uniqueEmployees();
+  const selectedEmployee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
+  const employeeArea = state.selectedEmployeeReportArea || "all";
+  const fromWeek = state.weeks.includes(state.selectedEmployeeReportFromWeek) ? state.selectedEmployeeReportFromWeek : state.selectedWeek;
+  const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
+  const employeeRecords = employeeReportRecords(selectedEmployee, fromWeek, toWeek, employeeArea);
+  const employeeTotals = employeeReportTotals(employeeRecords);
   return `
     <section class="panel">
       <div class="split">
@@ -1571,6 +1695,31 @@ function renderDeliverables() {
       <div class="report-grid section-gap">
         <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
         <div class="table-wrap">${productionSummaryTable()}</div>
+      </div>
+      <div class="employee-report section-gap">
+        <div class="split">
+          <div>
+            <h3>${t("Employee Report", "Reporte de trabajador")}</h3>
+            <p class="sub">Pick one employee to see their timesheet history across crews, jobs, and weeks.</p>
+          </div>
+          <div class="button-group no-print">
+            <button class="secondary-action" data-print="employee-report" type="button">${t("Export PDF", "Exportar PDF")}</button>
+            ${canExportEmployee ? `<button class="secondary-action" id="exportEmployeeCsv" type="button">${t("Export Employee CSV", "Exportar CSV trabajador")}</button>` : ""}
+          </div>
+        </div>
+        <div class="form-grid section-gap">
+          <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
+          <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
+          <label>From week<span class="es">Desde semana</span><select id="employeeReportFromWeek">${setOptions(state.weeks, fromWeek)}</select></label>
+          <label>To week<span class="es">Hasta semana</span><select id="employeeReportToWeek">${setOptions(state.weeks, toWeek)}</select></label>
+        </div>
+        <div class="metric-grid section-gap">
+          <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
+          <article class="metric"><span>Regular hours</span><strong>${preciseNumber(employeeTotals.regular)}</strong><small>Across selected period</small></article>
+          <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
+          <article class="metric"><span>Per diem / Gross</span><strong>${money(employeeTotals.perDiem)}</strong><small>Gross est. ${money(employeeTotals.gross)}</small></article>
+        </div>
+        <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
       </div>
     </section>
   `;
@@ -1753,6 +1902,41 @@ function bindTabEvents() {
   }
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
   if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
+  if ($("exportEmployeeCsv")) $("exportEmployeeCsv").addEventListener("click", exportEmployeeCsv);
+  if ($("employeeReportSelect")) {
+    $("employeeReportSelect").addEventListener("change", (event) => {
+      state.selectedEmployeeReport = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("employeeReportArea")) {
+    $("employeeReportArea").addEventListener("change", (event) => {
+      state.selectedEmployeeReportArea = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("employeeReportFromWeek")) {
+    $("employeeReportFromWeek").addEventListener("change", (event) => {
+      state.selectedEmployeeReportFromWeek = event.target.value;
+      if (state.selectedEmployeeReportToWeek < state.selectedEmployeeReportFromWeek) {
+        state.selectedEmployeeReportToWeek = state.selectedEmployeeReportFromWeek;
+      }
+      saveState();
+      render();
+    });
+  }
+  if ($("employeeReportToWeek")) {
+    $("employeeReportToWeek").addEventListener("change", (event) => {
+      state.selectedEmployeeReportToWeek = event.target.value;
+      if (state.selectedEmployeeReportFromWeek > state.selectedEmployeeReportToWeek) {
+        state.selectedEmployeeReportFromWeek = state.selectedEmployeeReportToWeek;
+      }
+      saveState();
+      render();
+    });
+  }
   if ($("newProdDescription")) {
     $("newProdDescription").addEventListener("input", (event) => {
       const parsedQuantity = quantityFromDescription(event.target.value);
@@ -1913,6 +2097,40 @@ function exportPayrollCsv() {
   const filename = `crewforge-payroll-${state.selectedArea}-${state.selectedWeek}.csv`;
   downloadFile(filename, csv);
   showToast("Payroll CSV exported");
+}
+
+function exportEmployeeCsv() {
+  const employees = uniqueEmployees();
+  const employee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
+  const fromWeek = state.weeks.includes(state.selectedEmployeeReportFromWeek) ? state.selectedEmployeeReportFromWeek : state.selectedWeek;
+  const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
+  const records = employeeReportRecords(employee, fromWeek, toWeek, state.selectedEmployeeReportArea || "all");
+  const headers = ["Employee", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
+  const rows = records.map((record) => [
+    record.employee,
+    record.week,
+    record.areaLabel,
+    record.job,
+    record.foreman,
+    record.group,
+    record.role,
+    record.regular,
+    record.pto,
+    record.sick,
+    record.total,
+    record.perDiem,
+    record.rate,
+    record.gross.toFixed(2),
+    record.borrowed ? "Yes" : "No",
+    record.dol ? "Yes" : "No",
+    record.lightDutyDays.join("; "),
+    record.status,
+    record.notes
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const safeName = employee.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "employee";
+  downloadFile(`crewforge-employee-${safeName}-${fromWeek}-to-${toWeek}.csv`, csv);
+  showToast("Employee CSV exported");
 }
 
 function addWorkerToWeek() {

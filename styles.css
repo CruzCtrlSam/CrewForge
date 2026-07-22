@@ -55,15 +55,28 @@ button {
   width: min(520px, 100%);
   display: grid;
   gap: 18px;
-  border: 2px solid var(--line);
+  border: 2px solid rgba(167, 123, 34, 0.55);
   border-radius: 8px;
-  background: var(--panel);
+  background: linear-gradient(180deg, #071426, #0b2036);
   box-shadow: var(--shadow);
   padding: 24px;
 }
 
+.login-card h1 {
+  color: #f4f7f8;
+}
+
+.login-card label {
+  color: #d8dde0;
+}
+
+.login-card .eyebrow,
+.login-card .sub {
+  color: #c4ccd2;
+}
+
 .login-logo-stack {
-  width: min(440px, 100%);
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -95,17 +108,17 @@ button {
 .trial-note {
   display: grid;
   gap: 4px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(167, 123, 34, 0.35);
   border-radius: 8px;
-  background: var(--soft);
-  color: var(--steel-dark);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f7f8;
   padding: 12px;
   font-size: 0.92rem;
   font-weight: 750;
 }
 
 .trial-note span {
-  color: var(--muted);
+  color: #c4ccd2;
 }
 
 .login-limit {
@@ -657,6 +670,20 @@ textarea {
   border-radius: 8px;
   padding: 16px;
   background: #fff8e5;
+}
+
+.employee-report {
+  border-top: 2px solid var(--line);
+  padding-top: 18px;
+}
+
+.employee-report-table td {
+  vertical-align: top;
+}
+
+.employee-report-table .tag {
+  margin-top: 5px;
+  margin-right: 5px;
 }
 
 .job-production-setup h3 {

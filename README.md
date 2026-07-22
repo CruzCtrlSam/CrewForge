@@ -26,6 +26,7 @@ Tagline: Crew time and job progress, forged into one.
 - Wind Farm jobs do not require description, control code, or weight during job creation
 - Optional production setup for weighted work can be started with a control code and completed later
 - Payroll deliverables can be exported as CSV
+- Admin, payroll, and management can generate an Employee Report in Deliverables with totals, detail rows, PDF print, and CSV export
 - Admin/payroll can enter hourly rates for employees in People / Crews or People / Shifts
 - Admin/payroll can adjust crew members by adding/removing workers and editing roles/rates
 - Weekly installation timesheets re-sync with the current default crew while preserving entered hours and borrowed workers
