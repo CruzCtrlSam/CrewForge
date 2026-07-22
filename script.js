@@ -1723,6 +1723,7 @@ function renderDocuments() {
           <label>Job<span class="es">Trabajo</span><select id="documentJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
           ${canManage ? `
             <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
+            <label id="otherDocumentTypeField" class="hidden">Other type<span class="es">Otro tipo</span><input id="otherDocumentType" placeholder="Safety orientation, site map, etc." /></label>
             <label>Upload document<span class="es">Subir documento</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
           ` : `<div class="notice compact-notice">Only Admin/Payroll can upload or delete job documents. <span class="es">Solo Admin/Payroll puede subir o borrar documentos.</span></div>`}
         </div>
@@ -2007,6 +2008,10 @@ function bindTabEvents() {
       saveState();
       render();
     });
+  }
+  if ($("documentTypeSelect")) {
+    $("documentTypeSelect").addEventListener("change", updateOtherDocumentTypeVisibility);
+    updateOtherDocumentTypeVisibility();
   }
   if ($("jobDocumentFile")) $("jobDocumentFile").addEventListener("change", uploadJobDocuments);
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
@@ -2507,6 +2512,11 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function updateOtherDocumentTypeVisibility() {
+  const isOther = $("documentTypeSelect")?.value === "Other";
+  $("otherDocumentTypeField")?.classList.toggle("hidden", !isOther);
+}
+
 async function uploadJobDocuments(event) {
   if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
   const jobId = $("documentJobSelect")?.value || state.selectedDocumentJob;
@@ -2521,7 +2531,8 @@ async function uploadJobDocuments(event) {
     return;
   }
 
-  const type = $("documentTypeSelect")?.value || "Other";
+  const selectedType = $("documentTypeSelect")?.value || "Other";
+  const type = selectedType === "Other" ? $("otherDocumentType")?.value.trim() || "Other" : selectedType;
   for (const file of files) {
     const dataUrl = await readFileAsDataUrl(file);
     job.documents = job.documents || [];
