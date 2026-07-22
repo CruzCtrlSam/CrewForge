@@ -1588,6 +1588,7 @@ function renderJobs() {
   const isSolar = state.selectedArea === "solarPiles";
   const jobTypes = jobTypeOptionsForArea();
   const selectedJobType = isSolar ? "" : state.jobDraftType || jobTypes[0] || "";
+  const visibleJobs = allJobsForArea();
   return `
     <section class="panel">
       <div class="split">
@@ -1663,7 +1664,7 @@ function renderJobs() {
         <table>
           <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
-            ${state.jobs
+            ${visibleJobs.length ? visibleJobs
               .map((job) => `<tr>
                 <td><strong>${job.name}</strong></td>
                 <td>${areas[job.area]?.label || job.area}</td>
@@ -1674,7 +1675,7 @@ function renderJobs() {
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
                 <td><button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
-              .join("")}
+              .join("") : `<tr><td colspan="8"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
           </tbody>
         </table>
       </div>
