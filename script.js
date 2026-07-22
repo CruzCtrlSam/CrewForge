@@ -1753,12 +1753,21 @@ function renderDeliverables() {
   const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
   const employeeRecords = employeeReportRecords(selectedEmployee, fromWeek, toWeek, employeeArea);
   const employeeTotals = employeeReportTotals(employeeRecords);
+  const generatedAt = new Date().toLocaleDateString("en-US");
   return `
-    <section class="panel">
+    <section class="panel deliverables-report">
+      <div class="print-report-header">
+        <img src="./assets/crewforge-app-icon.png" alt="CrewForge" />
+        <div>
+          <p class="eyebrow">CrewForge Report</p>
+          <h2>${areas[state.selectedArea]?.label || "CrewForge"} ${t("Deliverables", "Entregables")}</h2>
+          <p>${state.selectedWeek} · Generated ${generatedAt}</p>
+        </div>
+      </div>
       <div class="split">
         <div><h2>${t("Deliverables", "Entregables")}</h2><p class="sub">Choose the package payroll or management needs.</p></div>
       </div>
-      <div class="form-grid section-gap">
+      <div class="form-grid section-gap report-controls no-print">
         <label>Total period<span class="es">Periodo total</span><select id="periodSelect">${setOptions(["This week", "This month", "Custom weeks"], "This week")}</select></label>
         <label>From week<span class="es">Desde semana</span><select id="fromWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
         <label>To week<span class="es">Hasta semana</span><select id="toWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
@@ -1786,7 +1795,7 @@ function renderDeliverables() {
             ${canExportEmployee ? `<button class="secondary-action" id="exportEmployeeCsv" type="button">${t("Export Employee CSV", "Exportar CSV trabajador")}</button>` : ""}
           </div>
         </div>
-        <div class="form-grid section-gap">
+        <div class="form-grid section-gap no-print">
           <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
           <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
           <label>From week<span class="es">Desde semana</span><select id="employeeReportFromWeek">${setOptions(state.weeks, fromWeek)}</select></label>

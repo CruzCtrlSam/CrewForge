@@ -1287,6 +1287,14 @@ tr:last-child td {
   gap: 16px;
 }
 
+.print-report-header {
+  display: none;
+}
+
+.report-controls .secondary-action {
+  align-self: end;
+}
+
 .check-label {
   min-height: 42px;
   display: flex;
@@ -1589,12 +1597,32 @@ tr:last-child td {
 }
 
 @media print {
+  @page {
+    size: letter landscape;
+    margin: 0.35in;
+  }
+
+  :root {
+    --ink: #071426;
+    --muted: #4f5961;
+    --line: #9da8ae;
+  }
+
+  body {
+    background: #fff !important;
+    color: #071426;
+    font-size: 10px;
+  }
+
   .sidebar,
   .top-actions,
   .action-row,
   .button-group,
   .toast,
-  .no-print {
+  .no-print,
+  .report-controls,
+  .workspace > .topbar,
+  .deliverables-report > .split:first-of-type {
     display: none !important;
   }
 
@@ -1604,11 +1632,111 @@ tr:last-child td {
 
   .workspace {
     padding: 0;
+    background: #fff;
+    min-height: auto;
   }
 
   .panel,
   .metric {
     box-shadow: none;
     break-inside: avoid;
+  }
+
+  .panel {
+    border: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .print-report-header {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    border-bottom: 2px solid #071426;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+
+  .print-report-header img {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+  }
+
+  .print-report-header h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  .print-report-header p {
+    margin: 2px 0 0;
+    color: #4f5961;
+    font-weight: 800;
+  }
+
+  .print-report-header .eyebrow {
+    color: #071426;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .metric {
+    border: 1px solid #9da8ae;
+    padding: 10px;
+    min-height: 0;
+  }
+
+  .metric strong {
+    font-size: 24px;
+  }
+
+  .report-grid {
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border: 1px solid #9da8ae;
+  }
+
+  table {
+    table-layout: fixed;
+    width: 100%;
+    font-size: 9px;
+  }
+
+  th,
+  td {
+    padding: 6px 7px;
+    overflow-wrap: anywhere;
+  }
+
+  th {
+    background: #dbe1e5 !important;
+  }
+
+  .employee-report {
+    break-before: page;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .employee-report .metric-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .employee-report h3 {
+    margin-top: 0;
+  }
+
+  .tag {
+    border: 1px solid #9da8ae;
+    background: #f1f4f6;
   }
 }
