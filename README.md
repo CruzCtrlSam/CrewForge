@@ -22,6 +22,7 @@ Tagline: Crew time and job progress, forged into one.
 - Tablet-landscape layout adjusts earlier so iPad sideways view has more room for the work area
 - Production entries collect total amount, total weight, and amount completed, then calculate completed weight
 - Admin/payroll can add a job and optionally create the first production control-code item assigned to a foreman
+- Job Documents tab lets admin/payroll upload job packets, safety plans, JHAs, permits, and inspection forms for foremen to view, download, or print
 - Optional production setup can be left unassigned when a job is created
 - Wind Farm jobs do not require description, control code, or weight during job creation
 - Optional production setup for weighted work can be started with a control code and completed later

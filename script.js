@@ -39,6 +39,7 @@ const areas = {
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
+const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
 const fabricationJobTypes = [...installationJobTypes, "Commercial"];
 const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
@@ -68,6 +69,7 @@ const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
 const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists"];
+const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
@@ -277,6 +279,7 @@ function upgradeState(next) {
   next.selectedEmployeeReportArea = next.selectedEmployeeReportArea || "all";
   next.selectedEmployeeReportFromWeek = next.selectedEmployeeReportFromWeek || next.selectedWeek || defaultState.selectedWeek;
   next.selectedEmployeeReportToWeek = next.selectedEmployeeReportToWeek || next.selectedWeek || defaultState.selectedWeek;
+  next.selectedDocumentJob = next.selectedDocumentJob || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.jobLists = {
@@ -289,7 +292,8 @@ function upgradeState(next) {
     ...job,
     jobType: job.jobType || defaultJobTypeForArea(job.area),
     foundationIds: job.foundationIds || [],
-    customTracking: job.customTracking || []
+    customTracking: job.customTracking || [],
+    documents: job.documents || []
   }));
   next.people = (next.people || []).map((person) => ({
     ...person,
@@ -372,6 +376,20 @@ function preciseNumber(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(Number(value) || 0);
 }
 
+function fileSize(bytes = 0) {
+  if (!bytes) return "0 KB";
+  if (bytes < 1024 * 1024) return `${preciseNumber(bytes / 1024)} KB`;
+  return `${preciseNumber(bytes / (1024 * 1024))} MB`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function csvCell(value) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -433,7 +451,8 @@ function availableTabs() {
   if (isForemanMode()) {
     return [
       ["timesheet", "My Timesheet", "Mis horas"],
-      ["production", "Production Update", "Produccion"]
+      ["production", "Production Update", "Produccion"],
+      ["documents", "Documents", "Documentos"]
     ];
   }
   return [
@@ -441,6 +460,7 @@ function availableTabs() {
     ["timesheet", "Timesheet Review", "Revision de horas"],
     ["production", "Production", "Produccion"],
     ["jobs", "Jobs", "Trabajos"],
+    ["documents", "Documents", "Documentos"],
     ["deliverables", "Deliverables", "Entregables"],
     ["setup", "People / Crews", "Personas / Cuadrillas"]
   ];
@@ -687,6 +707,7 @@ function setArea(areaId) {
   state.selectedArea = areaId;
   state.activeTab = isForemanMode() ? "timesheet" : "dashboard";
   state.selectedProductionJob = "";
+  state.selectedDocumentJob = "";
   ensureAreaForeman();
   saveState();
   render();
@@ -903,6 +924,7 @@ function renderActiveTab() {
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
+  if (state.activeTab === "documents") return renderDocuments();
   if (state.activeTab === "deliverables") return renderDeliverables();
   if (state.activeTab === "setup") return renderSetup();
   return renderDashboard();
@@ -1663,6 +1685,63 @@ function renderSolarListsSetup() {
   `;
 }
 
+function renderDocuments() {
+  const canManage = ["Admin", "Payroll"].includes(state.selectedRole);
+  const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete" || job.documents?.length);
+  const selectedJob = jobs.find((job) => job.id === state.selectedDocumentJob) || jobs[0];
+  const docs = selectedJob?.documents || [];
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Job Documents", "Documentos del trabajo")}</h2>
+          <p class="sub">Upload the job packet once so foremen can view, download, or print it from the field.</p>
+        </div>
+      </div>
+      ${!jobs.length ? `<div class="notice">Add a job first, then documents can be attached to it. <span class="es">Agregue un trabajo primero para subir documentos.</span></div>` : `
+        <div class="form-grid document-toolbar">
+          <label>Job<span class="es">Trabajo</span><select id="documentJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+          ${canManage ? `
+            <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
+            <label>Upload document<span class="es">Subir documento</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
+          ` : `<div class="notice compact-notice">Only Admin/Payroll can upload or delete job documents. <span class="es">Solo Admin/Payroll puede subir o borrar documentos.</span></div>`}
+        </div>
+        <div class="document-job-summary section-gap">
+          <strong>${selectedJob.name}</strong>
+          <span>${areas[selectedJob.area]?.label || selectedJob.area}${selectedJob.customer ? ` · ${selectedJob.customer}` : ""}</span>
+          <span>${docs.length} document${docs.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="document-grid">
+          ${docs.length ? docs.map((doc) => documentCard(selectedJob.id, doc, canManage)).join("") : `
+            <div class="empty-state">
+              <strong>No documents uploaded yet.</strong>
+              <span class="es">Todavia no hay documentos.</span>
+            </div>
+          `}
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function documentCard(jobId, doc, canManage) {
+  return `
+    <article class="document-card">
+      <div>
+        <span class="tag">${doc.type || "Document"}</span>
+        <h3>${escapeHtml(doc.name)}</h3>
+        <p class="sub">${fileSize(doc.size)} · Uploaded ${doc.uploadedAt || ""}${doc.uploadedBy ? ` by ${escapeHtml(doc.uploadedBy)}` : ""}</p>
+      </div>
+      <div class="document-actions">
+        <button class="secondary-action table-action" data-document-action="view" data-job-id="${jobId}" data-doc-id="${doc.id}" type="button">View<span class="es">Ver</span></button>
+        <button class="secondary-action table-action" data-document-action="download" data-job-id="${jobId}" data-doc-id="${doc.id}" type="button">Download<span class="es">Descargar</span></button>
+        <button class="primary-action table-action" data-document-action="print" data-job-id="${jobId}" data-doc-id="${doc.id}" type="button">Print<span class="es">Imprimir</span></button>
+        ${canManage ? `<button class="danger-action table-action" data-document-action="delete" data-job-id="${jobId}" data-doc-id="${doc.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
 function renderDeliverables() {
   const sheet = currentSheet();
   const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
@@ -1888,6 +1967,7 @@ function bindTabEvents() {
       state.selectedArea = event.target.value;
       state.activeTab = "jobs";
       state.jobDraftType = "";
+      state.selectedDocumentJob = "";
       ensureAreaForeman();
       saveState();
       render();
@@ -1900,6 +1980,14 @@ function bindTabEvents() {
       render();
     });
   }
+  if ($("documentJobSelect")) {
+    $("documentJobSelect").addEventListener("change", (event) => {
+      state.selectedDocumentJob = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("jobDocumentFile")) $("jobDocumentFile").addEventListener("change", uploadJobDocuments);
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
   if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
   if ($("exportEmployeeCsv")) $("exportEmployeeCsv").addEventListener("click", exportEmployeeCsv);
@@ -2004,6 +2092,10 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-delete-job]").forEach((button) => {
     button.addEventListener("click", () => deleteJob(button.dataset.deleteJob));
+  });
+
+  document.querySelectorAll("[data-document-action]").forEach((button) => {
+    button.addEventListener("click", () => handleDocumentAction(button.dataset.documentAction, button.dataset.jobId, button.dataset.docId));
   });
 
   document.querySelectorAll("[data-prod]").forEach((input) => {
@@ -2385,6 +2477,130 @@ function savePerson() {
   showToast(`${name} saved`);
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadJobDocuments(event) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  const jobId = $("documentJobSelect")?.value || state.selectedDocumentJob;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  const files = Array.from(event.target.files || []);
+  if (!job || !files.length) return;
+
+  const oversized = files.find((file) => file.size > MAX_DEMO_DOCUMENT_BYTES);
+  if (oversized) {
+    showToast(`${oversized.name} is over the 5 MB demo limit`);
+    event.target.value = "";
+    return;
+  }
+
+  const type = $("documentTypeSelect")?.value || "Other";
+  for (const file of files) {
+    const dataUrl = await readFileAsDataUrl(file);
+    job.documents = job.documents || [];
+    job.documents.push({
+      id: `doc-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      type,
+      name: file.name,
+      mime: file.type || "application/octet-stream",
+      size: file.size,
+      dataUrl,
+      uploadedAt: new Date().toLocaleDateString("en-US"),
+      uploadedBy: state.auth?.name || state.selectedRole
+    });
+  }
+  event.target.value = "";
+  state.selectedDocumentJob = job.id;
+  saveState();
+  render();
+  showToast(`${files.length} document${files.length === 1 ? "" : "s"} uploaded`);
+}
+
+function findJobDocument(jobId, docId) {
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  const doc = job?.documents?.find((entry) => entry.id === docId);
+  return { job, doc };
+}
+
+function handleDocumentAction(action, jobId, docId) {
+  const { job, doc } = findJobDocument(jobId, docId);
+  if (!job || !doc) return;
+  if (action === "view") return viewJobDocument(doc);
+  if (action === "download") return downloadJobDocument(doc);
+  if (action === "print") return printJobDocument(job, doc);
+  if (action === "delete") return deleteJobDocument(job, doc);
+}
+
+function viewJobDocument(doc) {
+  const win = window.open(doc.dataUrl, "_blank");
+  if (!win) showToast("Allow popups to view this document");
+}
+
+function downloadJobDocument(doc) {
+  const link = document.createElement("a");
+  link.href = doc.dataUrl;
+  link.download = doc.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function printJobDocument(job, doc) {
+  const isPdf = doc.mime === "application/pdf" || doc.name.toLowerCase().endsWith(".pdf");
+  const isImage = doc.mime.startsWith("image/");
+  if (!isPdf && !isImage) {
+    showToast("Download this file to print it");
+    return;
+  }
+  const win = window.open("", "_blank");
+  if (!win) {
+    showToast("Allow popups to print this document");
+    return;
+  }
+  const title = escapeHtml(`${job.name} - ${doc.name}`);
+  const body = isPdf
+    ? `<iframe src="${doc.dataUrl}" title="${title}"></iframe>`
+    : `<img src="${doc.dataUrl}" alt="${title}" />`;
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          html, body { margin: 0; min-height: 100%; font-family: Arial, sans-serif; }
+          header { padding: 14px 18px; border-bottom: 1px solid #ccd3d8; }
+          strong { display: block; }
+          span { color: #52606a; }
+          iframe { width: 100%; height: calc(100vh - 64px); border: 0; }
+          img { display: block; max-width: 100%; margin: 0 auto; }
+          @media print { header { display: none; } iframe { height: 100vh; } }
+        </style>
+      </head>
+      <body>
+        <header><strong>${title}</strong><span>${escapeHtml(job.name)}</span></header>
+        ${body}
+        <script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function deleteJobDocument(job, doc) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  if (!confirm(`Delete ${doc.name} from ${job.name}?`)) return;
+  job.documents = (job.documents || []).filter((entry) => entry.id !== doc.id);
+  saveState();
+  render();
+  showToast(`${doc.name} deleted`);
+}
+
 function saveJob() {
   const areaId = $("jobArea").value;
   const typedName = $("jobNameInput")?.value.trim() || "";
@@ -2443,6 +2659,7 @@ function saveJob() {
     jobType,
     foundationIds,
     customTracking,
+    documents: [],
     status: $("jobStatusInput").value
   });
   if (hasProductionSetup) {
