@@ -696,6 +696,21 @@ function productionTotals() {
   return { planned, completed, delayed, remaining: Math.max(planned - completed, 0) };
 }
 
+function reportHeader(title, subtitle = "") {
+  const generatedAt = new Date().toLocaleDateString("en-US");
+  const areaLabel = areas[state.selectedArea]?.label || "CrewForge";
+  return `
+    <div class="print-report-header">
+      <img src="./assets/crewforge-app-icon.png" alt="CrewForge" />
+      <div>
+        <p class="eyebrow">CrewForge Report</p>
+        <h2>${title}</h2>
+        <p>${areaLabel} · ${subtitle || state.selectedWeek} · Generated ${generatedAt}</p>
+      </div>
+    </div>
+  `;
+}
+
 function showToast(message) {
   clearTimeout(toastTimer);
   $("toast").textContent = message;
@@ -935,13 +950,15 @@ function renderDashboard() {
   const totals = productionTotals();
   const pct = totals.planned ? Math.round((totals.completed / totals.planned) * 100) : 0;
   return `
-    <section class="metric-grid">
+    <section class="printable-report dashboard-report">
+      ${reportHeader("Dashboard", state.selectedWeek)}
+      <div class="metric-grid">
       <article class="metric"><span>Hours</span><strong>${number(totalHours(sheet))}</strong><small>Current week</small></article>
       <article class="metric"><span>Timesheet status</span><strong>${sheet.status}</strong><small>${sheet.foreman || "No foreman selected"}</small></article>
       <article class="metric"><span>Production</span><strong>${pct}%</strong><small>${number(totals.completed)} of ${number(totals.planned)}</small></article>
       <article class="metric"><span>Delays</span><strong>${totals.delayed}</strong><small>Reported production delays</small></article>
-    </section>
-    <section class="panel">
+      </div>
+    <section class="panel report-panel">
       <div class="split">
         <div><h2>${t("Today at a glance", "Resumen rapido")}</h2><p class="sub">A management-friendly snapshot for the selected area.</p></div>
         <button class="secondary-action no-print" data-print="dashboard">${t("Export PDF", "Exportar PDF")}</button>
@@ -950,6 +967,7 @@ function renderDashboard() {
         <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
         <div class="table-wrap">${productionSummaryTable()}</div>
       </div>
+    </section>
     </section>
   `;
 }
@@ -1163,7 +1181,8 @@ function renderTimesheet() {
       : t("Choose day or night shift; no crews needed for shop fabrication.", "Escoja turno de dia o noche; no se necesitan cuadrillas para fabricacion.");
   return `
     ${!editable ? `<div class="notice">Read only for this login. Payroll/Admin can edit all records. <span class="es">Solo lectura para este usuario.</span></div>` : ""}
-    <section class="panel ${useCards ? "foreman-panel" : ""}">
+    <section class="panel printable-report timesheet-report ${useCards ? "foreman-panel" : ""}">
+      ${reportHeader("Timesheet", `${state.selectedWeek} · ${sheet.foreman || ""}`)}
       <div class="split">
         <div><h2>${t("Timesheet", "Registro de horas")}</h2><p class="sub">${helperText}</p></div>
         <span class="tag">${sheet.status}</span>
@@ -1328,7 +1347,8 @@ function renderProduction() {
   const visibleProduction = productionForArea();
   const submittedCount = visibleProduction.filter((item) => item.reviewStatus === "Submitted").length;
   return `
-    <section class="panel">
+    <section class="panel printable-report production-report">
+      ${reportHeader(isForemanMode() ? "Production Update" : "Production", state.selectedProductionJob ? `${state.selectedWeek} · ${jobName(state.selectedProductionJob)}` : state.selectedWeek)}
       <div class="split">
         <div><h2>${t(isForemanMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track jobs, control codes, bundles, status, and delays.</p></div>
         <div class="button-pair">
@@ -1753,17 +1773,9 @@ function renderDeliverables() {
   const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
   const employeeRecords = employeeReportRecords(selectedEmployee, fromWeek, toWeek, employeeArea);
   const employeeTotals = employeeReportTotals(employeeRecords);
-  const generatedAt = new Date().toLocaleDateString("en-US");
   return `
-    <section class="panel deliverables-report">
-      <div class="print-report-header">
-        <img src="./assets/crewforge-app-icon.png" alt="CrewForge" />
-        <div>
-          <p class="eyebrow">CrewForge Report</p>
-          <h2>${areas[state.selectedArea]?.label || "CrewForge"} ${t("Deliverables", "Entregables")}</h2>
-          <p>${state.selectedWeek} · Generated ${generatedAt}</p>
-        </div>
-      </div>
+    <section class="panel printable-report deliverables-report">
+      ${reportHeader("Deliverables", state.selectedWeek)}
       <div class="split">
         <div><h2>${t("Deliverables", "Entregables")}</h2><p class="sub">Choose the package payroll or management needs.</p></div>
       </div>

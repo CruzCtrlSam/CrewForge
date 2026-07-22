@@ -1622,7 +1622,14 @@ tr:last-child td {
   .no-print,
   .report-controls,
   .workspace > .topbar,
-  .deliverables-report > .split:first-of-type {
+  .deliverables-report > .split:first-of-type,
+  .timesheet-report > .form-grid,
+  .timesheet-report .add-worker-grid,
+  .timesheet-report .action-row,
+  .production-report > .form-grid,
+  .production-report .production-add-grid,
+  .production-submit-row,
+  .production-card-actions {
     display: none !important;
   }
 
@@ -1646,6 +1653,10 @@ tr:last-child td {
     border: 0;
     padding: 0;
     background: #fff;
+  }
+
+  .printable-report {
+    display: block;
   }
 
   .print-report-header {
@@ -1700,6 +1711,10 @@ tr:last-child td {
     align-items: start;
   }
 
+  .report-panel {
+    margin-top: 10px;
+  }
+
   .table-wrap {
     overflow: visible;
     border: 1px solid #9da8ae;
@@ -1738,5 +1753,109 @@ tr:last-child td {
   .tag {
     border: 1px solid #9da8ae;
     background: #f1f4f6;
+  }
+
+  .timesheet-wrap,
+  .production-board {
+    overflow: visible;
+  }
+
+  .entry-table {
+    min-width: 0;
+  }
+
+  .entry-table th,
+  .entry-table td {
+    font-size: 8px;
+    padding: 4px;
+  }
+
+  .entry-table input,
+  .entry-table select,
+  .entry-table textarea,
+  .production-card input,
+  .production-card select {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    min-height: 0;
+    font-size: inherit;
+    color: #071426;
+    appearance: none;
+  }
+
+  .entry-table textarea {
+    min-height: 0;
+    resize: none;
+  }
+
+  .entry-table th:last-child,
+  .entry-table td:last-child {
+    display: none;
+  }
+
+  .mini-check {
+    display: none;
+  }
+
+  .worker-card-list {
+    display: block;
+  }
+
+  .worker-card {
+    break-inside: avoid;
+    border: 1px solid #9da8ae;
+    box-shadow: none;
+    margin-bottom: 8px;
+    padding: 10px;
+  }
+
+  .worker-card header,
+  .day-grid,
+  .mini-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .card-notes {
+    margin-top: 6px;
+  }
+
+  .production-card {
+    break-inside: avoid;
+    border: 1px solid #9da8ae;
+    box-shadow: none;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .production-board {
+    display: block;
+  }
+
+  .production-card-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .production-controls-v2 {
+    display: grid;
+    gap: 8px;
+  }
+
+  .production-fieldset {
+    border: 1px solid #c6ced3;
+    padding: 8px;
+  }
+
+  .production-fields.two-up,
+  .production-fields.three-up {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .progress-track {
+    height: 6px;
   }
 }
