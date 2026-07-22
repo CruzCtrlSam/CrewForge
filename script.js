@@ -132,6 +132,7 @@ const defaultState = {
   auth: null,
   selectedArea: "",
   activeTab: "dashboard",
+  showIntro: true,
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
   selectedEmployeeReport: "",
@@ -267,7 +268,7 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!saved) return upgradeState(structuredClone(defaultState));
-    return upgradeState({ ...structuredClone(defaultState), ...saved });
+    return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: true });
   } catch {
     return upgradeState(structuredClone(defaultState));
   }
@@ -275,6 +276,7 @@ function loadState() {
 
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
+  if (next.showIntro === undefined) next.showIntro = true;
   next.selectedEmployeeReport = next.selectedEmployeeReport || "";
   next.selectedEmployeeReportArea = next.selectedEmployeeReportArea || "all";
   next.selectedEmployeeReportFromWeek = next.selectedEmployeeReportFromWeek || next.selectedWeek || defaultState.selectedWeek;
@@ -720,6 +722,7 @@ function showToast(message) {
 
 function setArea(areaId) {
   state.selectedArea = areaId;
+  state.showIntro = false;
   state.activeTab = isForemanMode() ? "timesheet" : "dashboard";
   state.selectedProductionJob = "";
   state.selectedDocumentJob = "";
@@ -797,9 +800,49 @@ function loginWithCode() {
   state.currentForeman = selectedForeman || state.currentForeman;
   state.setupForeman = selectedForeman || state.setupForeman;
   state.selectedArea = "";
+  state.showIntro = true;
   state.activeTab = account.role === "Foreman" ? "timesheet" : "dashboard";
   saveState();
   render();
+}
+
+function renderIntro() {
+  $("app").innerHTML = `
+    <main class="intro-screen">
+      <section class="intro-card">
+        <div class="gate-logo-stack intro-logo">
+          <img class="gate-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+          <img class="gate-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
+        </div>
+        <div>
+          <p class="eyebrow">CrewForge</p>
+          <h1>${t("Field work, payroll, production, and documents in one place.", "Horas, produccion y documentos en un solo lugar.")}</h1>
+          <p class="sub">Start by choosing the part of the company you are working in today. CrewForge will only show the timesheets, jobs, production, and documents for that area.</p>
+        </div>
+        <div class="intro-points">
+          <article><strong>1</strong><span>Choose area<span class="es">Escoja area</span></span></article>
+          <article><strong>2</strong><span>Fill the work<span class="es">Llene el trabajo</span></span></article>
+          <article><strong>3</strong><span>Send reports<span class="es">Envie reportes</span></span></article>
+        </div>
+        <div class="intro-actions">
+          <button class="primary-action" id="continueIntro" type="button">${t("Continue", "Continuar")}</button>
+          <button class="text-button" id="introLogout" type="button">Log out<span class="es">Salir</span></button>
+        </div>
+      </section>
+    </main>
+  `;
+  $("continueIntro").addEventListener("click", () => {
+    state.showIntro = false;
+    saveState();
+    render();
+  });
+  $("introLogout").addEventListener("click", () => {
+    state.auth = null;
+    state.selectedArea = "";
+    state.showIntro = true;
+    saveState();
+    render();
+  });
 }
 
 function renderGate() {
@@ -842,6 +885,7 @@ function renderGate() {
   $("gateLogout").addEventListener("click", () => {
     state.auth = null;
     state.selectedArea = "";
+    state.showIntro = true;
     saveState();
     render();
   });
@@ -904,12 +948,14 @@ function renderShell() {
   document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => changeTab(button.dataset.tab)));
   $("changeArea").addEventListener("click", () => {
     state.selectedArea = "";
+    state.showIntro = false;
     saveState();
     render();
   });
   $("logout").addEventListener("click", () => {
     state.auth = null;
     state.selectedArea = "";
+    state.showIntro = true;
     saveState();
     render();
   });
@@ -917,6 +963,7 @@ function renderShell() {
     const auth = state.auth;
     state = structuredClone(defaultState);
     state.auth = auth;
+    state.showIntro = true;
     if (auth) {
       const account = trialAccounts.find((entry) => entry.code === auth.code);
       state.selectedRole = auth.role;
@@ -2830,6 +2877,7 @@ function updateProductionItem(event) {
 
 function render() {
   if (!state.auth) renderLogin();
+  else if (state.showIntro) renderIntro();
   else if (!state.selectedArea) renderGate();
   else renderShell();
 }
