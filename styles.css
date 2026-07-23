@@ -744,6 +744,26 @@ textarea {
   background: #fff8e5;
 }
 
+.foreman-rename {
+  border: 2px solid rgba(167, 123, 34, 0.45);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff8e5;
+}
+
+.foreman-rename h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.foreman-rename-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
 .employee-report {
   border-top: 2px solid var(--line);
   padding-top: 18px;
@@ -1465,6 +1485,7 @@ tr:last-child td {
   .compact-form-grid,
   .job-list-grid,
   .custom-tracking-grid,
+  .foreman-rename-grid,
   .add-worker-grid,
   .crew-add-grid,
   .production-add-grid,
