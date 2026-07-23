@@ -777,7 +777,7 @@ function renderLogin() {
           <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
         </div>
         <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField" class="hidden">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(loginForemanOptions(), loginForemanOptions()[0])}</select></label>
+        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(loginForemanOptions(), loginForemanOptions()[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
@@ -794,8 +794,22 @@ function renderLogin() {
   $("accessCode").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithCode();
   });
+  $("foremanLoginField").addEventListener("click", openLoginForemanPicker);
+  $("loginForeman").addEventListener("click", openLoginForemanPicker);
   updateForemanLoginVisibility();
   $("accessCode").focus();
+}
+
+function openLoginForemanPicker() {
+  const picker = $("loginForeman");
+  if (!picker || picker.disabled) return;
+  picker.focus();
+  if (typeof picker.showPicker !== "function") return;
+  try {
+    picker.showPicker();
+  } catch {
+    // Some browsers only allow showPicker from direct user taps.
+  }
 }
 
 function updateForemanLoginVisibility() {

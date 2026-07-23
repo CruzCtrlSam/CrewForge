@@ -75,6 +75,17 @@ button {
   color: #c4ccd2;
 }
 
+.login-select-field {
+  cursor: pointer;
+}
+
+.login-select-field select {
+  min-height: 56px;
+  cursor: pointer;
+  font-weight: 800;
+  padding-right: 44px;
+}
+
 .login-logo-stack {
   width: 100%;
   display: flex;
