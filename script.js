@@ -68,7 +68,7 @@ const trialAccounts = [
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "foremanAliases", "hiddenForemen"];
 const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
@@ -134,6 +134,7 @@ const defaultState = {
   activeTab: "dashboard",
   showIntro: true,
   foremanAliases: {},
+  hiddenForemen: [],
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
   selectedEmployeeReport: "",
@@ -279,6 +280,7 @@ function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
+  next.hiddenForemen = next.hiddenForemen || [];
   const aliasName = (name) => next.foremanAliases[normalizeForemanName(name)] || normalizeForemanName(name);
   const aliasCrew = (group) => {
     const normalized = normalizeCrewName(group);
@@ -538,7 +540,10 @@ function foremenForArea(areaId = state.selectedArea) {
 
 function loginForemanOptions() {
   const savedForemen = state.people?.filter((person) => person.role === "Foreman").map((person) => person.name) || [];
-  const aliasedTrialForemen = trialForemanNames.map((name) => state.foremanAliases?.[name] || name);
+  const hiddenForemen = new Set((state.hiddenForemen || []).map((name) => normalizeForemanName(name)));
+  const aliasedTrialForemen = trialForemanNames
+    .filter((name) => !hiddenForemen.has(normalizeForemanName(name)))
+    .map((name) => state.foremanAliases?.[name] || name);
   return [...new Set([...savedForemen, ...aliasedTrialForemen])].sort((a, b) => a.localeCompare(b));
 }
 
@@ -1929,9 +1934,26 @@ function renderForemanRenameTool(foreman) {
   `;
 }
 
+function renderForemanCrewAdminTool(foreman, crewMembers) {
+  return `
+    <div class="foreman-rename section-gap">
+      <div>
+        <h3>${t("Foreman / crew controls", "Controles de mayordomo / cuadrilla")}</h3>
+        <p class="sub">Add a foreman with a default crew, or remove the selected foreman and unassign that crew.</p>
+      </div>
+      <div class="foreman-admin-grid">
+        <label>New foreman<span class="es">Nuevo mayordomo</span><input id="newForemanName" placeholder="Name" /></label>
+        <button class="primary-action" id="addForemanButton" type="button">${t("Add foreman / crew", "Agregar mayordomo / cuadrilla")}</button>
+        <button class="danger-action" id="deleteForemanButton" type="button" ${!foreman ? "disabled" : ""}>${t("Delete selected foreman / crew", "Borrar mayordomo / cuadrilla")}</button>
+      </div>
+      <p class="sub compact-copy">${crewMembers.length} default crew member(s) assigned to this foreman.</p>
+    </div>
+  `;
+}
+
 function renderCrewSetup(admin) {
   const foreman = setupForemanName();
-  const crew = crewNameForForeman(foreman);
+  const crew = foreman ? crewNameForForeman(foreman) : "";
   const crewMembers = peopleForArea().filter((person) => person.group === crew);
   const availableWorkers = peopleForArea().filter((person) => person.role !== "Foreman" && person.group !== crew);
   return `
@@ -1941,11 +1963,12 @@ function renderCrewSetup(admin) {
       </div>
       ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or crews. <span class="es">Solo Payroll/Admin puede cambiar cuadrillas permanentes.</span></div>` : ""}
       <div class="form-grid section-gap">
-        <label>Foreman<span class="es">Mayordomo</span><select id="setupForemanSelect">${setOptions(foremenForArea().map((person) => person.name), foreman)}</select></label>
-        <label>Crew<span class="es">Cuadrilla</span><input value="${crew}" disabled /></label>
+        <label>Foreman<span class="es">Mayordomo</span><select id="setupForemanSelect">${foreman ? setOptions(foremenForArea().map((person) => person.name), foreman) : '<option value="">No foremen set up</option>'}</select></label>
+        <label>Crew<span class="es">Cuadrilla</span><input value="${crew || "No crew selected"}" disabled /></label>
         <label>Crew size<span class="es">Integrantes</span><input value="${crewMembers.length}" disabled /></label>
       </div>
-      ${admin ? renderForemanRenameTool(foreman) : ""}
+      ${admin ? renderForemanCrewAdminTool(foreman, crewMembers) : ""}
+      ${admin && foreman ? renderForemanRenameTool(foreman) : ""}
       <div class="crew-add-grid section-gap">
         <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!admin ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
         <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!admin ? "disabled" : ""} /></label>
@@ -2175,6 +2198,8 @@ function bindTabEvents() {
     });
   }
   if ($("renameForemanButton")) $("renameForemanButton").addEventListener("click", renameSelectedForeman);
+  if ($("addForemanButton")) $("addForemanButton").addEventListener("click", addForemanCrew);
+  if ($("deleteForemanButton")) $("deleteForemanButton").addEventListener("click", deleteSelectedForemanCrew);
 
   document.querySelectorAll("[data-add-person]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -2385,6 +2410,10 @@ function addPersonRow(person, borrowed) {
 
 function addCrewPerson() {
   const foreman = setupForemanName();
+  if (!foreman) {
+    showToast("Add a foreman first");
+    return;
+  }
   const crew = crewNameForForeman(foreman);
   const selectedName = $("crewExistingWorker")?.value;
   const newName = $("crewNewName")?.value.trim();
@@ -2419,8 +2448,78 @@ function addCrewPerson() {
   showToast(`${person.name} added to ${crew}`);
 }
 
+function canManagePeopleSetup() {
+  return ["Admin", "Payroll"].includes(state.selectedRole);
+}
+
+function addForemanCrew() {
+  if (!canManagePeopleSetup()) return;
+  const name = $("newForemanName")?.value.trim();
+  if (!name) {
+    showToast("Enter the foreman name");
+    return;
+  }
+  const duplicate = state.people.some((person) => sameName(person.name, name));
+  if (duplicate) {
+    showToast(`${name} already exists`);
+    return;
+  }
+
+  state.hiddenForemen = (state.hiddenForemen || []).filter((entry) => !sameName(entry, name));
+  state.people.push({
+    name,
+    role: "Foreman",
+    area: state.selectedArea,
+    group: crewNameForForeman(name),
+    dol: false,
+    hourlyRate: 0
+  });
+  state.setupForeman = name;
+  if (state.selectedRole !== "Foreman") state.currentForeman = name;
+  saveState();
+  render();
+  showToast(`${name} foreman/crew added`);
+}
+
+function deleteSelectedForemanCrew() {
+  if (!canManagePeopleSetup()) return;
+  const foreman = setupForemanName();
+  if (!foreman) {
+    showToast("No foreman selected");
+    return;
+  }
+  const crew = crewNameForForeman(foreman);
+  const crewWorkers = state.people.filter((person) => person.area === state.selectedArea && person.group === crew && !sameName(person.name, foreman));
+  const draftSheets = Object.values(state.sheets || {}).filter((sheet) => sheet.area === state.selectedArea && (sameName(sheet.foreman, foreman) || sheet.group === crew) && sheet.status !== "Submitted" && sheet.status !== "Approved").length;
+  const warning = `Delete ${foreman} and ${crew}? Workers in this crew will stay in People, but will become unassigned.${draftSheets ? ` This will also remove ${draftSheets} draft timesheet(s) for this crew.` : ""}`;
+  if (!confirm(warning)) return;
+
+  state.hiddenForemen = [...new Set([...(state.hiddenForemen || []), foreman])];
+  state.people = state.people.filter((person) => !(person.area === state.selectedArea && sameName(person.name, foreman) && person.role === "Foreman"));
+  state.people.forEach((person) => {
+    if (person.area === state.selectedArea && person.group === crew) person.group = "";
+  });
+
+  Object.entries(state.sheets || {}).forEach(([key, sheet]) => {
+    if (sheet.area !== state.selectedArea || (!sameName(sheet.foreman, foreman) && sheet.group !== crew)) return;
+    if (sheet.status === "Submitted" || sheet.status === "Approved") return;
+    delete state.sheets[key];
+  });
+
+  state.production.forEach((item) => {
+    if (item.area === state.selectedArea && sameName(item.foreman, foreman)) item.foreman = "";
+  });
+
+  const nextForeman = foremenForArea()[0]?.name || "";
+  state.setupForeman = nextForeman;
+  if (sameName(state.currentForeman, foreman)) state.currentForeman = nextForeman;
+  saveState();
+  render();
+  showToast(`${foreman} deleted; ${crewWorkers.length} worker(s) unassigned`);
+}
+
 function renameSelectedForeman() {
-  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  if (!canManagePeopleSetup()) return;
   const oldName = setupForemanName();
   const newName = $("renameForemanInput")?.value.trim();
   if (!newName) {
@@ -2487,7 +2586,7 @@ function removeCrewPerson(name) {
 }
 
 function updatePersonField(event) {
-  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  if (!canManagePeopleSetup()) return;
   const person = personByName(event.target.dataset.personName);
   if (!person) return;
   const field = event.target.dataset.personField;

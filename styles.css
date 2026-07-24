@@ -775,6 +775,18 @@ textarea {
   margin-top: 12px;
 }
 
+.foreman-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, auto) minmax(220px, auto);
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.compact-copy {
+  margin-top: 10px;
+}
+
 .employee-report {
   border-top: 2px solid var(--line);
   padding-top: 18px;
@@ -1497,6 +1509,7 @@ tr:last-child td {
   .job-list-grid,
   .custom-tracking-grid,
   .foreman-rename-grid,
+  .foreman-admin-grid,
   .add-worker-grid,
   .crew-add-grid,
   .production-add-grid,
