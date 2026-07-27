@@ -60,6 +60,7 @@ const areaArtwork = {
 };
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
+  { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
   { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
   { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
   { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
@@ -68,7 +69,7 @@ const trialAccounts = [
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "foremanAliases", "hiddenForemen"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
@@ -135,6 +136,7 @@ const defaultState = {
   showIntro: true,
   foremanAliases: {},
   hiddenForemen: [],
+  activityLog: [],
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
   selectedEmployeeReport: "",
@@ -177,6 +179,8 @@ let pendingRemoteState = null;
 
 let state = loadState();
 let toastTimer;
+let suppressHistorySync = false;
+let lastHistoryRoute = "";
 
 function sharedSnapshot(source = state) {
   return SHARED_STATE_KEYS.reduce((snapshot, key) => {
@@ -281,6 +285,7 @@ function upgradeState(next) {
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
   next.hiddenForemen = next.hiddenForemen || [];
+  next.activityLog = next.activityLog || [];
   const aliasName = (name) => next.foremanAliases[normalizeForemanName(name)] || normalizeForemanName(name);
   const aliasCrew = (group) => {
     const normalized = normalizeCrewName(group);
@@ -367,6 +372,47 @@ function saveState() {
   pendingRemoteState = null;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   pushCloud();
+}
+
+function timestamp() {
+  return new Date().toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function actorName() {
+  return state.auth?.name || state.currentForeman || state.selectedRole || "Unknown";
+}
+
+function actorRole() {
+  return state.auth?.role || state.selectedRole || "";
+}
+
+function setLastEdited(target, action) {
+  if (!target) return;
+  target.lastEditedBy = actorName();
+  target.lastEditedRole = actorRole();
+  target.lastEditedAt = timestamp();
+  target.lastEditedAction = action;
+}
+
+function logActivity(action, detail = {}) {
+  state.activityLog = state.activityLog || [];
+  state.activityLog.unshift({
+    id: `a${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    at: timestamp(),
+    actor: actorName(),
+    role: actorRole(),
+    area: state.selectedArea || detail.area || "",
+    week: state.selectedWeek || detail.week || "",
+    action,
+    ...detail
+  });
+  state.activityLog = state.activityLog.slice(0, 300);
 }
 
 function $(id) {
@@ -460,14 +506,30 @@ function roleIsElevated() {
   return ["Payroll", "Management", "Admin"].includes(state.selectedRole);
 }
 
+function roleIsOffice() {
+  return ["Payroll", "Management", "Admin"].includes(state.selectedRole);
+}
+
+function roleIsProductionVisible() {
+  return ["Management", "Admin"].includes(state.selectedRole);
+}
+
+function isApproverMode() {
+  return state.selectedRole === "Approver";
+}
+
 function isForemanMode() {
   return state.selectedRole === "Foreman";
 }
 
+function isFieldEntryMode() {
+  return isForemanMode() || isApproverMode();
+}
+
 function availableTabs() {
-  if (isForemanMode()) {
+  if (isFieldEntryMode()) {
     return [
-      ["timesheet", "My Timesheet", "Mis horas"],
+      ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
       ["production", "Production Update", "Produccion"],
       ["documents", "Documents", "Documentos"]
     ];
@@ -486,6 +548,7 @@ function availableTabs() {
 function canEditSheet(sheet) {
   if (state.selectedRole === "Management") return false;
   if (roleIsElevated()) return true;
+  if (isApproverMode()) return sheet.area === "rebarInstall" && sheet.status !== "Approved";
   return sheet.foreman === state.currentForeman && sheet.status !== "Approved";
 }
 
@@ -710,6 +773,7 @@ function productionForArea() {
     if (item.area !== state.selectedArea) return false;
     if (state.selectedProductionJob && item.jobId !== state.selectedProductionJob) return false;
     if (roleIsElevated()) return true;
+    if (isApproverMode()) return state.selectedArea === "rebarInstall";
     return (item.foreman || state.currentForeman) === state.currentForeman;
   });
 }
@@ -747,12 +811,13 @@ function showToast(message) {
 function setArea(areaId) {
   state.selectedArea = areaId;
   state.showIntro = false;
-  state.activeTab = isForemanMode() ? "timesheet" : "dashboard";
+  state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
   state.selectedProductionJob = "";
   state.selectedDocumentJob = "";
   ensureAreaForeman();
   saveState();
   render();
+  syncHistory();
 }
 
 function changeTab(tab) {
@@ -762,6 +827,52 @@ function changeTab(tab) {
   }
   saveState();
   render();
+  syncHistory();
+}
+
+function routeFromState() {
+  if (!state.auth) return "login";
+  if (state.showIntro) return "intro";
+  if (!state.selectedArea) return "areas";
+  return `${state.selectedArea}/${state.activeTab || "dashboard"}`;
+}
+
+function syncHistory(replace = false) {
+  if (suppressHistorySync || !window.history?.pushState) return;
+  const route = routeFromState();
+  if (route === lastHistoryRoute && window.location.hash === `#${route}`) return;
+  lastHistoryRoute = route;
+  const url = `${window.location.pathname}${window.location.search}#${route}`;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({ crewforgeRoute: route }, "", url);
+}
+
+function applyRoute(route = "") {
+  suppressHistorySync = true;
+  if (route === "login") {
+    state.auth = null;
+    state.selectedArea = "";
+    state.showIntro = true;
+    state.activeTab = "dashboard";
+  } else if (route === "intro" && state.auth) {
+    state.showIntro = true;
+    state.selectedArea = "";
+  } else if (route === "areas" && state.auth) {
+    state.showIntro = false;
+    state.selectedArea = "";
+  } else {
+    const [areaId, tab = "dashboard"] = route.split("/");
+    if (state.auth && areas[areaId]) {
+      state.showIntro = false;
+      state.selectedArea = areaId;
+      state.activeTab = tab;
+      ensureAreaForeman();
+    }
+  }
+  saveState();
+  render();
+  lastHistoryRoute = routeFromState();
+  suppressHistorySync = false;
 }
 
 function setOptions(values, selected, labeler = (value) => value, valueGetter = (value) => value) {
@@ -781,12 +892,13 @@ function renderLogin() {
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
           <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Mayordomo</span><select id="loginForeman">${setOptions(loginForemanOptions(), loginForemanOptions()[0])}</select></label>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, MAYORDOMO, PAYROLL, MANAGER, ADMIN" /></label>
+        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(loginForemanOptions(), loginForemanOptions()[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
           <span>Foremen: FOREMAN, then choose a name</span>
+          <span>Approver: MAYORDOMO</span>
           <span>Office: PAYROLL, MANAGER, or ADMIN</span>
           <span class="es">Codigos de prueba para esta demo.</span>
         </div>
@@ -837,11 +949,12 @@ function loginWithCode() {
   state.selectedRole = account.role;
   state.currentForeman = selectedForeman || state.currentForeman;
   state.setupForeman = selectedForeman || state.setupForeman;
-  state.selectedArea = "";
-  state.showIntro = true;
-  state.activeTab = account.role === "Foreman" ? "timesheet" : "dashboard";
+  state.selectedArea = account.area || "";
+  state.showIntro = !account.area;
+  state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
   saveState();
   render();
+  syncHistory();
 }
 
 function renderIntro() {
@@ -873,6 +986,7 @@ function renderIntro() {
     state.showIntro = false;
     saveState();
     render();
+    syncHistory();
   });
   $("introLogout").addEventListener("click", () => {
     state.auth = null;
@@ -880,6 +994,7 @@ function renderIntro() {
     state.showIntro = true;
     saveState();
     render();
+    syncHistory();
   });
 }
 
@@ -926,6 +1041,7 @@ function renderGate() {
     state.showIntro = true;
     saveState();
     render();
+    syncHistory();
   });
 }
 
@@ -938,11 +1054,11 @@ function renderShell() {
   if (!tabs.some(([id]) => id === state.activeTab)) state.activeTab = tabs[0][0];
 
   $("app").innerHTML = `
-    <div class="shell ${isForemanMode() ? "foreman-shell" : "office-shell"}">
+    <div class="shell ${isFieldEntryMode() ? "foreman-shell" : "office-shell"}">
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge logo" />
-          <div><strong>${appName}</strong><span>${appTagline}</span><small>${isForemanMode() ? "Foreman view" : "Office view"}</small></div>
+          <div><strong>${appName}</strong><span>${appTagline}</span><small>${isFieldEntryMode() ? "Field view" : "Office view"}</small></div>
         </div>
         <div class="area-badge">
           <strong>${area().label}</strong>
@@ -971,7 +1087,7 @@ function renderShell() {
             </div>
             <p class="eyebrow">${area().label}</p>
             <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
-            ${isForemanMode() ? `<p class="sub">${state.currentForeman} · ${state.selectedWeek}</p>` : ""}
+            ${isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
@@ -989,6 +1105,7 @@ function renderShell() {
     state.showIntro = false;
     saveState();
     render();
+    syncHistory();
   });
   $("logout").addEventListener("click", () => {
     state.auth = null;
@@ -996,6 +1113,7 @@ function renderShell() {
     state.showIntro = true;
     saveState();
     render();
+    syncHistory();
   });
   $("resetDemo").addEventListener("click", () => {
     const auth = state.auth;
@@ -1011,6 +1129,7 @@ function renderShell() {
     }
     saveState();
     render();
+    syncHistory(true);
   });
   $("weekSelect").addEventListener("change", (event) => {
     state.selectedWeek = event.target.value;
@@ -1191,6 +1310,30 @@ function employeeReportTable(records) {
   `;
 }
 
+function activityLogTable() {
+  const entries = (state.activityLog || [])
+    .filter((entry) => !state.selectedArea || !entry.area || entry.area === state.selectedArea)
+    .slice(0, 30);
+  if (!entries.length) {
+    return `<div class="empty-state">No activity recorded yet.<span class="es">Todavia no hay actividad registrada.</span></div>`;
+  }
+  return `
+    <table>
+      <thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th></tr></thead>
+      <tbody>
+        ${entries
+          .map((entry) => `<tr>
+            <td>${entry.at || ""}</td>
+            <td><strong>${entry.actor || ""}</strong><span class="sub">${entry.role || ""}</span></td>
+            <td>${entry.action || ""}</td>
+            <td>${[entry.week, entry.foreman, entry.employee, entry.job, entry.field].filter(Boolean).join(" · ")}</td>
+          </tr>`)
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function windFoundationStats(items) {
   const byFoundation = {};
   items
@@ -1257,12 +1400,12 @@ function renderWindFoundationSummary(items) {
 function renderTimesheet() {
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
-  const useCards = isForemanMode();
+  const useCards = isFieldEntryMode();
   const showTimesheetJob = state.selectedArea === "rebarInstall";
   const isCrewArea = area().mode === "crew";
   const helperText =
     isCrewArea
-      ? t("Choose a foreman and that foreman's crew fills in automatically.", "Escoja un mayordomo y se llena su cuadrilla automaticamente.")
+      ? t("Choose a foreman and that foreman's crew fills in automatically.", "Escoja un capataz y se llena su cuadrilla automaticamente.")
       : t("Choose day or night shift; no crews needed for shop fabrication.", "Escoja turno de dia o noche; no se necesitan cuadrillas para fabricacion.");
   return `
     ${!editable ? `<div class="notice">Read only for this login. Payroll/Admin can edit all records. <span class="es">Solo lectura para este usuario.</span></div>` : ""}
@@ -1274,7 +1417,7 @@ function renderTimesheet() {
       </div>
       <div class="form-grid section-gap">
         ${showTimesheetJob ? `<label>Job<span class="es">Trabajo</span><select id="sheetJob" ${!editable ? "disabled" : ""}>${setOptions(selectedJobs(), sheet.jobId, (job) => job.name, (job) => job.id)}</select></label>` : ""}
-        <label>Foreman<span class="es">Mayordomo</span><select id="sheetForeman" ${!editable || state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), sheet.foreman)}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="sheetForeman" ${!editable || state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), sheet.foreman)}</select></label>
         ${isCrewArea ? `<label>Crew<span class="es">Cuadrilla</span><input value="${sheet.group || crewNameForForeman(sheet.foreman)}" disabled /></label>` : `<label>Shift<span class="es">Turno</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>`}
         <label>Status<span class="es">Estado</span><select id="sheetStatus" ${!roleIsElevated() ? "disabled" : ""}>${setOptions(["Draft", "Submitted", "Approved"], sheet.status)}</select></label>
       </div>
@@ -1293,6 +1436,7 @@ function renderTimesheet() {
         </table>
       </div>`}
       ${sheet.submittedAt ? `<div class="audit-note section-gap">Submitted by ${sheet.submittedBy || sheet.foreman} on ${sheet.submittedAt}. <span class="es">Enviado por ${sheet.submittedBy || sheet.foreman}.</span></div>` : ""}
+      ${sheet.lastEditedAt ? `<div class="audit-note section-gap">Last edited by ${sheet.lastEditedBy || ""} on ${sheet.lastEditedAt}. <span class="es">Ultima edicion por ${sheet.lastEditedBy || ""}.</span></div>` : ""}
       <div class="action-row section-gap">
         <strong>Total: ${number(totalHours(sheet))} hours</strong>
         ${area().perDiem ? `<strong>Per diem: ${money(totalPerDiem(sheet))}</strong>` : ""}
@@ -1426,16 +1570,16 @@ function renderTimesheetRow(row, index, editable) {
 }
 
 function renderProduction() {
-  const canAddProduction = state.selectedRole === "Foreman" || ["Admin", "Payroll"].includes(state.selectedRole);
+  const canAddProduction = isFieldEntryMode() || ["Admin", "Payroll"].includes(state.selectedRole);
   const jobOptions = selectedJobs();
   const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
   const visibleProduction = productionForArea();
   const submittedCount = visibleProduction.filter((item) => item.reviewStatus === "Submitted").length;
   return `
     <section class="panel printable-report production-report">
-      ${reportHeader(isForemanMode() ? "Production Update" : "Production", state.selectedProductionJob ? `${state.selectedWeek} · ${jobName(state.selectedProductionJob)}` : state.selectedWeek)}
+      ${reportHeader(isFieldEntryMode() ? "Production Update" : "Production", state.selectedProductionJob ? `${state.selectedWeek} · ${jobName(state.selectedProductionJob)}` : state.selectedWeek)}
       <div class="split">
-        <div><h2>${t(isForemanMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track jobs, control codes, bundles, status, and delays.</p></div>
+        <div><h2>${t(isFieldEntryMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track jobs, control codes, bundles, status, and delays.</p></div>
         <div class="button-pair">
           ${visibleProduction.length ? `<button class="primary-action" data-submit-production type="button">${t("Submit Production", "Enviar produccion")}</button>` : ""}
           <button class="secondary-action" data-print="production">${t("Export PDF", "Exportar PDF")}</button>
@@ -1445,7 +1589,7 @@ function renderProduction() {
         <label>Job filter<span class="es">Filtro de trabajo</span><select id="productionJobFilter"><option value="">All jobs</option>${setOptions(jobOptions, state.selectedProductionJob, (job) => job.name, (job) => job.id)}</select></label>
       </div>
       ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
-      ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este mayordomo.</span></div>` : ""}
+      ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
       ${renderWindFoundationSummary(visibleProduction)}
       <div class="production-board section-gap">
@@ -1476,7 +1620,7 @@ function renderProductionAdder() {
         <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Foundation ID<span class="es">Cimentacion</span><select id="newFoundationId">${foundationIds.length ? setOptions(foundationIds, foundationIds[0]) : '<option value="">No IDs set up</option>'}</select></label>
         <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
-        <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
         <button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>
       </div>
     `;
@@ -1487,7 +1631,7 @@ function renderProductionAdder() {
         <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Tracking item<span class="es">Partida</span><select id="newCustomTracking">${setOptions(selectedJob.customTracking, selectedJob.customTracking[0]?.id || "", (item) => `${item.name} (${item.unit})`, (item) => item.id)}</select></label>
         <label>Amount completed<span class="es">Cantidad terminada</span><input id="newCustomCompleted" type="number" min="0" step="0.01" placeholder="0" /></label>
-        <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
         <button class="secondary-action" id="addProduction" type="button">${t("Add progress", "Agregar avance")}</button>
       </div>
     `;
@@ -1499,7 +1643,7 @@ function renderProductionAdder() {
       <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
       <label>Total amount<span class="es">Cantidad total</span><input id="newProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
       <label>Total weight<span class="es">Peso total</span><input id="newProdWeight" type="number" min="0" step="1" placeholder="18445" /></label>
-      <label>Foreman<span class="es">Mayordomo</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+      <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
       <button class="secondary-action" id="addProduction" type="button">${t("Add production", "Agregar produccion")}</button>
     </div>
   `;
@@ -1523,7 +1667,7 @@ function renderProductionCard(item) {
   const pct = item.planned ? Math.min(100, Math.round((weightDone / item.planned) * 100)) : 0;
   const remaining = Math.max((Number(item.planned) || 0) - weightDone, 0);
   const isFab = state.selectedArea === "rebarFab";
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   return `
     <article class="production-card">
       <header class="production-card-header">
@@ -1531,6 +1675,7 @@ function renderProductionCard(item) {
           <h3>${item.code} - ${item.description}</h3>
           <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
           <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
+          ${item.lastEditedAt ? `<p class="sub">Last edited by ${item.lastEditedBy || ""} · ${item.lastEditedAt}</p>` : ""}
         </div>
         <div class="production-status">
           <strong data-prod-pct="${item.id}">${pct}%</strong>
@@ -1588,7 +1733,7 @@ function renderCustomProductionCard(item) {
   const planned = Number(item.planned) || 0;
   const completed = Number(item.completedQty) || 0;
   const pct = planned ? Math.min(100, Math.round((completed / planned) * 100)) : 0;
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   return `
     <article class="production-card">
       <header class="production-card-header">
@@ -1596,6 +1741,7 @@ function renderCustomProductionCard(item) {
           <h3>${item.description}</h3>
           <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
           <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
+          ${item.lastEditedAt ? `<p class="sub">Last edited by ${item.lastEditedBy || ""} · ${item.lastEditedAt}</p>` : ""}
         </div>
         <div class="production-status">
           <strong data-prod-pct="${item.id}">${pct}%</strong>
@@ -1628,7 +1774,7 @@ function renderCustomProductionCard(item) {
 }
 
 function renderFoundationProductionCard(item) {
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   return `
     <article class="production-card foundation-card">
       <header class="production-card-header">
@@ -1636,6 +1782,7 @@ function renderFoundationProductionCard(item) {
           <h3>${item.foundationId} - ${item.component}</h3>
           <p class="sub">${jobName(item.jobId)} · ${item.foreman || "Unassigned"}</p>
           <span class="tag status-tag" data-prod-review="${item.id}">${item.reviewStatus || "Draft"}</span>
+          ${item.lastEditedAt ? `<p class="sub">Last edited by ${item.lastEditedBy || ""} · ${item.lastEditedAt}</p>` : ""}
         </div>
         <div class="production-status">
           <strong>Done</strong>
@@ -1737,7 +1884,7 @@ function renderJobs() {
             <p class="sub">Add the first control code now if it is ready. Foreman assignment can be left blank and handled later.</p>
           </div>
           <div class="form-grid compact-form-grid">
-            <label>Assign to foreman<span class="es">Asignar a mayordomo</span><select id="jobProdForeman"><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), "")}</select></label>
+            <label>Assign to foreman<span class="es">Asignar a capataz</span><select id="jobProdForeman"><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), "")}</select></label>
             <label>Control code<span class="es">Codigo</span><input id="jobProdCode" placeholder="ACA" /></label>
             <label>Description<span class="es">Descripcion</span><input id="jobProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
             <label>Total amount<span class="es">Cantidad total</span><input id="jobProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
@@ -1853,6 +2000,7 @@ function renderDeliverables() {
   const sheet = currentSheet();
   const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
   const canExportEmployee = roleIsElevated();
+  const showProductionDeliverables = state.selectedRole !== "Payroll";
   const employees = uniqueEmployees();
   const selectedEmployee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
   const employeeArea = state.selectedEmployeeReportArea || "all";
@@ -1876,12 +2024,12 @@ function renderDeliverables() {
       <div class="metric-grid section-gap">
         <article class="metric"><span>Hours</span><strong>${number(totalHours(sheet))}</strong><small>Selected week</small></article>
         ${area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(totalPerDiem(sheet))}</strong><small>Installation only</small></article>` : ""}
-        <article class="metric"><span>Production completed</span><strong>${number(productionTotals().completed)}</strong><small>Selected area</small></article>
-        <article class="metric"><span>Delays</span><strong>${productionTotals().delayed}</strong><small>Production issues</small></article>
+        ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionTotals().completed)}</strong><small>Selected area</small></article>
+        <article class="metric"><span>Delays</span><strong>${productionTotals().delayed}</strong><small>Production issues</small></article>` : ""}
       </div>
       <div class="report-grid section-gap">
         <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
-        <div class="table-wrap">${productionSummaryTable()}</div>
+        ${showProductionDeliverables ? `<div class="table-wrap">${productionSummaryTable()}</div>` : ""}
       </div>
       <div class="employee-report section-gap">
         <div class="split">
@@ -1908,6 +2056,15 @@ function renderDeliverables() {
         </div>
         <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
       </div>
+      ${roleIsElevated() ? `
+        <div class="employee-report section-gap">
+          <div>
+            <h3>${t("Activity Log", "Registro de actividad")}</h3>
+            <p class="sub">Recent changes for accountability and review.</p>
+          </div>
+          <div class="table-wrap section-gap">${activityLogTable()}</div>
+        </div>
+      ` : ""}
     </section>
   `;
 }
@@ -1922,7 +2079,7 @@ function renderForemanRenameTool(foreman) {
   return `
     <div class="foreman-rename section-gap">
       <div>
-        <h3>${t("Edit foreman name", "Editar nombre de mayordomo")}</h3>
+        <h3>${t("Edit foreman name", "Editar nombre de capataz")}</h3>
         <p class="sub">Updates this foreman, crew name, timesheets, production assignments, and login choices.</p>
       </div>
       <div class="foreman-rename-grid">
@@ -1938,13 +2095,13 @@ function renderForemanCrewAdminTool(foreman, crewMembers) {
   return `
     <div class="foreman-rename section-gap">
       <div>
-        <h3>${t("Foreman / crew controls", "Controles de mayordomo / cuadrilla")}</h3>
+        <h3>${t("Foreman / crew controls", "Controles de capataz / cuadrilla")}</h3>
         <p class="sub">Add a foreman with a default crew, or remove the selected foreman and unassign that crew.</p>
       </div>
       <div class="foreman-admin-grid">
-        <label>New foreman<span class="es">Nuevo mayordomo</span><input id="newForemanName" placeholder="Name" /></label>
-        <button class="primary-action" id="addForemanButton" type="button">${t("Add foreman / crew", "Agregar mayordomo / cuadrilla")}</button>
-        <button class="danger-action" id="deleteForemanButton" type="button" ${!foreman ? "disabled" : ""}>${t("Delete selected foreman / crew", "Borrar mayordomo / cuadrilla")}</button>
+        <label>New foreman<span class="es">Nuevo capataz</span><input id="newForemanName" placeholder="Name" /></label>
+        <button class="primary-action" id="addForemanButton" type="button">${t("Add foreman / crew", "Agregar capataz / cuadrilla")}</button>
+        <button class="danger-action" id="deleteForemanButton" type="button" ${!foreman ? "disabled" : ""}>${t("Delete selected foreman / crew", "Borrar capataz / cuadrilla")}</button>
       </div>
       <p class="sub compact-copy">${crewMembers.length} default crew member(s) assigned to this foreman.</p>
     </div>
@@ -1963,7 +2120,7 @@ function renderCrewSetup(admin) {
       </div>
       ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or crews. <span class="es">Solo Payroll/Admin puede cambiar cuadrillas permanentes.</span></div>` : ""}
       <div class="form-grid section-gap">
-        <label>Foreman<span class="es">Mayordomo</span><select id="setupForemanSelect">${foreman ? setOptions(foremenForArea().map((person) => person.name), foreman) : '<option value="">No foremen set up</option>'}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="setupForemanSelect">${foreman ? setOptions(foremenForArea().map((person) => person.name), foreman) : '<option value="">No foremen set up</option>'}</select></label>
         <label>Crew<span class="es">Cuadrilla</span><input value="${crew || "No crew selected"}" disabled /></label>
         <label>Crew size<span class="es">Integrantes</span><input value="${crewMembers.length}" disabled /></label>
       </div>
@@ -2073,11 +2230,17 @@ function bindTabEvents() {
   if ($("sheetStatus")) $("sheetStatus").addEventListener("change", (event) => updateSheet({ status: event.target.value }));
 
   document.querySelectorAll("[data-row]").forEach((input) => {
+    input.addEventListener("focusin", (event) => {
+      const row = sheet.rows[Number(event.target.dataset.row)];
+      const field = event.target.dataset.field;
+      event.target.dataset.startValue = field?.startsWith("lightDuty.") ? String(row.lightDuty?.[field.split(".")[1]] || false) : String(row?.[field] ?? "");
+    });
     const handler = (event) => {
       if (!editable) return;
       const row = sheet.rows[Number(event.target.dataset.row)];
       const field = event.target.dataset.field;
       const textFields = ["notes", "employee", "roleOverride"];
+      const oldValue = event.target.dataset.startValue ?? (field.startsWith("lightDuty.") ? row.lightDuty?.[field.split(".")[1]] || false : row[field]);
       if (field.startsWith("lightDuty.")) {
         const day = field.split(".")[1];
         row.lightDuty = row.lightDuty || {};
@@ -2091,6 +2254,18 @@ function bindTabEvents() {
         row.borrowed = !peopleForArea().some((person) => person.name === row.employee && person.group === sheet.group);
       }
       sheet.status = "Draft";
+      setLastEdited(sheet, "Timesheet edited");
+      const newValue = field.startsWith("lightDuty.") ? event.target.checked : row[field];
+      if (event.type === "change" && String(oldValue) !== String(newValue)) {
+        logActivity("Timesheet row changed", {
+          foreman: sheet.foreman,
+          employee: row.employee,
+          field,
+          from: oldValue,
+          to: newValue,
+          job: jobName(sheet.jobId)
+        });
+      }
       saveState();
       if (field === "employee") render();
     };
@@ -2216,6 +2391,8 @@ function bindTabEvents() {
       if (!confirm(`Remove ${name} from this week?`)) return;
       sheet.rows.splice(index, 1);
       sheet.status = "Draft";
+      setLastEdited(sheet, "Worker removed from week");
+      logActivity("Worker removed from week", { foreman: sheet.foreman, employee: name, job: jobName(sheet.jobId) });
       saveState();
       render();
       showToast(`${name} removed from this week`);
@@ -2251,13 +2428,23 @@ function bindTabEvents() {
   });
 
   document.querySelectorAll("[data-prod]").forEach((input) => {
+    input.addEventListener("focusin", (event) => {
+      const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
+      event.target.dataset.startValue = String(item?.[event.target.dataset.field] ?? "");
+    });
     input.addEventListener("input", updateProductionItem);
     input.addEventListener("change", updateProductionItem);
   });
 }
 
 function updateSheet(values, message) {
-  Object.assign(currentSheet(), values);
+  const sheet = currentSheet();
+  const changes = Object.entries(values).filter(([key, value]) => sheet[key] !== value);
+  Object.assign(sheet, values);
+  if (changes.length) {
+    setLastEdited(sheet, "Timesheet updated");
+    changes.forEach(([field, value]) => logActivity("Timesheet updated", { foreman: sheet.foreman, field, value, job: jobName(sheet.jobId) }));
+  }
   saveState();
   render();
   if (message) showToast(message);
@@ -2274,9 +2461,11 @@ function submitSheet() {
   });
   Object.assign(sheet, {
     status: "Submitted",
-    submittedBy: isForemanMode() ? state.currentForeman : state.selectedRole,
+    submittedBy: actorName(),
     submittedAt: stamp
   });
+  setLastEdited(sheet, "Timesheet submitted");
+  logActivity("Timesheet submitted", { foreman: sheet.foreman, job: jobName(sheet.jobId) });
   saveState();
   render();
   showToast("Week submitted");
@@ -2285,6 +2474,7 @@ function submitSheet() {
 function submitProduction() {
   const items = productionForArea().filter((item) => {
     if (["Admin", "Payroll"].includes(state.selectedRole)) return true;
+    if (isApproverMode()) return item.area === "rebarInstall";
     return state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman;
   });
   if (!items.length) {
@@ -2302,6 +2492,8 @@ function submitProduction() {
     item.reviewStatus = "Submitted";
     item.submittedAt = stamp;
     item.submittedBy = state.auth?.name || state.currentForeman || state.selectedRole;
+    setLastEdited(item, "Production submitted");
+    logActivity("Production submitted", { foreman: item.foreman, job: jobName(item.jobId), field: item.code || item.foundationId || item.description });
   });
   saveState();
   render();
@@ -2403,6 +2595,8 @@ function addPersonRow(person, borrowed) {
   row.borrowed = borrowed;
   sheet.rows.push(row);
   sheet.status = "Draft";
+  setLastEdited(sheet, "Worker added to week");
+  logActivity("Worker added to week", { foreman: sheet.foreman, employee: person.name, job: jobName(sheet.jobId) });
   saveState();
   render();
   showToast(`${person.name} added to this week only`);
@@ -2443,6 +2637,7 @@ function addCrewPerson() {
   }
 
   syncSheetsForCrew(state.selectedArea, crew);
+  logActivity("Worker assigned to crew", { foreman, employee: person.name, field: crew });
   saveState();
   render();
   showToast(`${person.name} added to ${crew}`);
@@ -2476,6 +2671,7 @@ function addForemanCrew() {
   });
   state.setupForeman = name;
   if (state.selectedRole !== "Foreman") state.currentForeman = name;
+  logActivity("Foreman / crew added", { foreman: name });
   saveState();
   render();
   showToast(`${name} foreman/crew added`);
@@ -2513,6 +2709,7 @@ function deleteSelectedForemanCrew() {
   const nextForeman = foremenForArea()[0]?.name || "";
   state.setupForeman = nextForeman;
   if (sameName(state.currentForeman, foreman)) state.currentForeman = nextForeman;
+  logActivity("Foreman / crew deleted", { foreman });
   saveState();
   render();
   showToast(`${foreman} deleted; ${crewWorkers.length} worker(s) unassigned`);
@@ -2568,6 +2765,7 @@ function renameSelectedForeman() {
   if (sameName(state.auth?.name, oldName)) state.auth.name = newName;
 
   syncSheetsForCrew(state.selectedArea, newCrew);
+  logActivity("Foreman renamed", { foreman: newName, from: oldName, to: newName });
   saveState();
   render();
   showToast(`${oldName} renamed to ${newName}`);
@@ -2580,6 +2778,7 @@ function removeCrewPerson(name) {
   const oldCrew = person.group;
   person.group = "";
   if (oldCrew) syncSheetsForCrew(state.selectedArea, oldCrew);
+  logActivity("Worker removed from crew", { employee: name, field: oldCrew });
   saveState();
   render();
   showToast(`${name} removed from crew`);
@@ -2590,7 +2789,9 @@ function updatePersonField(event) {
   const person = personByName(event.target.dataset.personName);
   if (!person) return;
   const field = event.target.dataset.personField;
+  const oldValue = person[field];
   person[field] = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
+  logActivity("Person updated", { employee: person.name, field, from: oldValue, to: person[field] });
   saveState();
   showToast(`${person.name} updated`);
 }
@@ -2600,6 +2801,7 @@ function removePerson(name) {
   if (!person || person.role === "Foreman") return;
   if (!confirm(`Delete ${name}?`)) return;
   state.people = state.people.filter((entry) => entry.name !== name || entry.area !== state.selectedArea);
+  logActivity("Person deleted", { employee: name });
   saveState();
   render();
   showToast(`${name} deleted`);
@@ -2608,10 +2810,11 @@ function removePerson(name) {
 function removeProductionItem(id) {
   const item = state.production.find((entry) => entry.id === id);
   if (!item) return;
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && item.area === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
   if (!canEdit) return;
   if (!confirm(`Remove ${item.code} from production?`)) return;
   state.production = state.production.filter((entry) => entry.id !== id);
+  logActivity("Production removed", { foreman: item.foreman, job: jobName(item.jobId), field: item.code || item.foundationId || item.description });
   saveState();
   render();
   showToast(`${item.code} removed`);
@@ -2632,7 +2835,7 @@ function addProduction() {
       showToast(`${foundationId} ${component} is already recorded`);
       return;
     }
-    state.production.push({
+    const item = {
       id: `p${Date.now()}`,
       area: state.selectedArea,
       productionMode: "foundation",
@@ -2651,7 +2854,10 @@ function addProduction() {
       delay: "No delay",
       delayNote: "",
       status: "Complete"
-    });
+    };
+    setLastEdited(item, "Production added");
+    state.production.push(item);
+    logActivity("Production added", { foreman: item.foreman, job: jobName(item.jobId), field: `${foundationId} ${component}` });
     saveState();
     render();
     showToast(`${foundationId} ${component} added`);
@@ -2669,7 +2875,7 @@ function addProduction() {
       showToast("Enter amount completed");
       return;
     }
-    state.production.push({
+    const item = {
       id: `p${Date.now()}`,
       area: state.selectedArea,
       productionMode: "custom",
@@ -2687,7 +2893,10 @@ function addProduction() {
       delay: "No delay",
       delayNote: "",
       status: completed >= (Number(tracking.planned) || 0) && Number(tracking.planned) ? "Complete" : "In Progress"
-    });
+    };
+    setLastEdited(item, "Production added");
+    state.production.push(item);
+    logActivity("Production added", { foreman: item.foreman, job: jobName(item.jobId), field: tracking.name, to: completed });
     saveState();
     render();
     showToast(`${tracking.name} progress added`);
@@ -2706,7 +2915,7 @@ function addProduction() {
     showToast("Add total amount and total weight");
     return;
   }
-  state.production.push({
+  const item = {
     id: `p${Date.now()}`,
     area: state.selectedArea,
     foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
@@ -2723,7 +2932,10 @@ function addProduction() {
     delay: "No delay",
     delayNote: "",
     status: "Not Started"
-  });
+  };
+  setLastEdited(item, "Production added");
+  state.production.push(item);
+  logActivity("Production added", { foreman: item.foreman, job: jobName(item.jobId), field: code });
   saveState();
   render();
   showToast("Production item added");
@@ -2801,6 +3013,7 @@ async function uploadJobDocuments(event) {
       uploadedAt: new Date().toLocaleDateString("en-US"),
       uploadedBy: state.auth?.name || state.selectedRole
     });
+    logActivity("Document uploaded", { area: job.area, job: job.name, field: type, to: file.name });
   }
   event.target.value = "";
   state.selectedDocumentJob = job.id;
@@ -2883,6 +3096,7 @@ function deleteJobDocument(job, doc) {
   if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
   if (!confirm(`Delete ${doc.name} from ${job.name}?`)) return;
   job.documents = (job.documents || []).filter((entry) => entry.id !== doc.id);
+  logActivity("Document deleted", { area: job.area, job: job.name, field: doc.type, from: doc.name });
   saveState();
   render();
   showToast(`${doc.name} deleted`);
@@ -2937,7 +3151,7 @@ function saveJob() {
     state.jobLists.solarJobNames.push(typedName);
     state.jobLists.solarJobNames.sort((a, b) => a.localeCompare(b));
   }
-  state.jobs.push({
+  const job = {
     id,
     name,
     number: $("jobNumberInput").value.trim(),
@@ -2948,9 +3162,11 @@ function saveJob() {
     customTracking,
     documents: [],
     status: $("jobStatusInput").value
-  });
+  };
+  state.jobs.push(job);
+  logActivity("Job added", { area: areaId, job: name, field: jobType || "Solar" });
   if (hasProductionSetup) {
-    state.production.push({
+    const productionItem = {
       id: `p${Date.now()}`,
       area: areaId,
       foreman: $("jobProdForeman")?.value || "",
@@ -2967,7 +3183,10 @@ function saveJob() {
       delay: "No delay",
       delayNote: "",
       status: "Not Started"
-    });
+    };
+    setLastEdited(productionItem, "Production setup added");
+    state.production.push(productionItem);
+    logActivity("Production setup added", { area: areaId, foreman: productionItem.foreman, job: name, field: productionCode });
   }
   if (areaId === state.selectedArea && !currentSheet().jobId) {
     currentSheet().jobId = id;
@@ -2985,10 +3204,12 @@ function updateJobStatus(jobId, status) {
   if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
   const job = state.jobs.find((entry) => entry.id === jobId);
   if (!job) return;
+  const oldStatus = job.status;
   job.status = status;
   if (state.selectedProductionJob === jobId && status !== "Active") {
     state.selectedProductionJob = "";
   }
+  logActivity("Job status changed", { job: job.name, field: "status", from: oldStatus, to: status });
   saveState();
   render();
   showToast(`${job.name} marked ${status}`);
@@ -3009,6 +3230,7 @@ function deleteJob(jobId) {
     }
   });
   if (state.selectedProductionJob === jobId) state.selectedProductionJob = "";
+  logActivity("Job deleted", { job: job.name });
   saveState();
   render();
   showToast(`${job.name} deleted`);
@@ -3034,6 +3256,7 @@ function updateProductionItem(event) {
   const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
   if (!item) return;
   const field = event.target.dataset.field;
+  const oldValue = event.target.dataset.startValue ?? item[field];
   item[field] = ["completed", "completedQty", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
   if (item.productionMode === "custom") {
     item.completed = Number(item.completedQty) || 0;
@@ -3042,6 +3265,10 @@ function updateProductionItem(event) {
     item.reviewStatus = "Draft";
     item.submittedAt = "";
     item.submittedBy = "";
+    setLastEdited(item, "Production edited");
+    if (event.type === "change" && String(oldValue) !== String(item[field])) {
+      logActivity("Production changed", { foreman: item.foreman, job: jobName(item.jobId), field, from: oldValue, to: item[field] });
+    }
     saveState();
     const pct = item.planned ? Math.min(100, Math.round((item.completed / item.planned) * 100)) : 0;
     const pctBox = document.querySelector(`[data-prod-pct="${item.id}"]`);
@@ -3060,6 +3287,10 @@ function updateProductionItem(event) {
   item.reviewStatus = "Draft";
   item.submittedAt = "";
   item.submittedBy = "";
+  setLastEdited(item, "Production edited");
+  if (event.type === "change" && String(oldValue) !== String(item[field])) {
+    logActivity("Production changed", { foreman: item.foreman, job: jobName(item.jobId), field, from: oldValue, to: item[field] });
+  }
   saveState();
   const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
   if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
@@ -3089,5 +3320,11 @@ function render() {
   else renderShell();
 }
 
+window.addEventListener("popstate", (event) => {
+  const route = event.state?.crewforgeRoute || window.location.hash.replace(/^#/, "") || routeFromState();
+  applyRoute(route);
+});
+
 render();
+syncHistory(true);
 initCloud();
