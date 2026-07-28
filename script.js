@@ -139,6 +139,7 @@ const defaultState = {
   activityLog: [],
   selectedWeek: "2026-07-03",
   selectedProductionJob: "",
+  selectedProductionForeman: "",
   selectedEmployeeReport: "",
   selectedEmployeeReportArea: "all",
   selectedEmployeeReportFromWeek: "2026-07-03",
@@ -293,6 +294,7 @@ function upgradeState(next) {
     return match ? crewNameForForeman(match[1]) : normalized;
   };
   next.selectedEmployeeReport = next.selectedEmployeeReport || "";
+  next.selectedProductionForeman = next.selectedProductionForeman || "";
   next.selectedEmployeeReportArea = next.selectedEmployeeReportArea || "all";
   next.selectedEmployeeReportFromWeek = next.selectedEmployeeReportFromWeek || next.selectedWeek || defaultState.selectedWeek;
   next.selectedEmployeeReportToWeek = next.selectedEmployeeReportToWeek || next.selectedWeek || defaultState.selectedWeek;
@@ -627,6 +629,16 @@ function setupForemanName() {
   return state.setupForeman;
 }
 
+function productionForemanName() {
+  const foremen = foremenForArea();
+  if (!foremen.some((person) => person.name === state.selectedProductionForeman)) {
+    state.selectedProductionForeman = state.currentForeman && foremen.some((person) => person.name === state.currentForeman)
+      ? state.currentForeman
+      : foremen[0]?.name || "";
+  }
+  return state.selectedProductionForeman;
+}
+
 function sheetKey(week = state.selectedWeek, areaId = state.selectedArea, foreman = state.currentForeman) {
   return `${areaId}:${week}:${normalizeForemanName(foreman || "")}`;
 }
@@ -773,7 +785,7 @@ function productionForArea() {
     if (item.area !== state.selectedArea) return false;
     if (state.selectedProductionJob && item.jobId !== state.selectedProductionJob) return false;
     if (roleIsElevated()) return true;
-    if (isApproverMode()) return state.selectedArea === "rebarInstall";
+    if (isApproverMode()) return state.selectedArea === "rebarInstall" && (item.foreman || productionForemanName()) === productionForemanName();
     return (item.foreman || state.currentForeman) === state.currentForeman;
   });
 }
@@ -1573,6 +1585,7 @@ function renderProduction() {
   const canAddProduction = isFieldEntryMode() || ["Admin", "Payroll"].includes(state.selectedRole);
   const jobOptions = selectedJobs();
   const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
+  const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
   const visibleProduction = productionForArea();
   const submittedCount = visibleProduction.filter((item) => item.reviewStatus === "Submitted").length;
   return `
@@ -1587,9 +1600,10 @@ function renderProduction() {
       </div>
       <div class="form-grid section-gap">
         <label>Job filter<span class="es">Filtro de trabajo</span><select id="productionJobFilter"><option value="">All jobs</option>${setOptions(jobOptions, state.selectedProductionJob, (job) => job.name, (job) => job.id)}</select></label>
+        ${isApproverMode() ? `<label>Production capataz<span class="es">Capataz de produccion</span><select id="productionForemanSelect">${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>` : ""}
       </div>
       ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
-      ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${state.currentForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
+      ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${selectedForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
       ${renderWindFoundationSummary(visibleProduction)}
       <div class="production-board section-gap">
@@ -1611,6 +1625,7 @@ function renderProduction() {
 function renderProductionAdder() {
   const defaultJob = state.selectedProductionJob || selectedJobs()[0]?.id || "";
   const selectedJob = jobById(defaultJob);
+  const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
   const isWind = selectedJob?.jobType === "Wind Farm";
   const isCustom = selectedJob?.customTracking?.length;
   if (isWind) {
@@ -1620,7 +1635,7 @@ function renderProductionAdder() {
         <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Foundation ID<span class="es">Cimentacion</span><select id="newFoundationId">${foundationIds.length ? setOptions(foundationIds, foundationIds[0]) : '<option value="">No IDs set up</option>'}</select></label>
         <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
-        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
         <button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>
       </div>
     `;
@@ -1631,7 +1646,7 @@ function renderProductionAdder() {
         <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Tracking item<span class="es">Partida</span><select id="newCustomTracking">${setOptions(selectedJob.customTracking, selectedJob.customTracking[0]?.id || "", (item) => `${item.name} (${item.unit})`, (item) => item.id)}</select></label>
         <label>Amount completed<span class="es">Cantidad terminada</span><input id="newCustomCompleted" type="number" min="0" step="0.01" placeholder="0" /></label>
-        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+        <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
         <button class="secondary-action" id="addProduction" type="button">${t("Add progress", "Agregar avance")}</button>
       </div>
     `;
@@ -1643,7 +1658,7 @@ function renderProductionAdder() {
       <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
       <label>Total amount<span class="es">Cantidad total</span><input id="newProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
       <label>Total weight<span class="es">Peso total</span><input id="newProdWeight" type="number" min="0" step="1" placeholder="18445" /></label>
-      <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), state.currentForeman)}</select></label>
+      <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
       <button class="secondary-action" id="addProduction" type="button">${t("Add production", "Agregar produccion")}</button>
     </div>
   `;
@@ -2217,6 +2232,20 @@ function bindTabEvents() {
       render();
     });
   }
+  if ($("productionForemanSelect")) {
+    $("productionForemanSelect").addEventListener("change", (event) => {
+      state.selectedProductionForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("newProdForeman") && isApproverMode()) {
+    $("newProdForeman").addEventListener("change", (event) => {
+      state.selectedProductionForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
   if ($("sheetGroup")) {
     $("sheetGroup").addEventListener("change", (event) => {
       if (!editable) return;
@@ -2474,7 +2503,7 @@ function submitSheet() {
 function submitProduction() {
   const items = productionForArea().filter((item) => {
     if (["Admin", "Payroll"].includes(state.selectedRole)) return true;
-    if (isApproverMode()) return item.area === "rebarInstall";
+    if (isApproverMode()) return item.area === "rebarInstall" && (item.foreman || productionForemanName()) === productionForemanName();
     return state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman;
   });
   if (!items.length) {
@@ -2823,6 +2852,7 @@ function removeProductionItem(id) {
 function addProduction() {
   const selectedJobId = $("newProdJob").value;
   const selectedJob = jobById(selectedJobId);
+  const assignedForeman = state.selectedRole === "Foreman" ? state.currentForeman : isApproverMode() ? productionForemanName() : $("newProdForeman").value;
   if (selectedJob?.jobType === "Wind Farm") {
     const foundationId = $("newFoundationId")?.value;
     const component = $("newFoundationComponent")?.value;
@@ -2839,7 +2869,7 @@ function addProduction() {
       id: `p${Date.now()}`,
       area: state.selectedArea,
       productionMode: "foundation",
-      foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
+      foreman: assignedForeman,
       jobId: selectedJobId,
       foundationId,
       component,
@@ -2879,7 +2909,7 @@ function addProduction() {
       id: `p${Date.now()}`,
       area: state.selectedArea,
       productionMode: "custom",
-      foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
+      foreman: assignedForeman,
       jobId: selectedJobId,
       customTrackingId: tracking.id,
       code: tracking.name,
@@ -2918,7 +2948,7 @@ function addProduction() {
   const item = {
     id: `p${Date.now()}`,
     area: state.selectedArea,
-    foreman: state.selectedRole === "Foreman" ? state.currentForeman : $("newProdForeman").value,
+    foreman: assignedForeman,
     jobId: $("newProdJob").value,
     code,
     description,
