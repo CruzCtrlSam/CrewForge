@@ -149,6 +149,8 @@ const defaultState = {
   selectedEmployeeReportArea: "all",
   selectedEmployeeReportFromWeek: "2026-07-03",
   selectedEmployeeReportToWeek: "2026-07-03",
+  selectedEmployeeReportFromDate: "2026-06-29",
+  selectedEmployeeReportToDate: "2026-07-03",
   jobDraftType: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
@@ -305,6 +307,9 @@ function upgradeState(next) {
   next.selectedEmployeeReportArea = next.selectedEmployeeReportArea || "all";
   next.selectedEmployeeReportFromWeek = next.selectedEmployeeReportFromWeek || next.selectedWeek || defaultState.selectedWeek;
   next.selectedEmployeeReportToWeek = next.selectedEmployeeReportToWeek || next.selectedWeek || defaultState.selectedWeek;
+  const defaultRange = weekRangeDates(next.selectedWeek || defaultState.selectedWeek);
+  next.selectedEmployeeReportFromDate = next.selectedEmployeeReportFromDate || defaultRange.start;
+  next.selectedEmployeeReportToDate = next.selectedEmployeeReportToDate || defaultRange.end;
   next.selectedDocumentJob = next.selectedDocumentJob || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
@@ -1355,17 +1360,57 @@ function uniqueEmployees() {
   return [...new Set(state.people.map((person) => person.name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
-function weekInRange(week, fromWeek, toWeek) {
-  if (fromWeek && week < fromWeek) return false;
-  if (toWeek && week > toWeek) return false;
-  return true;
+function dateInputValue(value, fallback = state.selectedWeek) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return fallback;
 }
 
-function employeeReportRecords(employee, fromWeek = state.selectedWeek, toWeek = state.selectedWeek, areaFilter = "all") {
+function addDays(dateValue, amount) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(date.getDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function weekRangeDates(weekEnding) {
+  const end = dateInputValue(weekEnding, defaultState.selectedWeek);
+  return { start: addDays(end, -4), end };
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  return startA <= endB && startB <= endA;
+}
+
+function weekInRange(week, fromDate, toDate) {
+  const selectedStart = dateInputValue(fromDate, state.selectedWeek);
+  const selectedEnd = dateInputValue(toDate, selectedStart);
+  const normalizedStart = selectedStart <= selectedEnd ? selectedStart : selectedEnd;
+  const normalizedEnd = selectedStart <= selectedEnd ? selectedEnd : selectedStart;
+  const weekRange = weekRangeDates(week);
+  return rangesOverlap(weekRange.start, weekRange.end, normalizedStart, normalizedEnd);
+}
+
+function selectedEmployeeDateRange() {
+  const fallback = weekRangeDates(state.selectedWeek);
+  const fromDate = dateInputValue(state.selectedEmployeeReportFromDate, fallback.start);
+  const toDate = dateInputValue(state.selectedEmployeeReportToDate, fallback.end);
+  if (fromDate <= toDate) return { fromDate, toDate };
+  return { fromDate: toDate, toDate: fromDate };
+}
+
+function weekRangeLabel(week) {
+  const range = weekRangeDates(week);
+  return `${range.start} to ${range.end}`;
+}
+
+function dateRangeLabel(fromDate, toDate) {
+  return fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`;
+}
+
+function employeeReportRecords(employee, fromDate = state.selectedWeek, toDate = state.selectedWeek, areaFilter = "all") {
   if (!employee) return [];
   return Object.values(state.sheets || [])
     .flatMap((sheet) => {
-      if (!weekInRange(sheet.week, fromWeek, toWeek)) return [];
+      if (!weekInRange(sheet.week, fromDate, toDate)) return [];
       if (areaFilter !== "all" && sheet.area !== areaFilter) return [];
       return (sheet.rows || [])
         .filter((row) => row.employee === employee)
@@ -1424,12 +1469,12 @@ function employeeReportTable(records) {
   return `
     <table>
       <thead>
-        <tr><th>Week</th><th>Area</th><th>Job</th><th>Foreman</th><th>Role</th><th>Hours</th><th>PTO</th><th>Sick</th><th>Per diem</th><th>Rate</th><th>Gross est.</th><th>Notes</th></tr>
+        <tr><th>Work period</th><th>Area</th><th>Job</th><th>Foreman</th><th>Role</th><th>Hours</th><th>PTO</th><th>Sick</th><th>Per diem</th><th>Rate</th><th>Gross est.</th><th>Notes</th></tr>
       </thead>
       <tbody>
         ${records
           .map((record) => `<tr>
-            <td>${record.week}</td>
+            <td><strong>${weekRangeLabel(record.week)}</strong><span class="sub">Week ending ${record.week}</span></td>
             <td>${record.areaLabel}</td>
             <td>${record.job || ""}</td>
             <td>${record.foreman || ""}</td>
@@ -2141,9 +2186,8 @@ function renderEmployeeReports() {
   const employees = uniqueEmployees();
   const selectedEmployee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
   const employeeArea = state.selectedEmployeeReportArea || "all";
-  const fromWeek = state.weeks.includes(state.selectedEmployeeReportFromWeek) ? state.selectedEmployeeReportFromWeek : state.selectedWeek;
-  const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
-  const employeeRecords = employeeReportRecords(selectedEmployee, fromWeek, toWeek, employeeArea);
+  const { fromDate, toDate } = selectedEmployeeDateRange();
+  const employeeRecords = employeeReportRecords(selectedEmployee, fromDate, toDate, employeeArea);
   const employeeTotals = employeeReportTotals(employeeRecords);
   const person = personByName(selectedEmployee) || {};
   const normalCrew = person.group || employeeRecords.find((record) => record.group)?.group || "Not assigned";
@@ -2151,11 +2195,11 @@ function renderEmployeeReports() {
   const areaLabel = person.area ? areas[person.area]?.label : "All areas";
   return `
     <section class="panel printable-report employee-report-page">
-      ${reportHeader("Employee Reports", `${fromWeek} to ${toWeek}`)}
+      ${reportHeader("Employee Reports", dateRangeLabel(fromDate, toDate))}
       <div class="split">
         <div>
           <h2>${t("Employee Reports", "Reportes de empleados")}</h2>
-          <p class="sub">Search one employee and see hours, normal crew, pay-period totals, and job history.</p>
+          <p class="sub">Search one employee and see hours, normal crew, selected-day totals, and job history.</p>
         </div>
         <div class="button-group no-print">
           <button class="secondary-action" data-print="employee-report" type="button">${t("Export PDF", "Exportar PDF")}</button>
@@ -2165,14 +2209,14 @@ function renderEmployeeReports() {
       <div class="form-grid section-gap no-print">
         <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
         <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
-        <label>From week<span class="es">Desde semana</span><select id="employeeReportFromWeek">${setOptions(state.weeks, fromWeek)}</select></label>
-        <label>To week<span class="es">Hasta semana</span><select id="employeeReportToWeek">${setOptions(state.weeks, toWeek)}</select></label>
+        <label>From day<span class="es">Desde dia</span><input id="employeeReportFromDate" type="date" value="${fromDate}" /></label>
+        <label>To day<span class="es">Hasta dia</span><input id="employeeReportToDate" type="date" value="${toDate}" /></label>
       </div>
       <div class="metric-grid section-gap">
         <article class="metric"><span>Normal crew</span><strong>${normalCrew}</strong><small>${areaLabel}</small></article>
         <article class="metric"><span>Normal role</span><strong>${normalRole}</strong><small>Current people setup</small></article>
         <article class="metric"><span>Hourly rate</span><strong>${money(person.hourlyRate || 0)}</strong><small>Visible to office users</small></article>
-        <article class="metric"><span>Period gross est.</span><strong>${money(employeeTotals.gross)}</strong><small>Hours x rate + per diem</small></article>
+        <article class="metric"><span>Selected period gross est.</span><strong>${money(employeeTotals.gross)}</strong><small>Hours x rate + per diem</small></article>
       </div>
       <div class="metric-grid section-gap">
         <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
@@ -2499,21 +2543,21 @@ function bindTabEvents() {
       render();
     });
   }
-  if ($("employeeReportFromWeek")) {
-    $("employeeReportFromWeek").addEventListener("change", (event) => {
-      state.selectedEmployeeReportFromWeek = event.target.value;
-      if (state.selectedEmployeeReportToWeek < state.selectedEmployeeReportFromWeek) {
-        state.selectedEmployeeReportToWeek = state.selectedEmployeeReportFromWeek;
+  if ($("employeeReportFromDate")) {
+    $("employeeReportFromDate").addEventListener("change", (event) => {
+      state.selectedEmployeeReportFromDate = event.target.value;
+      if (state.selectedEmployeeReportToDate < state.selectedEmployeeReportFromDate) {
+        state.selectedEmployeeReportToDate = state.selectedEmployeeReportFromDate;
       }
       saveState();
       render();
     });
   }
-  if ($("employeeReportToWeek")) {
-    $("employeeReportToWeek").addEventListener("change", (event) => {
-      state.selectedEmployeeReportToWeek = event.target.value;
-      if (state.selectedEmployeeReportFromWeek > state.selectedEmployeeReportToWeek) {
-        state.selectedEmployeeReportFromWeek = state.selectedEmployeeReportToWeek;
+  if ($("employeeReportToDate")) {
+    $("employeeReportToDate").addEventListener("change", (event) => {
+      state.selectedEmployeeReportToDate = event.target.value;
+      if (state.selectedEmployeeReportFromDate > state.selectedEmployeeReportToDate) {
+        state.selectedEmployeeReportFromDate = state.selectedEmployeeReportToDate;
       }
       saveState();
       render();
@@ -2709,9 +2753,8 @@ function exportPayrollCsv() {
 function exportEmployeeCsv() {
   const employees = uniqueEmployees();
   const employee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
-  const fromWeek = state.weeks.includes(state.selectedEmployeeReportFromWeek) ? state.selectedEmployeeReportFromWeek : state.selectedWeek;
-  const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
-  const records = employeeReportRecords(employee, fromWeek, toWeek, state.selectedEmployeeReportArea || "all");
+  const { fromDate, toDate } = selectedEmployeeDateRange();
+  const records = employeeReportRecords(employee, fromDate, toDate, state.selectedEmployeeReportArea || "all");
   const headers = ["Employee", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
   const rows = records.map((record) => [
     record.employee,
@@ -2736,7 +2779,7 @@ function exportEmployeeCsv() {
   ]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const safeName = employee.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "employee";
-  downloadFile(`crewforge-employee-${safeName}-${fromWeek}-to-${toWeek}.csv`, csv);
+  downloadFile(`crewforge-employee-${safeName}-${fromDate}-to-${toDate}.csv`, csv);
   showToast("Employee CSV exported");
 }
 
