@@ -46,7 +46,8 @@ const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
-const rebarFabForemen = ["Rebar Fabrication Day Foreman", "Rebar Fabrication Night Foreman"];
+const companyAccessCode = "VALOR";
+const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman"];
 const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
 const appName = "CrewForge";
@@ -61,6 +62,7 @@ const areaArtwork = {
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
+  { code: "QUALITY", name: "Quality", role: "Quality", area: "rebarFab", foreman: "Daniel Medrano" },
   { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
   { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
   { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
@@ -131,6 +133,8 @@ const bakersfieldControlCodes = [
 
 const defaultState = {
   auth: null,
+  companyVerified: false,
+  companyName: "",
   selectedArea: "",
   activeTab: "dashboard",
   showIntro: true,
@@ -275,7 +279,7 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!saved) return upgradeState(structuredClone(defaultState));
-    return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: true });
+    return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: false });
   } catch {
     return upgradeState(structuredClone(defaultState));
   }
@@ -283,6 +287,8 @@ function loadState() {
 
 function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
+  if (next.companyVerified === undefined) next.companyVerified = Boolean(next.auth);
+  next.companyName = next.companyName || (next.companyVerified ? "Valor" : "");
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
   next.hiddenForemen = next.hiddenForemen || [];
@@ -489,6 +495,8 @@ function completedWeight(item) {
 }
 
 function normalizeForemanName(name) {
+  if (name === "Rebar Fabrication Day Foreman") return "Daniel Medrano";
+  if (name === "Rebar Fabrication Night Foreman") return "Hipolito Pereda";
   return name === "Willie Vargas" ? "Wilfredo Vargas" : name;
 }
 
@@ -513,7 +521,7 @@ function roleIsOffice() {
 }
 
 function roleIsProductionVisible() {
-  return ["Management", "Admin"].includes(state.selectedRole);
+  return ["Management", "Admin", "Quality"].includes(state.selectedRole);
 }
 
 function isApproverMode() {
@@ -529,6 +537,12 @@ function isFieldEntryMode() {
 }
 
 function availableTabs() {
+  if (state.selectedRole === "Quality") {
+    return [
+      ["production", "Bundle Tracking", "Rastreo de paquetes"],
+      ["documents", "Documents", "Documentos"]
+    ];
+  }
   if (isFieldEntryMode()) {
     return [
       ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
@@ -542,6 +556,7 @@ function availableTabs() {
     ["production", "Production", "Produccion"],
     ["jobs", "Jobs", "Trabajos"],
     ["documents", "Documents", "Documentos"],
+    ["employeeReports", "Employee Reports", "Reportes de empleados"],
     ["deliverables", "Deliverables", "Entregables"],
     ["setup", "People / Crews", "Personas / Cuadrillas"]
   ];
@@ -552,6 +567,13 @@ function canEditSheet(sheet) {
   if (roleIsElevated()) return true;
   if (isApproverMode()) return sheet.area === "rebarInstall" && sheet.status !== "Approved";
   return sheet.foreman === state.currentForeman && sheet.status !== "Approved";
+}
+
+function canManageProductionItem(item = {}) {
+  if (["Admin", "Payroll"].includes(state.selectedRole)) return true;
+  if (state.selectedRole === "Quality") return state.selectedArea === "rebarFab" && item.area === "rebarFab";
+  if (isApproverMode()) return state.selectedArea === "rebarInstall" && item.area === "rebarInstall";
+  return state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman;
 }
 
 function selectedJobs() {
@@ -603,10 +625,14 @@ function foremenForArea(areaId = state.selectedArea) {
   return peopleForArea(areaId).filter((person) => person.role === "Foreman");
 }
 
-function loginForemanOptions() {
-  const savedForemen = state.people?.filter((person) => person.role === "Foreman").map((person) => person.name) || [];
+function loginForemanOptions(areaId = state.selectedArea) {
+  const savedForemen =
+    state.people
+      ?.filter((person) => person.role === "Foreman" && (!areaId || person.area === areaId))
+      .map((person) => person.name) || [];
   const hiddenForemen = new Set((state.hiddenForemen || []).map((name) => normalizeForemanName(name)));
-  const aliasedTrialForemen = trialForemanNames
+  const trialForemanPool = areaId === "rebarInstall" ? foremanNames : areaId === "rebarFab" ? rebarFabForemen : areaId === "solarPiles" ? solarPilesForemen : trialForemanNames;
+  const aliasedTrialForemen = trialForemanPool
     .filter((name) => !hiddenForemen.has(normalizeForemanName(name)))
     .map((name) => state.foremanAliases?.[name] || name);
   return [...new Set([...savedForemen, ...aliasedTrialForemen])].sort((a, b) => a.localeCompare(b));
@@ -785,6 +811,7 @@ function productionForArea() {
     if (item.area !== state.selectedArea) return false;
     if (state.selectedProductionJob && item.jobId !== state.selectedProductionJob) return false;
     if (roleIsElevated()) return true;
+    if (state.selectedRole === "Quality") return state.selectedArea === "rebarFab";
     if (isApproverMode()) return state.selectedArea === "rebarInstall" && (item.foreman || productionForemanName()) === productionForemanName();
     return (item.foreman || state.currentForeman) === state.currentForeman;
   });
@@ -823,10 +850,10 @@ function showToast(message) {
 function setArea(areaId) {
   state.selectedArea = areaId;
   state.showIntro = false;
-  state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
+  state.activeTab = state.auth ? (isFieldEntryMode() ? "timesheet" : "dashboard") : "dashboard";
   state.selectedProductionJob = "";
   state.selectedDocumentJob = "";
-  ensureAreaForeman();
+  if (state.auth) ensureAreaForeman();
   saveState();
   render();
   syncHistory();
@@ -843,7 +870,8 @@ function changeTab(tab) {
 }
 
 function routeFromState() {
-  if (!state.auth) return "login";
+  if (!state.companyVerified) return "company";
+  if (!state.auth) return state.selectedArea ? "login" : "areas";
   if (state.showIntro) return "intro";
   if (!state.selectedArea) return "areas";
   return `${state.selectedArea}/${state.activeTab || "dashboard"}`;
@@ -861,15 +889,21 @@ function syncHistory(replace = false) {
 
 function applyRoute(route = "") {
   suppressHistorySync = true;
-  if (route === "login") {
+  if (route === "company") {
+    state.companyVerified = false;
+    state.companyName = "";
     state.auth = null;
     state.selectedArea = "";
-    state.showIntro = true;
+    state.showIntro = false;
+    state.activeTab = "dashboard";
+  } else if (route === "login") {
+    state.auth = null;
+    state.showIntro = false;
     state.activeTab = "dashboard";
   } else if (route === "intro" && state.auth) {
     state.showIntro = true;
     state.selectedArea = "";
-  } else if (route === "areas" && state.auth) {
+  } else if (route === "areas" && state.companyVerified) {
     state.showIntro = false;
     state.selectedArea = "";
   } else {
@@ -887,11 +921,7 @@ function applyRoute(route = "") {
   suppressHistorySync = false;
 }
 
-function setOptions(values, selected, labeler = (value) => value, valueGetter = (value) => value) {
-  return values.map((value) => `<option value="${valueGetter(value)}" ${valueGetter(value) === selected ? "selected" : ""}>${labeler(value)}</option>`).join("");
-}
-
-function renderLogin() {
+function renderCompanyLogin() {
   $("app").innerHTML = `
     <main class="login-screen">
       <section class="login-card">
@@ -900,20 +930,73 @@ function renderLogin() {
           <img class="login-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
         </div>
         <div>
-          <p class="eyebrow">Trial access</p>
-          <h1>${t("Sign in", "Iniciar sesion")}</h1>
-          <p class="sub">Use one trial code, then choose the right foreman when needed.</p>
+          <p class="eyebrow">Company access</p>
+          <h1>${t("Choose company", "Escoja compania")}</h1>
+          <p class="sub">Enter the company code first. Then CrewForge will show the operating areas for that company.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, MAYORDOMO, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(loginForemanOptions(), loginForemanOptions()[0])}</select></label>
+        <label>Company code<span class="es">Codigo de compania</span><input id="companyCode" autocomplete="organization" placeholder="VALOR" /></label>
+        <button class="primary-action" id="companyButton" type="button">${t("Continue", "Continuar")}</button>
+        <div class="trial-note">
+          <strong>Trial company</strong>
+          <span>Code: VALOR</span>
+          <span class="es">Codigo de prueba: VALOR</span>
+        </div>
+      </section>
+    </main>
+  `;
+  const submitCompany = () => {
+    const code = $("companyCode").value.trim().toUpperCase();
+    if (code !== companyAccessCode) {
+      showToast("Company code not recognized");
+      return;
+    }
+    state.companyVerified = true;
+    state.companyName = "Valor";
+    state.auth = null;
+    state.selectedArea = "";
+    state.showIntro = false;
+    saveState();
+    render();
+    syncHistory();
+  };
+  $("companyButton").addEventListener("click", submitCompany);
+  $("companyCode").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") submitCompany();
+  });
+  $("companyCode").focus();
+}
+
+function setOptions(values, selected, labeler = (value) => value, valueGetter = (value) => value) {
+  return values.map((value) => `<option value="${valueGetter(value)}" ${valueGetter(value) === selected ? "selected" : ""}>${labeler(value)}</option>`).join("");
+}
+
+function renderLogin() {
+  const selectedAreaLabel = state.selectedArea ? areas[state.selectedArea]?.label : "All areas";
+  const foremanOptions = loginForemanOptions();
+  $("app").innerHTML = `
+    <main class="login-screen">
+      <section class="login-card">
+        <div class="login-logo-stack">
+          <img class="login-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+          <img class="login-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
+        </div>
+        <div>
+          <p class="eyebrow">${state.companyName || "Valor"} · ${selectedAreaLabel}</p>
+          <h1>${t("Sign in", "Iniciar sesion")}</h1>
+          <p class="sub">Use your trial code for this department. Office users can still change areas after signing in.</p>
+        </div>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, MAYORDOMO, QUALITY, PAYROLL, MANAGER, ADMIN" /></label>
+        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, foremanOptions[0])}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
           <span>Foremen: FOREMAN, then choose a name</span>
+          <span>Quality: QUALITY</span>
           <span>Approver: MAYORDOMO</span>
           <span>Office: PAYROLL, MANAGER, or ADMIN</span>
           <span class="es">Codigos de prueba para esta demo.</span>
         </div>
+        <button class="text-button" id="loginChangeArea" type="button">Change area<span class="es">Cambiar area</span></button>
         <p class="sub login-limit">This is trial access for workflow testing. Real company use still needs hosted login and server-side permissions.</p>
       </section>
     </main>
@@ -925,6 +1008,12 @@ function renderLogin() {
   });
   $("foremanLoginField").addEventListener("click", openLoginForemanPicker);
   $("loginForeman").addEventListener("click", openLoginForemanPicker);
+  $("loginChangeArea").addEventListener("click", () => {
+    state.selectedArea = "";
+    saveState();
+    render();
+    syncHistory();
+  });
   updateForemanLoginVisibility();
   $("accessCode").focus();
 }
@@ -954,6 +1043,14 @@ function loginWithCode() {
     showToast("Code not recognized");
     return;
   }
+  if (!state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) {
+    showToast("Choose a department first");
+    return;
+  }
+  if (account.area && state.selectedArea && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) {
+    showToast(`${account.name} belongs in ${areas[account.area]?.label || account.area}`);
+    return;
+  }
   updateForemanLoginVisibility();
   const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
   const displayName = account.needsForeman ? selectedForeman : account.name;
@@ -961,9 +1058,10 @@ function loginWithCode() {
   state.selectedRole = account.role;
   state.currentForeman = selectedForeman || state.currentForeman;
   state.setupForeman = selectedForeman || state.setupForeman;
-  state.selectedArea = account.area || "";
-  state.showIntro = !account.area;
+  state.selectedArea = account.area || state.selectedArea || "";
+  state.showIntro = false;
   state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
+  if (state.selectedRole === "Quality") state.activeTab = "production";
   saveState();
   render();
   syncHistory();
@@ -1025,8 +1123,8 @@ function renderGate() {
           </div>
         </div>
         <h1>${t("Choose operating area", "Escoja area de trabajo")}</h1>
-        <p class="sub">Start simple: pick the side of the company, then fill out time, production, and reports for that area only.</p>
-        <button class="text-button gate-logout" id="gateLogout" type="button">Log out<span class="es">Salir</span></button>
+        <p class="sub">Pick the department first. Then CrewForge will ask for the right login for that area.</p>
+        <button class="text-button gate-logout" id="gateLogout" type="button">Change company<span class="es">Cambiar compania</span></button>
       </section>
       <section class="area-grid">
         ${Object.entries(areas)
@@ -1048,9 +1146,11 @@ function renderGate() {
   `;
   document.querySelectorAll("[data-area]").forEach((button) => button.addEventListener("click", () => setArea(button.dataset.area)));
   $("gateLogout").addEventListener("click", () => {
+    state.companyVerified = false;
+    state.companyName = "";
     state.auth = null;
     state.selectedArea = "";
-    state.showIntro = true;
+    state.showIntro = false;
     saveState();
     render();
     syncHistory();
@@ -1156,6 +1256,7 @@ function renderActiveTab() {
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
   if (state.activeTab === "documents") return renderDocuments();
+  if (state.activeTab === "employeeReports") return renderEmployeeReports();
   if (state.activeTab === "deliverables") return renderDeliverables();
   if (state.activeTab === "setup") return renderSetup();
   return renderDashboard();
@@ -1582,7 +1683,7 @@ function renderTimesheetRow(row, index, editable) {
 }
 
 function renderProduction() {
-  const canAddProduction = isFieldEntryMode() || ["Admin", "Payroll"].includes(state.selectedRole);
+  const canAddProduction = isFieldEntryMode() || ["Admin", "Payroll", "Quality"].includes(state.selectedRole);
   const jobOptions = selectedJobs();
   const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
   const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
@@ -1603,7 +1704,7 @@ function renderProduction() {
         ${isApproverMode() ? `<label>Production capataz<span class="es">Capataz de produccion</span><select id="productionForemanSelect">${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>` : ""}
       </div>
       ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
-      ${!roleIsElevated() ? `<div class="notice section-gap">Showing only production assigned to ${selectedForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
+      ${!roleIsElevated() && state.selectedRole !== "Quality" ? `<div class="notice section-gap">Showing only production assigned to ${selectedForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
       ${canAddProduction ? renderProductionAdder() : ""}
       ${renderWindFoundationSummary(visibleProduction)}
       <div class="production-board section-gap">
@@ -1682,7 +1783,7 @@ function renderProductionCard(item) {
   const pct = item.planned ? Math.min(100, Math.round((weightDone / item.planned) * 100)) : 0;
   const remaining = Math.max((Number(item.planned) || 0) - weightDone, 0);
   const isFab = state.selectedArea === "rebarFab";
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = canManageProductionItem(item);
   return `
     <article class="production-card">
       <header class="production-card-header">
@@ -1748,7 +1849,7 @@ function renderCustomProductionCard(item) {
   const planned = Number(item.planned) || 0;
   const completed = Number(item.completedQty) || 0;
   const pct = planned ? Math.min(100, Math.round((completed / planned) * 100)) : 0;
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = canManageProductionItem(item);
   return `
     <article class="production-card">
       <header class="production-card-header">
@@ -1789,7 +1890,7 @@ function renderCustomProductionCard(item) {
 }
 
 function renderFoundationProductionCard(item) {
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && state.selectedArea === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = canManageProductionItem(item);
   return `
     <article class="production-card foundation-card">
       <header class="production-card-header">
@@ -2011,11 +2112,7 @@ function documentCard(jobId, doc, canManage) {
   `;
 }
 
-function renderDeliverables() {
-  const sheet = currentSheet();
-  const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
-  const canExportEmployee = roleIsElevated();
-  const showProductionDeliverables = state.selectedRole !== "Payroll";
+function renderEmployeeReports() {
   const employees = uniqueEmployees();
   const selectedEmployee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
   const employeeArea = state.selectedEmployeeReportArea || "all";
@@ -2023,6 +2120,50 @@ function renderDeliverables() {
   const toWeek = state.weeks.includes(state.selectedEmployeeReportToWeek) ? state.selectedEmployeeReportToWeek : fromWeek;
   const employeeRecords = employeeReportRecords(selectedEmployee, fromWeek, toWeek, employeeArea);
   const employeeTotals = employeeReportTotals(employeeRecords);
+  const person = personByName(selectedEmployee) || {};
+  const normalCrew = person.group || employeeRecords.find((record) => record.group)?.group || "Not assigned";
+  const normalRole = person.role || employeeRecords.find((record) => record.role)?.role || "Not set";
+  const areaLabel = person.area ? areas[person.area]?.label : "All areas";
+  return `
+    <section class="panel printable-report employee-report-page">
+      ${reportHeader("Employee Reports", `${fromWeek} to ${toWeek}`)}
+      <div class="split">
+        <div>
+          <h2>${t("Employee Reports", "Reportes de empleados")}</h2>
+          <p class="sub">Search one employee and see hours, normal crew, pay-period totals, and job history.</p>
+        </div>
+        <div class="button-group no-print">
+          <button class="secondary-action" data-print="employee-report" type="button">${t("Export PDF", "Exportar PDF")}</button>
+          <button class="secondary-action" id="exportEmployeeCsv" type="button">${t("Export Employee CSV", "Exportar CSV trabajador")}</button>
+        </div>
+      </div>
+      <div class="form-grid section-gap no-print">
+        <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
+        <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
+        <label>From week<span class="es">Desde semana</span><select id="employeeReportFromWeek">${setOptions(state.weeks, fromWeek)}</select></label>
+        <label>To week<span class="es">Hasta semana</span><select id="employeeReportToWeek">${setOptions(state.weeks, toWeek)}</select></label>
+      </div>
+      <div class="metric-grid section-gap">
+        <article class="metric"><span>Normal crew</span><strong>${normalCrew}</strong><small>${areaLabel}</small></article>
+        <article class="metric"><span>Normal role</span><strong>${normalRole}</strong><small>Current people setup</small></article>
+        <article class="metric"><span>Hourly rate</span><strong>${money(person.hourlyRate || 0)}</strong><small>Visible to office users</small></article>
+        <article class="metric"><span>Period gross est.</span><strong>${money(employeeTotals.gross)}</strong><small>Hours x rate + per diem</small></article>
+      </div>
+      <div class="metric-grid section-gap">
+        <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
+        <article class="metric"><span>Regular hours</span><strong>${preciseNumber(employeeTotals.regular)}</strong><small>Across selected period</small></article>
+        <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
+        <article class="metric"><span>Per diem</span><strong>${money(employeeTotals.perDiem)}</strong><small>Installation only</small></article>
+      </div>
+      <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
+    </section>
+  `;
+}
+
+function renderDeliverables() {
+  const sheet = currentSheet();
+  const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
+  const showProductionDeliverables = state.selectedRole !== "Payroll";
   return `
     <section class="panel printable-report deliverables-report">
       ${reportHeader("Deliverables", state.selectedWeek)}
@@ -2045,31 +2186,6 @@ function renderDeliverables() {
       <div class="report-grid section-gap">
         <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
         ${showProductionDeliverables ? `<div class="table-wrap">${productionSummaryTable()}</div>` : ""}
-      </div>
-      <div class="employee-report section-gap">
-        <div class="split">
-          <div>
-            <h3>${t("Employee Report", "Reporte de trabajador")}</h3>
-            <p class="sub">Pick one employee to see their timesheet history across crews, jobs, and weeks.</p>
-          </div>
-          <div class="button-group no-print">
-            <button class="secondary-action" data-print="employee-report" type="button">${t("Export PDF", "Exportar PDF")}</button>
-            ${canExportEmployee ? `<button class="secondary-action" id="exportEmployeeCsv" type="button">${t("Export Employee CSV", "Exportar CSV trabajador")}</button>` : ""}
-          </div>
-        </div>
-        <div class="form-grid section-gap no-print">
-          <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
-          <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
-          <label>From week<span class="es">Desde semana</span><select id="employeeReportFromWeek">${setOptions(state.weeks, fromWeek)}</select></label>
-          <label>To week<span class="es">Hasta semana</span><select id="employeeReportToWeek">${setOptions(state.weeks, toWeek)}</select></label>
-        </div>
-        <div class="metric-grid section-gap">
-          <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
-          <article class="metric"><span>Regular hours</span><strong>${preciseNumber(employeeTotals.regular)}</strong><small>Across selected period</small></article>
-          <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
-          <article class="metric"><span>Per diem / Gross</span><strong>${money(employeeTotals.perDiem)}</strong><small>Gross est. ${money(employeeTotals.gross)}</small></article>
-        </div>
-        <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
       </div>
       ${roleIsElevated() ? `
         <div class="employee-report section-gap">
@@ -2503,6 +2619,7 @@ function submitSheet() {
 function submitProduction() {
   const items = productionForArea().filter((item) => {
     if (["Admin", "Payroll"].includes(state.selectedRole)) return true;
+    if (state.selectedRole === "Quality") return item.area === "rebarFab";
     if (isApproverMode()) return item.area === "rebarInstall" && (item.foreman || productionForemanName()) === productionForemanName();
     return state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman;
   });
@@ -2839,7 +2956,7 @@ function removePerson(name) {
 function removeProductionItem(id) {
   const item = state.production.find((entry) => entry.id === id);
   if (!item) return;
-  const canEdit = ["Admin", "Payroll"].includes(state.selectedRole) || (isApproverMode() && item.area === "rebarInstall") || (state.selectedRole === "Foreman" && (item.foreman || state.currentForeman) === state.currentForeman);
+  const canEdit = canManageProductionItem(item);
   if (!canEdit) return;
   if (!confirm(`Remove ${item.code} from production?`)) return;
   state.production = state.production.filter((entry) => entry.id !== id);
@@ -3344,7 +3461,9 @@ function updateProductionItem(event) {
 }
 
 function render() {
-  if (!state.auth) renderLogin();
+  if (!state.companyVerified) renderCompanyLogin();
+  else if (!state.auth && !state.selectedArea) renderGate();
+  else if (!state.auth) renderLogin();
   else if (state.showIntro) renderIntro();
   else if (!state.selectedArea) renderGate();
   else renderShell();
