@@ -35,8 +35,8 @@ const areas = {
     dol: true
   },
   bundleLab: {
-    label: "Bundle / Trailer Lab",
-    es: "Prueba de paquetes y trailers",
+    label: "Fabrication Package Lab",
+    es: "Prueba de paquetes de fabricacion",
     mode: "planner",
     roles: [],
     pto: false,
@@ -181,9 +181,17 @@ const drilledPierBundleRows = [
 function defaultBundlePlanner() {
   return {
     jobName: "IPA HVDC Delta UT - Drilled Piers",
+    customer: "",
+    jobNumber: "",
+    detailer: "",
+    packageType: "Drilled Piers",
     source: "Detailer package trial",
+    maxBundleWeight: 0,
+    maxBundleLength: "",
+    tagRule: "",
     maxTrailerWeight: 48000,
     trailers: ["Trailer 1", "Trailer 2", "Trailer 3", "Trailer 4", "Trailer 5"],
+    imports: [],
     bundles: drilledPierBundleRows.map(([code, description, weight, trailer], index) => ({
       id: `pier-${code.toLowerCase()}`,
       tag: code,
@@ -385,6 +393,14 @@ function upgradeState(next) {
   };
   next.bundlePlanner.trailers = next.bundlePlanner.trailers?.length ? next.bundlePlanner.trailers : structuredClone(defaultBundlePlanner().trailers);
   next.bundlePlanner.bundles = next.bundlePlanner.bundles?.length ? next.bundlePlanner.bundles : structuredClone(defaultBundlePlanner().bundles);
+  next.bundlePlanner.imports = next.bundlePlanner.imports || [];
+  next.bundlePlanner.customer = next.bundlePlanner.customer || "";
+  next.bundlePlanner.jobNumber = next.bundlePlanner.jobNumber || "";
+  next.bundlePlanner.detailer = next.bundlePlanner.detailer || "";
+  next.bundlePlanner.packageType = next.bundlePlanner.packageType || "Drilled Piers";
+  next.bundlePlanner.maxBundleWeight = Number(next.bundlePlanner.maxBundleWeight) || 0;
+  next.bundlePlanner.maxBundleLength = next.bundlePlanner.maxBundleLength || "";
+  next.bundlePlanner.tagRule = next.bundlePlanner.tagRule || "";
   next.bundlePlanner.maxTrailerWeight = Number(next.bundlePlanner.maxTrailerWeight) || 48000;
   next.jobLists = {
     solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
@@ -618,7 +634,7 @@ function isFieldEntryMode() {
 function availableTabs() {
   if (state.selectedArea === "bundleLab") {
     return [
-      ["bundlePlanner", "Trailer Planner", "Plan de trailers"]
+      ["bundlePlanner", "Package Planner", "Plan de paquete"]
     ];
   }
   if (state.selectedRole === "Quality") {
@@ -1413,11 +1429,11 @@ function renderBundlePlanner() {
   const trailerData = trailerTotals();
   const trailerOptions = ["", ...planner.trailers];
   return `
-    <section class="panel bundle-planner">
+    <section class="panel bundle-planner package-planner">
       <div class="split">
         <div>
-          <h2>${t("Bundle / Trailer Planner", "Plan de paquetes y trailers")}</h2>
-          <p class="sub">Admin-only test area for importing detailer output, assigning bundles/tags to trailers, and checking trailer weight before shipping.</p>
+          <h2>${t("Fabrication Package Planner", "Plan de paquete de fabricacion")}</h2>
+          <p class="sub">Admin-only test area for importing detailer output, reviewing control codes and tag specs, then assigning approved bundles/tags to trailers.</p>
         </div>
         <div class="button-pair">
           <button class="secondary-action" id="autoAssignTrailers" type="button">${t("Auto assign", "Asignar auto")}</button>
@@ -1425,10 +1441,53 @@ function renderBundlePlanner() {
         </div>
       </div>
 
-      <div class="form-grid section-gap">
-        <label>Job / package<span class="es">Trabajo / paquete</span><input id="bundleJobName" value="${planner.jobName || ""}" /></label>
-        <label>Source<span class="es">Origen</span><input id="bundleSource" value="${planner.source || ""}" /></label>
-        <label>Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" /><span>lbs</span></div></label>
+      <div class="planner-section section-gap">
+        <div>
+          <h3>${t("1. Job / package setup", "1. Configuracion del trabajo")}</h3>
+          <p class="sub">These fields can stay blank during testing. Later they should come from the uploaded detailer package when possible.</p>
+        </div>
+        <div class="form-grid">
+          <label>Job / package<span class="es">Trabajo / paquete</span><input id="bundleJobName" value="${planner.jobName || ""}" /></label>
+          <label>Customer<span class="es">Cliente</span><input id="bundleCustomer" value="${planner.customer || ""}" placeholder="Optional" /></label>
+          <label>Job number<span class="es">Numero de trabajo</span><input id="bundleJobNumber" value="${planner.jobNumber || ""}" placeholder="Optional" /></label>
+          <label>Detailer<span class="es">Detallador</span><input id="bundleDetailer" value="${planner.detailer || ""}" placeholder="Optional" /></label>
+          <label>Package type<span class="es">Tipo de paquete</span><input id="bundlePackageType" value="${planner.packageType || ""}" placeholder="Drilled piers, cages, commercial, etc." /></label>
+          <label>Source note<span class="es">Nota de origen</span><input id="bundleSource" value="${planner.source || ""}" /></label>
+        </div>
+      </div>
+
+      <div class="planner-section section-gap">
+        <div>
+          <h3>${t("2. Upload / import detailer files", "2. Subir / importar archivos")}</h3>
+          <p class="sub">Trial note: this stores file names for the workflow. Real synced uploads should go to Supabase Storage, then a parser saves the extracted control codes and tag rows into CrewForge.</p>
+        </div>
+        <div class="form-grid">
+          <label>Detailer package files<span class="es">Archivos del detallador</span><input id="packageUploadInput" type="file" multiple accept=".zip,.xls,.xlsx,.csv,.pdf,.cad" /></label>
+          <label>Upload destination<span class="es">Destino de carga</span><input value="Future: Supabase Storage bucket detailer-packages" disabled /></label>
+          <label>Parser status<span class="es">Estado del analisis</span><input value="Manual test data loaded; parser not connected yet" disabled /></label>
+        </div>
+        <div class="table-wrap compact-table-wrap section-gap">
+          <table>
+            <thead><tr><th>File</th><th>Size</th><th>Status</th><th>Added</th></tr></thead>
+            <tbody>
+              ${planner.imports.length
+                ? planner.imports.map((file) => `<tr><td><strong>${file.name}</strong></td><td>${fileSize(file.size)}</td><td>${file.status}</td><td>${file.addedAt}</td></tr>`).join("")
+                : `<tr><td colspan="4"><strong>No uploaded package recorded yet.</strong><span class="es">Aun no hay paquete registrado.</span></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="planner-section section-gap">
+        <div>
+          <h3>${t("3. Bundle / tag rules", "3. Reglas de paquetes / etiquetas")}</h3>
+          <p class="sub">These are placeholders for the rules that decide whether CrewForge should split a tag or keep it together.</p>
+        </div>
+        <div class="form-grid">
+          <label>Max bundle weight<span class="es">Peso maximo de paquete</span><div class="money-input"><input id="bundleMaxBundleWeight" type="number" min="0" step="100" value="${planner.maxBundleWeight || ""}" placeholder="Optional" /><span>lbs</span></div></label>
+          <label>Max bundle length<span class="es">Largo maximo</span><input id="bundleMaxBundleLength" value="${planner.maxBundleLength || ""}" placeholder="Optional" /></label>
+          <label>Tag split rule<span class="es">Regla para dividir etiquetas</span><input id="bundleTagRule" value="${planner.tagRule || ""}" placeholder="Example: keep pier type together unless over limit" /></label>
+        </div>
       </div>
 
       <div class="metric-grid section-gap">
@@ -1438,37 +1497,14 @@ function renderBundlePlanner() {
         <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
       </div>
 
-      <div class="trailer-grid section-gap">
-        ${planner.trailers
-          .map((trailer) => {
-            const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
-            const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
-            const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
-            return `
-              <article class="trailer-card ${remaining < 0 ? "over-limit" : ""}">
-                <header>
-                  <strong>${trailer}</strong>
-                  <span>${data.count} tags</span>
-                </header>
-                <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-                <p><strong>${number(data.weight)} lbs</strong> loaded</p>
-                <small>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</small>
-              </article>
-            `;
-          })
-          .join("")}
-        ${trailerData.unassignedCount ? `
-          <article class="trailer-card unassigned-card">
-            <header><strong>Unassigned</strong><span>${trailerData.unassignedCount} tags</span></header>
-            <p><strong>${number(trailerData.unassignedWeight)} lbs</strong> waiting</p>
-            <small>Assign these before final shipping.</small>
-          </article>
-        ` : ""}
-      </div>
-
-      <div class="table-wrap section-gap">
+      <div class="planner-section section-gap">
+        <div>
+          <h3>${t("4. Control codes / tag specifications", "4. Codigos / especificaciones de etiquetas")}</h3>
+          <p class="sub">This is the work package list. Later this should be created from the upload instead of typed one by one.</p>
+        </div>
+      <div class="table-wrap">
         <table class="bundle-table">
-          <thead><tr><th>Tag / code</th><th>Description</th><th>Weight</th><th>Trailer</th><th>Status</th><th>Notes</th></tr></thead>
+          <thead><tr><th>Tag / code</th><th>Description</th><th>Weight</th><th>Status</th><th>Trailer</th><th>Notes</th></tr></thead>
           <tbody>
             ${planner.bundles
               .map((bundle) => `
@@ -1476,14 +1512,52 @@ function renderBundlePlanner() {
                   <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
                   <td>${bundle.description || ""}</td>
                   <td><div class="money-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
-                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer"><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
                   <td><select data-bundle="${bundle.id}" data-bundle-field="status">${setOptions(plannerStatuses, bundle.status || "Planned")}</select></td>
+                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer"><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
                   <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" /></td>
                 </tr>
               `)
               .join("")}
           </tbody>
         </table>
+      </div>
+      </div>
+
+      <div class="planner-section section-gap">
+        <div class="split">
+          <div>
+            <h3>${t("5. Trailer / load assignment", "5. Asignacion de trailer / carga")}</h3>
+            <p class="sub">This happens after the control codes and tag specifications are known.</p>
+          </div>
+          <label class="inline-limit">Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" /><span>lbs</span></div></label>
+        </div>
+        <div class="trailer-grid section-gap">
+          ${planner.trailers
+            .map((trailer) => {
+              const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
+              const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
+              const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
+              return `
+                <article class="trailer-card ${remaining < 0 ? "over-limit" : ""}">
+                  <header>
+                    <strong>${trailer}</strong>
+                    <span>${data.count} tags</span>
+                  </header>
+                  <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+                  <p><strong>${number(data.weight)} lbs</strong> loaded</p>
+                  <small>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</small>
+                </article>
+              `;
+            })
+            .join("")}
+          ${trailerData.unassignedCount ? `
+            <article class="trailer-card unassigned-card">
+              <header><strong>Unassigned</strong><span>${trailerData.unassignedCount} tags</span></header>
+              <p><strong>${number(trailerData.unassignedWeight)} lbs</strong> waiting</p>
+              <small>Assign these before final shipping.</small>
+            </article>
+          ` : ""}
+        </div>
       </div>
     </section>
   `;
@@ -2598,9 +2672,10 @@ function bindTabEvents() {
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
 
-  if ($("bundleJobName")) $("bundleJobName").addEventListener("change", updateBundlePlannerSettings);
-  if ($("bundleSource")) $("bundleSource").addEventListener("change", updateBundlePlannerSettings);
-  if ($("bundleMaxWeight")) $("bundleMaxWeight").addEventListener("change", updateBundlePlannerSettings);
+  ["bundleJobName", "bundleCustomer", "bundleJobNumber", "bundleDetailer", "bundlePackageType", "bundleSource", "bundleMaxBundleWeight", "bundleMaxBundleLength", "bundleTagRule", "bundleMaxWeight"].forEach((id) => {
+    if ($(id)) $(id).addEventListener("change", updateBundlePlannerSettings);
+  });
+  if ($("packageUploadInput")) $("packageUploadInput").addEventListener("change", recordPackageUpload);
   if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
   if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
   document.querySelectorAll("[data-bundle]").forEach((input) => {
@@ -2860,12 +2935,49 @@ function bindTabEvents() {
 
 function updateBundlePlannerSettings(event) {
   const field = event.target.id;
-  if (field === "bundleJobName") state.bundlePlanner.jobName = event.target.value;
-  if (field === "bundleSource") state.bundlePlanner.source = event.target.value;
+  const textFields = {
+    bundleJobName: "jobName",
+    bundleCustomer: "customer",
+    bundleJobNumber: "jobNumber",
+    bundleDetailer: "detailer",
+    bundlePackageType: "packageType",
+    bundleSource: "source",
+    bundleMaxBundleLength: "maxBundleLength",
+    bundleTagRule: "tagRule"
+  };
+  if (textFields[field]) state.bundlePlanner[textFields[field]] = event.target.value;
+  if (field === "bundleMaxBundleWeight") state.bundlePlanner.maxBundleWeight = Number(event.target.value) || 0;
   if (field === "bundleMaxWeight") state.bundlePlanner.maxTrailerWeight = Number(event.target.value) || 48000;
-  logActivity("Trailer planner settings changed", { field, to: event.target.value });
+  logActivity("Package planner settings changed", { field, to: event.target.value });
   saveState();
   render();
+}
+
+function recordPackageUpload(event) {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  const current = state.bundlePlanner.imports || [];
+  const existing = new Set(current.map((file) => `${file.name}:${file.size}`));
+  const addedAt = timestamp();
+  const incoming = files
+    .filter((file) => !existing.has(`${file.name}:${file.size}`))
+    .map((file) => ({
+      id: `package-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: file.name,
+      size: file.size,
+      status: "Recorded for parser",
+      addedAt
+    }));
+  if (!incoming.length) {
+    showToast("Package already recorded");
+    event.target.value = "";
+    return;
+  }
+  state.bundlePlanner.imports = [...incoming, ...current].slice(0, 20);
+  logActivity("Detailer package recorded", { job: state.bundlePlanner.jobName, field: `${incoming.length} file(s)` });
+  saveState();
+  render();
+  showToast(`${incoming.length} file(s) recorded`);
 }
 
 function updateBundleRow(event) {

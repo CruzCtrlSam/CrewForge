@@ -1357,6 +1357,28 @@ tr:last-child td {
   display: block;
 }
 
+.planner-section {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.planner-section h3 {
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.compact-table-wrap table {
+  min-width: 0;
+}
+
+.inline-limit {
+  width: min(100%, 320px);
+}
+
 .trailer-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(180px, 1fr));
