@@ -67,6 +67,7 @@ const trialAccounts = [
   { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
   { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
 ];
+let lastLoginCode = "";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
@@ -1003,11 +1004,13 @@ function renderLogin() {
   `;
   $("loginButton").addEventListener("click", loginWithCode);
   $("accessCode").addEventListener("input", updateForemanLoginVisibility);
+  $("accessCode").addEventListener("change", normalizeLoginCodeInput);
+  $("accessCode").addEventListener("blur", normalizeLoginCodeInput);
   $("accessCode").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithCode();
   });
-  $("foremanLoginField").addEventListener("click", openLoginForemanPicker);
-  $("loginForeman").addEventListener("click", openLoginForemanPicker);
+  $("foremanLoginField").addEventListener("pointerdown", openLoginForemanPicker);
+  $("loginForeman").addEventListener("pointerdown", openLoginForemanPicker);
   $("loginChangeArea").addEventListener("click", () => {
     state.selectedArea = "";
     saveState();
@@ -1018,7 +1021,12 @@ function renderLogin() {
   $("accessCode").focus();
 }
 
-function openLoginForemanPicker() {
+function openLoginForemanPicker(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const codeInput = $("accessCode");
+  if (codeInput && lastLoginCode) codeInput.value = lastLoginCode;
+  updateForemanLoginVisibility();
   const picker = $("loginForeman");
   if (!picker || picker.disabled) return;
   picker.focus();
@@ -1030,8 +1038,25 @@ function openLoginForemanPicker() {
   }
 }
 
+function normalizeLoginCodeInput() {
+  const input = $("accessCode");
+  if (!input) return;
+  const code = input.value.trim().toUpperCase();
+  if (trialAccounts.some((entry) => entry.code === code)) {
+    input.value = code;
+    lastLoginCode = code;
+    updateForemanLoginVisibility();
+    return;
+  }
+  if (!input.value.trim() && lastLoginCode === "FOREMAN") {
+    input.value = lastLoginCode;
+    updateForemanLoginVisibility();
+  }
+}
+
 function updateForemanLoginVisibility() {
   const code = $("accessCode")?.value.trim().toUpperCase();
+  if (trialAccounts.some((entry) => entry.code === code)) lastLoginCode = code;
   const showForemen = code === "FOREMAN";
   $("foremanLoginField")?.classList.toggle("hidden", !showForemen);
 }
