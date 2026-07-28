@@ -1357,6 +1357,66 @@ tr:last-child td {
   display: block;
 }
 
+.trailer-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.trailer-card {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.trailer-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.trailer-card header span,
+.trailer-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.trailer-card p {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.trailer-card.over-limit {
+  border-color: #c43b2f;
+  background: #fff3f1;
+}
+
+.trailer-card.over-limit .progress-fill {
+  background: #c43b2f;
+}
+
+.unassigned-card {
+  border-style: dashed;
+  background: #f8f9f9;
+}
+
+.danger-metric {
+  border-color: #c43b2f;
+}
+
+.bundle-table td:nth-child(2) {
+  min-width: 320px;
+}
+
+.bundle-table .tag {
+  margin-top: 6px;
+}
+
 .wind-summary {
   border: 2px solid var(--line);
   border-radius: 8px;
@@ -1503,6 +1563,7 @@ tr:last-child td {
 
   .metric-grid,
   .area-grid,
+  .trailer-grid,
   .report-grid,
   .form-grid,
   .compact-form-grid,
@@ -1886,8 +1947,17 @@ tr:last-child td {
   }
 
   .timesheet-wrap,
-  .production-board {
+  .production-board,
+  .bundle-planner .table-wrap {
     overflow: visible;
+  }
+
+  .bundle-planner .table-wrap {
+    overflow-x: auto;
+  }
+
+  .bundle-table {
+    min-width: 980px;
   }
 
   .entry-table {

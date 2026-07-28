@@ -33,11 +33,23 @@ const areas = {
     sick: true,
     perDiem: true,
     dol: true
+  },
+  bundleLab: {
+    label: "Bundle / Trailer Lab",
+    es: "Prueba de paquetes y trailers",
+    mode: "planner",
+    roles: [],
+    pto: false,
+    sick: false,
+    perDiem: false,
+    dol: false,
+    adminOnly: true
   }
 };
 
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
+const plannerStatuses = ["Planned", "Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
@@ -57,7 +69,8 @@ const asset = (path) => `${path}?v=${assetVersion}`;
 const areaArtwork = {
   rebarFab: asset("./assets/crewforge-rebar-fabrication.png"),
   solarPiles: asset("./assets/crewforge-solar-piles.png"),
-  rebarInstall: asset("./assets/crewforge-thumbnail.png")
+  rebarInstall: asset("./assets/crewforge-thumbnail.png"),
+  bundleLab: asset("./assets/crewforge-rebar-fabrication.png")
 };
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
@@ -72,7 +85,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
@@ -140,6 +153,50 @@ const bakersfieldControlCodes = [
   status: "Not Started"
 }));
 
+const drilledPierBundleRows = [
+  ["UTA", "UTA PIER TYPE DP.CA.K138.301-303", 1092, "Trailer 5"],
+  ["UTB", "UTB PIER TYPE PC.CA.C101.301-306", 4377, "Trailer 4"],
+  ["UTC", "UTC PIER TYPE DP.CA.K101.301-303", 2213, "Trailer 4"],
+  ["UTD", "UTD PIER TYPE DP.CA.K107A.301-307", 6444, "Trailer 4"],
+  ["UTE", "UTE PIER TYPE DP.CA.K107B.301-307", 6444, "Trailer 4"],
+  ["UTF", "UTF PIER TYPE PC.CA.F101.301-303", 6690, "Trailer 3"],
+  ["UTG", "UTG PIER TYPE DP.CA.D101.301-306", 4921, "Trailer 1"],
+  ["UTH", "UTH PIER TYPE DP.CA.TBI.101 & 102", 10382, "Trailer 3"],
+  ["UTJ", "UTJ PIER TYPE DP.CA.LM140.2 & 4", 12347, "Trailer 1"],
+  ["UTK", "UTK PIER TYPE DP.CA.TCI.301-304", 29945, "Trailer 1"],
+  ["UTL", "UTL PIER TYPE DP.CA.K138.401-403", 1092, "Trailer 5"],
+  ["UTM", "UTM PIER TYPE PC.CA.C101.401-406", 4377, "Trailer 4"],
+  ["UTN", "UTN PIER TYPE DP.CA.LP.01-04", 2265, "Trailer 4"],
+  ["UTP", "UTP PIER TYPE DP.CA.K101.401-403", 2213, "Trailer 4"],
+  ["UTQ", "UTQ PIER TYPE DP.CA.K107A.401-407", 6444, "Trailer 4"],
+  ["UTR", "UTR PIER TYPE DP.CA.K107B.401-407", 6444, "Trailer 4"],
+  ["UTS", "UTS PIER TYPE PC.CA.F101.401-403", 6690, "Trailer 4"],
+  ["UTT", "UTT PIER TYPE DP.CA.D101.401-406", 4921, "Trailer 2"],
+  ["UTU", "UTU PIER TYPE DP.CA.LM90.11-12", 9300, "Trailer 3"],
+  ["UTV", "UTV PIER TYPE DP.CA.TBI.103-106", 20764, "Trailer 3"],
+  ["UTW", "UTW PIER TYPE DP.CA.LM140.1 & 3", 12347, "Trailer 2"],
+  ["UTY", "UTY PIER TYPE DP.CA.TCI.401-404", 29945, "Trailer 2"]
+];
+
+function defaultBundlePlanner() {
+  return {
+    jobName: "IPA HVDC Delta UT - Drilled Piers",
+    source: "Detailer package trial",
+    maxTrailerWeight: 48000,
+    trailers: ["Trailer 1", "Trailer 2", "Trailer 3", "Trailer 4", "Trailer 5"],
+    bundles: drilledPierBundleRows.map(([code, description, weight, trailer], index) => ({
+      id: `pier-${code.toLowerCase()}`,
+      tag: code,
+      controlCode: code,
+      description,
+      weight,
+      trailer,
+      status: index < 2 ? "Staged" : "Planned",
+      notes: ""
+    }))
+  };
+}
+
 const defaultState = {
   auth: null,
   companyVerified: false,
@@ -182,7 +239,8 @@ const defaultState = {
     { id: "p3", area: "rebarFab", foreman: "Rebar Fabrication Day Foreman", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
     { id: "p4", area: "rebarFab", foreman: "Rebar Fabrication Night Foreman", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
     { id: "p5", area: "solarPiles", foreman: "Solar Piles Day Foreman", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
-  ]
+  ],
+  bundlePlanner: defaultBundlePlanner()
 };
 
 const cloud =
@@ -321,6 +379,13 @@ function upgradeState(next) {
   next.selectedDocumentJob = next.selectedDocumentJob || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
+  next.bundlePlanner = {
+    ...defaultBundlePlanner(),
+    ...(next.bundlePlanner || {})
+  };
+  next.bundlePlanner.trailers = next.bundlePlanner.trailers?.length ? next.bundlePlanner.trailers : structuredClone(defaultBundlePlanner().trailers);
+  next.bundlePlanner.bundles = next.bundlePlanner.bundles?.length ? next.bundlePlanner.bundles : structuredClone(defaultBundlePlanner().bundles);
+  next.bundlePlanner.maxTrailerWeight = Number(next.bundlePlanner.maxTrailerWeight) || 48000;
   next.jobLists = {
     solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
     solarJobNames: next.jobLists?.solarJobNames?.length ? next.jobLists.solarJobNames : structuredClone(defaultState.jobLists.solarJobNames)
@@ -551,6 +616,11 @@ function isFieldEntryMode() {
 }
 
 function availableTabs() {
+  if (state.selectedArea === "bundleLab") {
+    return [
+      ["bundlePlanner", "Trailer Planner", "Plan de trailers"]
+    ];
+  }
   if (state.selectedRole === "Quality") {
     return [
       ["production", "Bundle Tracking", "Rastreo de paquetes"],
@@ -1089,6 +1159,10 @@ function loginWithCode() {
     showToast(`${account.name} belongs in ${areas[account.area]?.label || account.area}`);
     return;
   }
+  if (areas[state.selectedArea]?.adminOnly && account.role !== "Admin") {
+    showToast("This test area is admin only");
+    return;
+  }
   updateForemanLoginVisibility();
   const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
   const displayName = account.needsForeman ? selectedForeman : account.name;
@@ -1099,6 +1173,7 @@ function loginWithCode() {
   state.selectedArea = account.area || state.selectedArea || "";
   state.showIntro = false;
   state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
+  if (state.selectedArea === "bundleLab") state.activeTab = "bundlePlanner";
   if (state.selectedRole === "Quality") state.activeTab = "production";
   saveState();
   render();
@@ -1174,7 +1249,7 @@ function renderGate() {
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>
               </span>
-              <span class="sub">${info.mode === "crew" ? "Crew timesheets" : "Day/Night shift timesheets"}</span>
+              <span class="sub">${info.adminOnly ? "Admin test area" : info.mode === "crew" ? "Crew timesheets" : "Day/Night shift timesheets"}</span>
             </button>
           `
           )
@@ -1290,6 +1365,7 @@ function renderShell() {
 }
 
 function renderActiveTab() {
+  if (state.activeTab === "bundlePlanner") return renderBundlePlanner();
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
@@ -1298,6 +1374,119 @@ function renderActiveTab() {
   if (state.activeTab === "deliverables") return renderDeliverables();
   if (state.activeTab === "setup") return renderSetup();
   return renderDashboard();
+}
+
+function trailerTotals() {
+  const planner = state.bundlePlanner;
+  const totals = Object.fromEntries(planner.trailers.map((trailer) => [trailer, { weight: 0, count: 0 }]));
+  let unassignedWeight = 0;
+  let unassignedCount = 0;
+  planner.bundles.forEach((bundle) => {
+    if (bundle.trailer && totals[bundle.trailer]) {
+      totals[bundle.trailer].weight += Number(bundle.weight) || 0;
+      totals[bundle.trailer].count += 1;
+    } else {
+      unassignedWeight += Number(bundle.weight) || 0;
+      unassignedCount += 1;
+    }
+  });
+  return { totals, unassignedWeight, unassignedCount };
+}
+
+function bundlePlannerTotals() {
+  const planner = state.bundlePlanner;
+  const totalWeight = planner.bundles.reduce((sum, bundle) => sum + (Number(bundle.weight) || 0), 0);
+  const assignedWeight = planner.bundles.reduce((sum, bundle) => sum + (bundle.trailer ? Number(bundle.weight) || 0 : 0), 0);
+  const overLimitCount = Object.values(trailerTotals().totals).filter((trailer) => trailer.weight > planner.maxTrailerWeight).length;
+  return {
+    totalWeight,
+    assignedWeight,
+    remainingWeight: Math.max(totalWeight - assignedWeight, 0),
+    overLimitCount,
+    minimumTrailers: planner.maxTrailerWeight ? Math.ceil(totalWeight / planner.maxTrailerWeight) : 0
+  };
+}
+
+function renderBundlePlanner() {
+  const planner = state.bundlePlanner;
+  const totals = bundlePlannerTotals();
+  const trailerData = trailerTotals();
+  const trailerOptions = ["", ...planner.trailers];
+  return `
+    <section class="panel bundle-planner">
+      <div class="split">
+        <div>
+          <h2>${t("Bundle / Trailer Planner", "Plan de paquetes y trailers")}</h2>
+          <p class="sub">Admin-only test area for importing detailer output, assigning bundles/tags to trailers, and checking trailer weight before shipping.</p>
+        </div>
+        <div class="button-pair">
+          <button class="secondary-action" id="autoAssignTrailers" type="button">${t("Auto assign", "Asignar auto")}</button>
+          <button class="primary-action" id="addTrailer" type="button">${t("Add trailer", "Agregar trailer")}</button>
+        </div>
+      </div>
+
+      <div class="form-grid section-gap">
+        <label>Job / package<span class="es">Trabajo / paquete</span><input id="bundleJobName" value="${planner.jobName || ""}" /></label>
+        <label>Source<span class="es">Origen</span><input id="bundleSource" value="${planner.source || ""}" /></label>
+        <label>Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" /><span>lbs</span></div></label>
+      </div>
+
+      <div class="metric-grid section-gap">
+        <article class="metric"><span>Total weight</span><strong>${number(totals.totalWeight)} lbs</strong><small>${planner.bundles.length} bundles/tags</small></article>
+        <article class="metric"><span>Assigned</span><strong>${number(totals.assignedWeight)} lbs</strong><small>${trailerData.unassignedCount} unassigned</small></article>
+        <article class="metric"><span>Minimum trailers</span><strong>${totals.minimumTrailers}</strong><small>At ${number(planner.maxTrailerWeight)} lbs max</small></article>
+        <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
+      </div>
+
+      <div class="trailer-grid section-gap">
+        ${planner.trailers
+          .map((trailer) => {
+            const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
+            const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
+            const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
+            return `
+              <article class="trailer-card ${remaining < 0 ? "over-limit" : ""}">
+                <header>
+                  <strong>${trailer}</strong>
+                  <span>${data.count} tags</span>
+                </header>
+                <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+                <p><strong>${number(data.weight)} lbs</strong> loaded</p>
+                <small>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</small>
+              </article>
+            `;
+          })
+          .join("")}
+        ${trailerData.unassignedCount ? `
+          <article class="trailer-card unassigned-card">
+            <header><strong>Unassigned</strong><span>${trailerData.unassignedCount} tags</span></header>
+            <p><strong>${number(trailerData.unassignedWeight)} lbs</strong> waiting</p>
+            <small>Assign these before final shipping.</small>
+          </article>
+        ` : ""}
+      </div>
+
+      <div class="table-wrap section-gap">
+        <table class="bundle-table">
+          <thead><tr><th>Tag / code</th><th>Description</th><th>Weight</th><th>Trailer</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${planner.bundles
+              .map((bundle) => `
+                <tr>
+                  <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
+                  <td>${bundle.description || ""}</td>
+                  <td><div class="money-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
+                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer"><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
+                  <td><select data-bundle="${bundle.id}" data-bundle-field="status">${setOptions(plannerStatuses, bundle.status || "Planned")}</select></td>
+                  <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" /></td>
+                </tr>
+              `)
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
 }
 
 function renderDashboard() {
@@ -2409,6 +2598,16 @@ function bindTabEvents() {
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
 
+  if ($("bundleJobName")) $("bundleJobName").addEventListener("change", updateBundlePlannerSettings);
+  if ($("bundleSource")) $("bundleSource").addEventListener("change", updateBundlePlannerSettings);
+  if ($("bundleMaxWeight")) $("bundleMaxWeight").addEventListener("change", updateBundlePlannerSettings);
+  if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
+  if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
+  document.querySelectorAll("[data-bundle]").forEach((input) => {
+    input.addEventListener("change", updateBundleRow);
+    input.addEventListener("input", updateBundleRow);
+  });
+
   if ($("sheetJob")) $("sheetJob").addEventListener("change", (event) => updateSheet({ jobId: event.target.value }));
   if ($("sheetForeman")) {
     $("sheetForeman").addEventListener("change", (event) => {
@@ -2657,6 +2856,63 @@ function bindTabEvents() {
     input.addEventListener("input", updateProductionItem);
     input.addEventListener("change", updateProductionItem);
   });
+}
+
+function updateBundlePlannerSettings(event) {
+  const field = event.target.id;
+  if (field === "bundleJobName") state.bundlePlanner.jobName = event.target.value;
+  if (field === "bundleSource") state.bundlePlanner.source = event.target.value;
+  if (field === "bundleMaxWeight") state.bundlePlanner.maxTrailerWeight = Number(event.target.value) || 48000;
+  logActivity("Trailer planner settings changed", { field, to: event.target.value });
+  saveState();
+  render();
+}
+
+function updateBundleRow(event) {
+  const bundle = state.bundlePlanner.bundles.find((item) => item.id === event.target.dataset.bundle);
+  if (!bundle) return;
+  const field = event.target.dataset.bundleField;
+  bundle[field] = field === "weight" ? Number(event.target.value) || 0 : event.target.value;
+  logActivity("Bundle trailer plan changed", {
+    job: state.bundlePlanner.jobName,
+    field,
+    to: bundle[field],
+    tag: bundle.tag || bundle.controlCode
+  });
+  saveState();
+  render();
+}
+
+function addTrailerToPlanner() {
+  const nextNumber = state.bundlePlanner.trailers.length + 1;
+  const trailerName = `Trailer ${nextNumber}`;
+  state.bundlePlanner.trailers.push(trailerName);
+  logActivity("Trailer added", { job: state.bundlePlanner.jobName, field: trailerName });
+  saveState();
+  render();
+}
+
+function autoAssignTrailers() {
+  const planner = state.bundlePlanner;
+  const limit = Number(planner.maxTrailerWeight) || 48000;
+  const trailers = planner.trailers.map((name) => ({ name, weight: 0 }));
+  planner.bundles
+    .slice()
+    .sort((a, b) => (Number(b.weight) || 0) - (Number(a.weight) || 0))
+    .forEach((bundle) => {
+      let trailer = trailers.find((candidate) => candidate.weight + (Number(bundle.weight) || 0) <= limit);
+      if (!trailer) {
+        trailer = { name: `Trailer ${trailers.length + 1}`, weight: 0 };
+        trailers.push(trailer);
+      }
+      trailer.weight += Number(bundle.weight) || 0;
+      bundle.trailer = trailer.name;
+    });
+  planner.trailers = trailers.map((trailer) => trailer.name);
+  logActivity("Bundles auto assigned to trailers", { job: planner.jobName, field: `${planner.trailers.length} trailers` });
+  saveState();
+  render();
+  showToast("Trailer plan updated");
 }
 
 function updateSheet(values, message) {
