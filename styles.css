@@ -1439,6 +1439,34 @@ tr:last-child td {
   margin-top: 6px;
 }
 
+.process-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 6px;
+  min-width: 300px;
+}
+
+.process-check-grid .mini-check {
+  justify-content: flex-start;
+  min-height: 36px;
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: minmax(95px, 0.7fr) minmax(170px, 1fr) minmax(210px, 1.2fr);
+  gap: 8px;
+  min-width: 520px;
+}
+
+.quality-grid label {
+  gap: 4px;
+}
+
+.quality-grid input,
+.quality-grid select {
+  min-height: 38px;
+}
+
 .wind-summary {
   border: 2px solid var(--line);
   border-radius: 8px;
@@ -1677,6 +1705,16 @@ tr:last-child td {
 
   .production-card-actions {
     display: grid;
+  }
+
+  .process-check-grid {
+    grid-template-columns: 1fr;
+    min-width: 180px;
+  }
+
+  .quality-grid {
+    grid-template-columns: 1fr;
+    min-width: 240px;
   }
 
   .production-submit-row {
@@ -1979,7 +2017,7 @@ tr:last-child td {
   }
 
   .bundle-table {
-    min-width: 980px;
+    min-width: 1500px;
   }
 
   .entry-table {

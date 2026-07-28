@@ -35,8 +35,8 @@ const areas = {
     dol: true
   },
   bundleLab: {
-    label: "Fabrication Package Lab",
-    es: "Prueba de paquetes de fabricacion",
+    label: "Rebar Fabrication Tracking",
+    es: "Rastreo de fabricacion de varilla",
     mode: "planner",
     roles: [],
     pto: false,
@@ -49,7 +49,17 @@ const areas = {
 
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
-const plannerStatuses = ["Planned", "Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
+const plannerStatuses = ["Planned", "Received", "Cut", "Bent/Fabricated", "QC checked", "Staged", "Loaded", "Shipped"];
+const fabricationProcessSteps = [
+  ["received", "Received", "Recibido"],
+  ["cut", "Cut", "Cortado"],
+  ["fabricated", "Fabricated", "Fabricado"],
+  ["qc", "QC", "Calidad"],
+  ["staged", "Staged", "Preparado"],
+  ["loaded", "Loaded", "Cargado"],
+  ["shipped", "Shipped", "Enviado"]
+];
+const qualityRejectReasons = ["None", "Missed bend", "Wrong size", "Wrong quantity", "Bad steel quality", "Damaged", "Other"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
@@ -192,14 +202,29 @@ function defaultBundlePlanner() {
     maxTrailerWeight: 48000,
     trailers: ["Trailer 1", "Trailer 2", "Trailer 3", "Trailer 4", "Trailer 5"],
     imports: [],
+    scanCodeSearch: "",
     bundles: drilledPierBundleRows.map(([code, description, weight, trailer], index) => ({
       id: `pier-${code.toLowerCase()}`,
       tag: code,
       controlCode: code,
+      scanCode: ["1516900001", "1516970001", "1516990001"][index] || "",
       description,
+      pieces: "",
       weight,
       trailer,
       status: index < 2 ? "Staged" : "Planned",
+      process: {
+        received: index < 2,
+        cut: index < 2,
+        fabricated: index < 2,
+        qc: false,
+        staged: index < 2,
+        loaded: false,
+        shipped: false
+      },
+      rejectedPieces: 0,
+      rejectReason: "None",
+      qualityNotes: "",
       notes: ""
     }))
   };
@@ -402,6 +427,31 @@ function upgradeState(next) {
   next.bundlePlanner.maxBundleLength = next.bundlePlanner.maxBundleLength || "";
   next.bundlePlanner.tagRule = next.bundlePlanner.tagRule || "";
   next.bundlePlanner.maxTrailerWeight = Number(next.bundlePlanner.maxTrailerWeight) || 48000;
+  next.bundlePlanner.scanCodeSearch = next.bundlePlanner.scanCodeSearch || "";
+  next.bundlePlanner.bundles = next.bundlePlanner.bundles.map((bundle, index) => {
+    const sampleScanCode = ["1516900001", "1516970001", "1516990001"][index] || "";
+    return {
+    pieces: "",
+    process: {},
+    rejectedPieces: 0,
+    rejectReason: "None",
+    qualityNotes: "",
+    ...bundle,
+    scanCode: bundle.scanCode || sampleScanCode,
+    process: {
+      received: bundle.process?.received || ["Received", "Cut", "Bent/Fabricated", "QC checked", "Staged", "Loaded", "Shipped"].includes(bundle.status),
+      cut: bundle.process?.cut || ["Cut", "Bent/Fabricated", "QC checked", "Staged", "Loaded", "Shipped"].includes(bundle.status),
+      fabricated: bundle.process?.fabricated || ["Bent/Fabricated", "QC checked", "Staged", "Loaded", "Shipped"].includes(bundle.status),
+      qc: bundle.process?.qc || ["QC checked", "Staged", "Loaded", "Shipped"].includes(bundle.status),
+      staged: bundle.process?.staged || ["Staged", "Loaded", "Shipped"].includes(bundle.status),
+      loaded: bundle.process?.loaded || ["Loaded", "Shipped"].includes(bundle.status),
+      shipped: bundle.process?.shipped || bundle.status === "Shipped"
+    },
+    rejectedPieces: Number(bundle.rejectedPieces) || 0,
+    rejectReason: bundle.rejectReason || "None",
+    qualityNotes: bundle.qualityNotes || ""
+  };
+  });
   next.jobLists = {
     solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
     solarJobNames: next.jobLists?.solarJobNames?.length ? next.jobLists.solarJobNames : structuredClone(defaultState.jobLists.solarJobNames)
@@ -634,7 +684,7 @@ function isFieldEntryMode() {
 function availableTabs() {
   if (state.selectedArea === "bundleLab") {
     return [
-      ["bundlePlanner", "Package Planner", "Plan de paquete"]
+      ["bundlePlanner", "Fab Tracking", "Rastreo fab."]
     ];
   }
   if (state.selectedRole === "Quality") {
@@ -1414,13 +1464,39 @@ function bundlePlannerTotals() {
   const totalWeight = planner.bundles.reduce((sum, bundle) => sum + (Number(bundle.weight) || 0), 0);
   const assignedWeight = planner.bundles.reduce((sum, bundle) => sum + (bundle.trailer ? Number(bundle.weight) || 0 : 0), 0);
   const overLimitCount = Object.values(trailerTotals().totals).filter((trailer) => trailer.weight > planner.maxTrailerWeight).length;
+  const processCounts = Object.fromEntries(fabricationProcessSteps.map(([key]) => [key, 0]));
+  let rejectedPieces = 0;
+  planner.bundles.forEach((bundle) => {
+    fabricationProcessSteps.forEach(([key]) => {
+      if (bundle.process?.[key]) processCounts[key] += 1;
+    });
+    rejectedPieces += Number(bundle.rejectedPieces) || 0;
+  });
   return {
     totalWeight,
     assignedWeight,
     remainingWeight: Math.max(totalWeight - assignedWeight, 0),
     overLimitCount,
-    minimumTrailers: planner.maxTrailerWeight ? Math.ceil(totalWeight / planner.maxTrailerWeight) : 0
+    minimumTrailers: planner.maxTrailerWeight ? Math.ceil(totalWeight / planner.maxTrailerWeight) : 0,
+    processCounts,
+    rejectedPieces
   };
+}
+
+function bundleCurrentStatus(bundle) {
+  const latest = fabricationProcessSteps
+    .slice()
+    .reverse()
+    .find(([key]) => bundle.process?.[key]);
+  return latest ? latest[1] : bundle.status || "Planned";
+}
+
+function bundleMatchesScan(bundle, query) {
+  if (!query) return false;
+  const value = query.trim().toLowerCase();
+  return [bundle.scanCode, bundle.tag, bundle.controlCode, bundle.description]
+    .filter(Boolean)
+    .some((field) => String(field).toLowerCase().includes(value));
 }
 
 function renderBundlePlanner() {
@@ -1428,12 +1504,13 @@ function renderBundlePlanner() {
   const totals = bundlePlannerTotals();
   const trailerData = trailerTotals();
   const trailerOptions = ["", ...planner.trailers];
+  const scanMatch = planner.bundles.find((bundle) => bundleMatchesScan(bundle, planner.scanCodeSearch));
   return `
-    <section class="panel bundle-planner package-planner">
+    <section class="panel bundle-planner package-planner rebar-tracker">
       <div class="split">
         <div>
-          <h2>${t("Fabrication Package Planner", "Plan de paquete de fabricacion")}</h2>
-          <p class="sub">Admin-only test area for importing detailer output, reviewing control codes and tag specs, then assigning approved bundles/tags to trailers.</p>
+          <h2>${t("Rebar Fabrication Tracking", "Rastreo de fabricacion de varilla")}</h2>
+          <p class="sub">Upload the detailer package, build the bundle/tag library, scan tags through shop steps, track quality rejects, then assign approved bundles to trailers.</p>
         </div>
         <div class="button-pair">
           <button class="secondary-action" id="autoAssignTrailers" type="button">${t("Auto assign", "Asignar auto")}</button>
@@ -1492,27 +1569,64 @@ function renderBundlePlanner() {
 
       <div class="metric-grid section-gap">
         <article class="metric"><span>Total weight</span><strong>${number(totals.totalWeight)} lbs</strong><small>${planner.bundles.length} bundles/tags</small></article>
-        <article class="metric"><span>Assigned</span><strong>${number(totals.assignedWeight)} lbs</strong><small>${trailerData.unassignedCount} unassigned</small></article>
-        <article class="metric"><span>Minimum trailers</span><strong>${totals.minimumTrailers}</strong><small>At ${number(planner.maxTrailerWeight)} lbs max</small></article>
+        <article class="metric"><span>Fabricated</span><strong>${totals.processCounts.fabricated || 0}</strong><small>Bundles through fabrication</small></article>
+        <article class="metric"><span>QC checked</span><strong>${totals.processCounts.qc || 0}</strong><small>${number(totals.rejectedPieces)} pieces rejected</small></article>
+        <article class="metric"><span>Ready to ship</span><strong>${totals.processCounts.staged || 0}</strong><small>${trailerData.unassignedCount} unassigned</small></article>
         <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
       </div>
 
       <div class="planner-section section-gap">
         <div>
-          <h3>${t("4. Control codes / tag specifications", "4. Codigos / especificaciones de etiquetas")}</h3>
-          <p class="sub">This is the work package list. Later this should be created from the upload instead of typed one by one.</p>
+          <h3>${t("4. Scan / lookup bundle", "4. Escanear / buscar paquete")}</h3>
+          <p class="sub">For the trial, paste or type the DataMatrix/QR content from a scan. Later the phone camera scanner should fill this automatically.</p>
+        </div>
+        <div class="form-grid">
+          <label>Scan code, tag, or control code<span class="es">Codigo escaneado, etiqueta, o codigo</span><input id="bundleScanCodeSearch" value="${planner.scanCodeSearch || ""}" placeholder="Example: 1516990001 or UTA" /></label>
+          <label>Matched bundle<span class="es">Paquete encontrado</span><input id="bundleScanMatchResult" value="${scanMatch ? `${scanMatch.tag || scanMatch.controlCode} - ${bundleCurrentStatus(scanMatch)}` : "No match yet"}" disabled /></label>
+          <label>Quality rejects<span class="es">Rechazos de calidad</span><input id="bundleScanRejectResult" value="${scanMatch ? `${number(scanMatch.rejectedPieces || 0)} rejected pieces` : "Scan a bundle first"}" disabled /></label>
+        </div>
+      </div>
+
+      <div class="planner-section section-gap">
+        <div>
+          <h3>${t("5. Bundle library / live shop status", "5. Libreria de paquetes / estado en vivo")}</h3>
+          <p class="sub">Check each process step as the tag moves through the shop. Quality can record rejected pieces and why.</p>
         </div>
       <div class="table-wrap">
         <table class="bundle-table">
-          <thead><tr><th>Tag / code</th><th>Description</th><th>Weight</th><th>Status</th><th>Trailer</th><th>Notes</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Tag / code</th>
+              <th>Description</th>
+              <th>Scan code</th>
+              <th>Weight</th>
+              <th>Process</th>
+              <th>Quality</th>
+              <th>Trailer</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
           <tbody>
             ${planner.bundles
               .map((bundle) => `
                 <tr>
                   <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
                   <td>${bundle.description || ""}</td>
+                  <td><input data-bundle="${bundle.id}" data-bundle-field="scanCode" value="${bundle.scanCode || ""}" placeholder="Scan value" /></td>
                   <td><div class="money-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
-                  <td><select data-bundle="${bundle.id}" data-bundle-field="status">${setOptions(plannerStatuses, bundle.status || "Planned")}</select></td>
+                  <td>
+                    <div class="process-check-grid">
+                      ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${bundle.id}" data-bundle-field="process.${key}" type="checkbox" ${bundle.process?.[key] ? "checked" : ""} /> ${label}<span class="es">${es}</span></label>`).join("")}
+                    </div>
+                    <span class="tag">${bundleCurrentStatus(bundle)}</span>
+                  </td>
+                  <td>
+                    <div class="quality-grid">
+                      <label>Rejected<span class="es">Rechazadas</span><input data-bundle="${bundle.id}" data-bundle-field="rejectedPieces" type="number" min="0" step="1" value="${bundle.rejectedPieces || 0}" /></label>
+                      <label>Reason<span class="es">Razon</span><select data-bundle="${bundle.id}" data-bundle-field="rejectReason">${setOptions(qualityRejectReasons, bundle.rejectReason || "None")}</select></label>
+                      <label>QC notes<span class="es">Notas calidad</span><input data-bundle="${bundle.id}" data-bundle-field="qualityNotes" value="${bundle.qualityNotes || ""}" placeholder="Optional" /></label>
+                    </div>
+                  </td>
                   <td><select data-bundle="${bundle.id}" data-bundle-field="trailer"><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
                   <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" /></td>
                 </tr>
@@ -1526,7 +1640,7 @@ function renderBundlePlanner() {
       <div class="planner-section section-gap">
         <div class="split">
           <div>
-            <h3>${t("5. Trailer / load assignment", "5. Asignacion de trailer / carga")}</h3>
+            <h3>${t("6. Trailer / load assignment", "6. Asignacion de trailer / carga")}</h3>
             <p class="sub">This happens after the control codes and tag specifications are known.</p>
           </div>
           <label class="inline-limit">Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" /><span>lbs</span></div></label>
@@ -2672,15 +2786,15 @@ function bindTabEvents() {
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
 
-  ["bundleJobName", "bundleCustomer", "bundleJobNumber", "bundleDetailer", "bundlePackageType", "bundleSource", "bundleMaxBundleWeight", "bundleMaxBundleLength", "bundleTagRule", "bundleMaxWeight"].forEach((id) => {
+  ["bundleJobName", "bundleCustomer", "bundleJobNumber", "bundleDetailer", "bundlePackageType", "bundleSource", "bundleMaxBundleWeight", "bundleMaxBundleLength", "bundleTagRule", "bundleScanCodeSearch", "bundleMaxWeight"].forEach((id) => {
     if ($(id)) $(id).addEventListener("change", updateBundlePlannerSettings);
   });
+  if ($("bundleScanCodeSearch")) $("bundleScanCodeSearch").addEventListener("input", updateBundleScanLookup);
   if ($("packageUploadInput")) $("packageUploadInput").addEventListener("change", recordPackageUpload);
   if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
   if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
   document.querySelectorAll("[data-bundle]").forEach((input) => {
     input.addEventListener("change", updateBundleRow);
-    input.addEventListener("input", updateBundleRow);
   });
 
   if ($("sheetJob")) $("sheetJob").addEventListener("change", (event) => updateSheet({ jobId: event.target.value }));
@@ -2943,7 +3057,8 @@ function updateBundlePlannerSettings(event) {
     bundlePackageType: "packageType",
     bundleSource: "source",
     bundleMaxBundleLength: "maxBundleLength",
-    bundleTagRule: "tagRule"
+    bundleTagRule: "tagRule",
+    bundleScanCodeSearch: "scanCodeSearch"
   };
   if (textFields[field]) state.bundlePlanner[textFields[field]] = event.target.value;
   if (field === "bundleMaxBundleWeight") state.bundlePlanner.maxBundleWeight = Number(event.target.value) || 0;
@@ -2951,6 +3066,14 @@ function updateBundlePlannerSettings(event) {
   logActivity("Package planner settings changed", { field, to: event.target.value });
   saveState();
   render();
+}
+
+function updateBundleScanLookup(event) {
+  state.bundlePlanner.scanCodeSearch = event.target.value;
+  const match = state.bundlePlanner.bundles.find((bundle) => bundleMatchesScan(bundle, state.bundlePlanner.scanCodeSearch));
+  if ($("bundleScanMatchResult")) $("bundleScanMatchResult").value = match ? `${match.tag || match.controlCode} - ${bundleCurrentStatus(match)}` : "No match yet";
+  if ($("bundleScanRejectResult")) $("bundleScanRejectResult").value = match ? `${number(match.rejectedPieces || 0)} rejected pieces` : "Scan a bundle first";
+  saveState();
 }
 
 function recordPackageUpload(event) {
@@ -2984,11 +3107,20 @@ function updateBundleRow(event) {
   const bundle = state.bundlePlanner.bundles.find((item) => item.id === event.target.dataset.bundle);
   if (!bundle) return;
   const field = event.target.dataset.bundleField;
-  bundle[field] = field === "weight" ? Number(event.target.value) || 0 : event.target.value;
-  logActivity("Bundle trailer plan changed", {
+  if (field.startsWith("process.")) {
+    const processField = field.split(".")[1];
+    bundle.process = bundle.process || {};
+    bundle.process[processField] = event.target.checked;
+    bundle.status = bundleCurrentStatus(bundle);
+  } else if (["weight", "pieces", "rejectedPieces"].includes(field)) {
+    bundle[field] = Number(event.target.value) || 0;
+  } else {
+    bundle[field] = event.target.value;
+  }
+  logActivity("Rebar fabrication bundle changed", {
     job: state.bundlePlanner.jobName,
     field,
-    to: bundle[field],
+    to: field.startsWith("process.") ? event.target.checked : bundle[field],
     tag: bundle.tag || bundle.controlCode
   });
   saveState();
