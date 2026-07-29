@@ -1467,6 +1467,60 @@ tr:last-child td {
   background: #fff6df;
 }
 
+.bundle-job-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.bundle-job-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  border: 2px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  padding: 16px;
+  cursor: pointer;
+}
+
+.bundle-job-card.active {
+  border-color: var(--gold);
+  background: #fff8e5;
+}
+
+.bundle-job-card strong {
+  font-size: 1.05rem;
+}
+
+.bundle-job-card span,
+.bundle-job-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.form-button {
+  align-self: end;
+  min-height: 46px;
+}
+
+.selected-row {
+  background: #fff8e5;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.small-action {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
 .extraction-review-table td:nth-child(3) {
   min-width: 260px;
 }
