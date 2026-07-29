@@ -1714,7 +1714,7 @@ function renderBundlePlanner() {
                   <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
                   <td>${bundle.description || ""}</td>
                   <td><input data-bundle="${bundle.id}" data-bundle-field="scanCode" value="${bundle.scanCode || ""}" placeholder="Scan value" /></td>
-                  <td><div class="money-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
+                  <td><div class="unit-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
                   <td>
                     <div class="process-check-grid">
                       ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${bundle.id}" data-bundle-field="process.${key}" type="checkbox" ${bundle.process?.[key] ? "checked" : ""} /> ${label}<span class="es">${es}</span></label>`).join("")}

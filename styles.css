@@ -1075,6 +1075,23 @@ tr:last-child td {
   padding-left: 24px;
 }
 
+.unit-input {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.unit-input input {
+  min-width: 0;
+}
+
+.unit-input span {
+  color: var(--muted);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .mini-check {
   display: flex;
   align-items: center;
