@@ -310,6 +310,8 @@ const defaultState = {
   auth: null,
   companyVerified: false,
   companyName: "",
+  loginCodeDraft: "",
+  loginForemanDraft: "",
   selectedArea: "",
   activeTab: "dashboard",
   showIntro: true,
@@ -467,6 +469,8 @@ function upgradeState(next) {
   if (next.auth === undefined) next.auth = null;
   if (next.companyVerified === undefined) next.companyVerified = Boolean(next.auth);
   next.companyName = next.companyName || (next.companyVerified ? "Valor" : "");
+  next.loginCodeDraft = next.loginCodeDraft || "";
+  next.loginForemanDraft = next.loginForemanDraft || "";
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
   next.hiddenForemen = next.hiddenForemen || [];
@@ -907,7 +911,7 @@ function loginForemanOptions(areaId = state.selectedArea) {
   const aliasedTrialForemen = trialForemanPool
     .filter((name) => !hiddenForemen.has(normalizeForemanName(name)))
     .map((name) => state.foremanAliases?.[name] || name);
-  return [...new Set([...savedForemen, ...aliasedTrialForemen])].sort((a, b) => a.localeCompare(b));
+  return [...new Set([...aliasedTrialForemen, ...savedForemen])];
 }
 
 function groupOptions() {
@@ -1245,6 +1249,9 @@ function setOptions(values, selected, labeler = (value) => value, valueGetter = 
 function renderLogin() {
   const selectedAreaLabel = state.selectedArea ? areas[state.selectedArea]?.label : "All areas";
   const foremanOptions = loginForemanOptions();
+  const loginCode = (state.loginCodeDraft || "").trim().toUpperCase();
+  const selectedLoginForeman = foremanOptions.includes(state.loginForemanDraft) ? state.loginForemanDraft : foremanOptions[0] || "";
+  const showForemen = loginCode === "FOREMAN";
   $("app").innerHTML = `
     <main class="login-screen">
       <section class="login-card">
@@ -1257,8 +1264,8 @@ function renderLogin() {
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
           <p class="sub">Use your trial code for this department. Office users can still change areas after signing in.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" placeholder="FOREMAN, MAYORDOMO, QUALITY, PAYROLL, MANAGER, ADMIN" /></label>
-        <label id="foremanLoginField" class="login-select-field hidden">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, foremanOptions[0])}</select></label>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="FOREMAN, MAYORDOMO, QUALITY, PAYROLL, MANAGER, ADMIN" /></label>
+        <label id="foremanLoginField" class="login-select-field ${showForemen ? "" : "hidden"}">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, selectedLoginForeman)}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
@@ -1280,8 +1287,11 @@ function renderLogin() {
   $("accessCode").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithCode();
   });
-  $("foremanLoginField").addEventListener("pointerdown", openLoginForemanPicker);
-  $("loginForeman").addEventListener("pointerdown", openLoginForemanPicker);
+  $("foremanLoginField").addEventListener("click", openLoginForemanPicker);
+  $("loginForeman").addEventListener("change", (event) => {
+    state.loginForemanDraft = event.target.value;
+    saveState();
+  });
   $("loginChangeArea").addEventListener("click", () => {
     state.selectedArea = "";
     saveState();
@@ -1293,11 +1303,7 @@ function renderLogin() {
 }
 
 function openLoginForemanPicker(event) {
-  event?.preventDefault?.();
-  event?.stopPropagation?.();
-  const codeInput = $("accessCode");
-  if (codeInput && lastLoginCode) codeInput.value = lastLoginCode;
-  updateForemanLoginVisibility();
+  if (event?.target?.id === "loginForeman") return;
   const picker = $("loginForeman");
   if (!picker || picker.disabled) return;
   picker.focus();
@@ -1315,25 +1321,33 @@ function normalizeLoginCodeInput() {
   const code = input.value.trim().toUpperCase();
   if (trialAccounts.some((entry) => entry.code === code)) {
     input.value = code;
+    state.loginCodeDraft = code;
     lastLoginCode = code;
     updateForemanLoginVisibility();
     return;
   }
-  if (!input.value.trim() && lastLoginCode === "FOREMAN") {
-    input.value = lastLoginCode;
-    updateForemanLoginVisibility();
-  }
+  state.loginCodeDraft = input.value.trim().toUpperCase();
+  saveState();
 }
 
 function updateForemanLoginVisibility() {
   const code = $("accessCode")?.value.trim().toUpperCase();
-  if (trialAccounts.some((entry) => entry.code === code)) lastLoginCode = code;
+  state.loginCodeDraft = code || "";
+  if (trialAccounts.some((entry) => entry.code === code)) {
+    lastLoginCode = code;
+    if (code !== "FOREMAN") state.loginForemanDraft = "";
+  }
+  if (code === "FOREMAN" && !$("loginForeman")?.value) {
+    state.loginForemanDraft = loginForemanOptions()[0] || "";
+  }
   const showForemen = code === "FOREMAN";
   $("foremanLoginField")?.classList.toggle("hidden", !showForemen);
+  saveState();
 }
 
 function loginWithCode() {
-  const code = $("accessCode").value.trim().toUpperCase();
+  normalizeLoginCodeInput();
+  const code = ($("accessCode")?.value || state.loginCodeDraft || "").trim().toUpperCase();
   const account = trialAccounts.find((entry) => entry.code === code);
   if (!account) {
     showToast("Code not recognized");
@@ -1355,6 +1369,8 @@ function loginWithCode() {
   const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
   const displayName = account.needsForeman ? selectedForeman : account.name;
   state.auth = { name: displayName, role: account.role, code: account.code };
+  state.loginCodeDraft = "";
+  state.loginForemanDraft = "";
   state.selectedRole = account.role;
   state.currentForeman = selectedForeman || state.currentForeman;
   state.setupForeman = selectedForeman || state.setupForeman;
