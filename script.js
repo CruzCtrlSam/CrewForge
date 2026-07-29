@@ -3767,7 +3767,11 @@ function hasUploadedFileName(fragment) {
 
 function packageLooksLikeTlinePiers(job) {
   const packageText = [job?.jobName, job?.jobNumber, job?.customer, job?.packageType, job?.source, ...uploadedPackageNames()].join(" ").toLowerCase();
-  return ["t-line", "tline", "substation", "pier", "piers", "rhome", "rhone", "overland", "lcra"].some((fragment) => packageText.includes(fragment));
+  return ["t-line", "tline", "substation", "pier", "piers", "rhome", "rhone", "overland", "lcra", "control code list summary", "img_1657"].some((fragment) => packageText.includes(fragment));
+}
+
+function hasKnownTlinePierTrialFile() {
+  return uploadedPackageNames().some((name) => ["img_1657.pdf", "img_1657"].some((fragment) => name.includes(fragment)));
 }
 
 function analyzeDetailerPackage() {
@@ -3785,7 +3789,7 @@ function analyzeDetailerPackage() {
   const hasPhilipPackage = uploadedPackageNames().some((name) => name.includes("philip wind project"));
   const hasCcList = hasUploadedFileName("cc list");
   const hasBarList = hasUploadedFileName("bar list");
-  const hasTlinePierPackage = packageLooksLikeTlinePiers(job) && (hasCcList || hasUploadedFileName("control code"));
+  const hasTlinePierPackage = hasKnownTlinePierTrialFile() || (packageLooksLikeTlinePiers(job) && (hasCcList || hasUploadedFileName("control code")));
 
   if (!hasPhilipPackage && !hasTlinePierPackage) {
     job.analysis = {
@@ -3803,7 +3807,7 @@ function analyzeDetailerPackage() {
     return;
   }
 
-  if (hasTlinePierPackage && (!hasPhilipPackage || /t-?line|substation|pier|rhome|rhone|overland|lcra/i.test([job.jobName, job.packageType, job.source, uploadedPackageNames().join(" ")].join(" ")))) {
+  if (hasTlinePierPackage && (!hasPhilipPackage || hasKnownTlinePierTrialFile() || /t-?line|substation|pier|rhome|rhone|overland|lcra/i.test([job.jobName, job.packageType, job.source, uploadedPackageNames().join(" ")].join(" ")))) {
     const rows = structuredClone(rhoneTlinePierTrialRows);
     const totalWeight = rows.reduce((sum, row) => sum + (Number(row.weight) || 0), 0);
     job.analysis = {
