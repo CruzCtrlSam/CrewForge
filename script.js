@@ -245,6 +245,137 @@ const philipWindTrialRows = [
   }
 ];
 
+const rhoneTlinePierTrialRows = [
+  {
+    controlCode: "AAFR",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "07/20/2026",
+    status: "Invoiced",
+    release: "1",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "150/AT815-S-1",
+    weight: 19897,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AAFT",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "07/20/2026",
+    status: "Invoiced",
+    release: "3",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "149/AT683-S-28",
+    weight: 18619,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AAFV",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "07/20/2026",
+    status: "Invoiced",
+    release: "5",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "POI#1/T852-S-1",
+    weight: 17762,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AFS",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "06/30/2026",
+    status: "Shipped",
+    release: "AFS1",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "150B/T816-S-1",
+    weight: 19897,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AFS1",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "07/20/2026",
+    status: "Invoiced",
+    release: "4",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "150B/T816-S-1",
+    weight: 3600,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AFU",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "07/20/2026",
+    status: "Invoiced",
+    release: "6",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "149B/T18-S-1",
+    weight: 18619,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AFW",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "06/30/2026",
+    status: "Shipped",
+    release: "AFW1",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "POI#2/T853-S-1",
+    weight: 17762,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  },
+  {
+    controlCode: "AFW1",
+    library: "RTX",
+    detailerLocation: "RTX",
+    fabLocation: "RTX",
+    activityDate: "06/30/2026",
+    status: "Shipped",
+    release: "AFW1",
+    customer: "Saber Power",
+    jobNumber: "VS26-OVE",
+    jobName: "LCRA Overland",
+    description: "POI#2/T853-S-1",
+    weight: 1588,
+    initials: "UNK",
+    source: "RTX - Rhome Control Code List Summary"
+  }
+];
+
 function defaultBundlePlanner() {
   const bundles = drilledPierBundleRows.map(([code, description, weight, trailer], index) => ({
     id: `pier-${code.toLowerCase()}`,
@@ -795,6 +926,25 @@ function roleIsProductionVisible() {
   return ["Management", "Admin", "Quality"].includes(state.selectedRole);
 }
 
+function canAccessSelectedArea(account) {
+  if (!account) return false;
+  if (state.selectedArea === "bundleLab") {
+    return ["Admin", "Quality", "Foreman"].includes(account.role);
+  }
+  if (!state.selectedArea) return ["Payroll", "Management", "Admin"].includes(account.role);
+  if (account.area && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) return false;
+  if (areas[state.selectedArea]?.adminOnly && account.role !== "Admin") return false;
+  return true;
+}
+
+function canManageBundlePlanner() {
+  return ["Admin", "Quality"].includes(state.selectedRole);
+}
+
+function canUpdateBundleProductionStatus() {
+  return ["Admin", "Quality", "Foreman"].includes(state.selectedRole);
+}
+
 function isApproverMode() {
   return state.selectedRole === "Approver";
 }
@@ -907,7 +1057,7 @@ function loginForemanOptions(areaId = state.selectedArea) {
       ?.filter((person) => person.role === "Foreman" && (!areaId || person.area === areaId))
       .map((person) => person.name) || [];
   const hiddenForemen = new Set((state.hiddenForemen || []).map((name) => normalizeForemanName(name)));
-  const trialForemanPool = areaId === "rebarInstall" ? foremanNames : areaId === "rebarFab" ? rebarFabForemen : areaId === "solarPiles" ? solarPilesForemen : trialForemanNames;
+  const trialForemanPool = areaId === "rebarInstall" ? foremanNames : areaId === "rebarFab" || areaId === "bundleLab" ? rebarFabForemen : areaId === "solarPiles" ? solarPilesForemen : trialForemanNames;
   const aliasedTrialForemen = trialForemanPool
     .filter((name) => !hiddenForemen.has(normalizeForemanName(name)))
     .map((name) => state.foremanAliases?.[name] || name);
@@ -1353,16 +1503,12 @@ function loginWithCode() {
     showToast("Code not recognized");
     return;
   }
-  if (!state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) {
+  if (!state.selectedArea && !canAccessSelectedArea(account)) {
     showToast("Choose a department first");
     return;
   }
-  if (account.area && state.selectedArea && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) {
+  if (!canAccessSelectedArea(account)) {
     showToast(`${account.name} belongs in ${areas[account.area]?.label || account.area}`);
-    return;
-  }
-  if (areas[state.selectedArea]?.adminOnly && account.role !== "Admin") {
-    showToast("This test area is admin only");
     return;
   }
   updateForemanLoginVisibility();
@@ -1453,7 +1599,7 @@ function renderGate() {
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>
               </span>
-              <span class="sub">${info.adminOnly ? "Admin test area" : info.mode === "crew" ? "Crew timesheets" : "Day/Night shift timesheets"}</span>
+              <span class="sub">${id === "bundleLab" ? "Bundle status tracking" : info.adminOnly ? "Admin test area" : info.mode === "crew" ? "Crew timesheets" : "Day/Night shift timesheets"}</span>
             </button>
           `
           )
@@ -1680,6 +1826,11 @@ function renderBundlePlanner() {
   const job = currentBundleJob();
   const bundles = currentBundleSections();
   const section = currentBundleSection();
+  const canManage = canManageBundlePlanner();
+  const canUpdateStatus = canUpdateBundleProductionStatus();
+  const setupDisabled = canManage ? "" : "disabled";
+  const statusDisabled = canUpdateStatus ? "" : "disabled";
+  const qualityDisabled = canManage ? "" : "disabled";
   const totals = bundlePlannerTotals();
   const trailerData = trailerTotals();
   const trailerOptions = ["", ...planner.trailers];
@@ -1698,10 +1849,11 @@ function renderBundlePlanner() {
         </div>
         <div class="button-pair">
           <button class="secondary-action" id="showBundleJobs" type="button">${t("Jobs", "Trabajos")}</button>
-          <button class="secondary-action" id="autoAssignTrailers" type="button">${t("Auto assign", "Asignar auto")}</button>
-          <button class="primary-action" id="addTrailer" type="button">${t("Add trailer", "Agregar trailer")}</button>
+          <button class="secondary-action" id="autoAssignTrailers" type="button" ${setupDisabled}>${t("Auto assign", "Asignar auto")}</button>
+          <button class="primary-action" id="addTrailer" type="button" ${setupDisabled}>${t("Add trailer", "Agregar trailer")}</button>
         </div>
       </div>
+      ${!canManage ? `<div class="notice section-gap">Foreman view: update production status and notes only. Admin or Quality controls imports, setup, quality rejects, and trailer assignment. <span class="es">Vista de capataz: solo actualice estado de produccion y notas.</span></div>` : ""}
 
       <div class="planner-section section-gap">
         <div>
@@ -1722,10 +1874,10 @@ function renderBundlePlanner() {
           }).join("")}
         </div>
         <div class="form-grid section-gap">
-          <label>New job name<span class="es">Nombre nuevo</span><input id="newBundleJobName" placeholder="Project name" /></label>
-          <label>Job number<span class="es">Numero</span><input id="newBundleJobNumber" placeholder="Optional" /></label>
-          <label>Package type<span class="es">Tipo de paquete</span><input id="newBundlePackageType" placeholder="Wind farm, drilled piers, commercial" /></label>
-          <button class="primary-action form-button" id="createBundleJob" type="button">${t("Create job", "Crear trabajo")}</button>
+          <label>New job name<span class="es">Nombre nuevo</span><input id="newBundleJobName" placeholder="Project name" ${setupDisabled} /></label>
+          <label>Job number<span class="es">Numero</span><input id="newBundleJobNumber" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Package type<span class="es">Tipo de paquete</span><input id="newBundlePackageType" placeholder="Wind farm, drilled piers, commercial" ${setupDisabled} /></label>
+          <button class="primary-action form-button" id="createBundleJob" type="button" ${setupDisabled}>${t("Create job", "Crear trabajo")}</button>
         </div>
       </div>
 
@@ -1735,12 +1887,12 @@ function renderBundlePlanner() {
           <p class="sub">These fields can stay blank during testing. Later they should come from the uploaded detailer package when possible.</p>
         </div>
         <div class="form-grid">
-          <label>Job / package<span class="es">Trabajo / paquete</span><input id="bundleJobName" value="${job?.jobName || ""}" /></label>
-          <label>Customer<span class="es">Cliente</span><input id="bundleCustomer" value="${job?.customer || ""}" placeholder="Optional" /></label>
-          <label>Job number<span class="es">Numero de trabajo</span><input id="bundleJobNumber" value="${job?.jobNumber || ""}" placeholder="Optional" /></label>
-          <label>Detailer<span class="es">Detallador</span><input id="bundleDetailer" value="${job?.detailer || ""}" placeholder="Optional" /></label>
-          <label>Package type<span class="es">Tipo de paquete</span><input id="bundlePackageType" value="${job?.packageType || ""}" placeholder="Drilled piers, cages, commercial, etc." /></label>
-          <label>Source note<span class="es">Nota de origen</span><input id="bundleSource" value="${job?.source || ""}" /></label>
+          <label>Job / package<span class="es">Trabajo / paquete</span><input id="bundleJobName" value="${job?.jobName || ""}" ${setupDisabled} /></label>
+          <label>Customer<span class="es">Cliente</span><input id="bundleCustomer" value="${job?.customer || ""}" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Job number<span class="es">Numero de trabajo</span><input id="bundleJobNumber" value="${job?.jobNumber || ""}" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Detailer<span class="es">Detallador</span><input id="bundleDetailer" value="${job?.detailer || ""}" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Package type<span class="es">Tipo de paquete</span><input id="bundlePackageType" value="${job?.packageType || ""}" placeholder="Drilled piers, cages, commercial, etc." ${setupDisabled} /></label>
+          <label>Source note<span class="es">Nota de origen</span><input id="bundleSource" value="${job?.source || ""}" ${setupDisabled} /></label>
         </div>
       </div>
 
@@ -1750,13 +1902,13 @@ function renderBundlePlanner() {
           <p class="sub">Upload the package, analyze the detailer files, review what CrewForge found, then import the rows into the live bundle library.</p>
         </div>
         <div class="form-grid">
-          <label>Detailer package files<span class="es">Archivos del detallador</span><input id="packageUploadInput" type="file" multiple accept=".zip,.xls,.xlsx,.csv,.pdf,.cad" /></label>
+          <label>Detailer package files<span class="es">Archivos del detallador</span><input id="packageUploadInput" type="file" multiple accept=".zip,.xls,.xlsx,.csv,.pdf,.cad" ${setupDisabled} /></label>
           <label>Upload destination<span class="es">Destino de carga</span><input value="Future: Supabase Storage bucket detailer-packages" disabled /></label>
           <label>Parser status<span class="es">Estado del analisis</span><input value="${parserStatus}" disabled /></label>
         </div>
         <div class="analysis-actions">
-          <button class="secondary-action" id="analyzePackage" type="button">${t("Analyze package", "Analizar paquete")}</button>
-          <button class="primary-action" id="importAnalyzedRows" type="button" ${analysisRows.length ? "" : "disabled"}>${t("Import reviewed rows", "Importar filas revisadas")}</button>
+          <button class="secondary-action" id="analyzePackage" type="button" ${setupDisabled}>${t("Analyze package", "Analizar paquete")}</button>
+          <button class="primary-action" id="importAnalyzedRows" type="button" ${analysisRows.length && canManage ? "" : "disabled"}>${t("Import reviewed rows", "Importar filas revisadas")}</button>
         </div>
         <div class="table-wrap compact-table-wrap section-gap">
           <table>
@@ -1781,13 +1933,17 @@ function renderBundlePlanner() {
               <div class="table-wrap compact-table-wrap">
                 <table class="extraction-review-table">
                   <thead>
-                    <tr><th>Control code</th><th>Release</th><th>Description</th><th>Pieces</th><th>Weight</th><th>Scan lookup</th><th>Source</th></tr>
+                    <tr><th>Control code</th><th>Status</th><th>Release</th><th>Customer</th><th>Job</th><th>Job name</th><th>Description</th><th>Pieces</th><th>Weight</th><th>Scan lookup</th><th>Source</th></tr>
                   </thead>
                   <tbody>
                     ${analysisRows.map((row) => `
                       <tr>
                         <td><strong>${row.controlCode}</strong></td>
+                        <td>${row.status || ""}</td>
                         <td>${row.release || ""}</td>
+                        <td>${row.customer || ""}</td>
+                        <td>${row.jobNumber || ""}</td>
+                        <td>${row.jobName || ""}</td>
                         <td>${row.description || ""}</td>
                         <td>${number(row.pieces || 0)}</td>
                         <td>${number(row.weight || 0)} lbs</td>
@@ -1809,9 +1965,9 @@ function renderBundlePlanner() {
           <p class="sub">These are placeholders for the rules that decide whether CrewForge should split a tag or keep it together.</p>
         </div>
         <div class="form-grid">
-          <label>Max bundle weight<span class="es">Peso maximo de paquete</span><div class="money-input"><input id="bundleMaxBundleWeight" type="number" min="0" step="100" value="${planner.maxBundleWeight || ""}" placeholder="Optional" /><span>lbs</span></div></label>
-          <label>Max bundle length<span class="es">Largo maximo</span><input id="bundleMaxBundleLength" value="${planner.maxBundleLength || ""}" placeholder="Optional" /></label>
-          <label>Tag split rule<span class="es">Regla para dividir etiquetas</span><input id="bundleTagRule" value="${planner.tagRule || ""}" placeholder="Example: keep pier type together unless over limit" /></label>
+          <label>Max bundle weight<span class="es">Peso maximo de paquete</span><div class="money-input"><input id="bundleMaxBundleWeight" type="number" min="0" step="100" value="${planner.maxBundleWeight || ""}" placeholder="Optional" ${setupDisabled} /><span>lbs</span></div></label>
+          <label>Max bundle length<span class="es">Largo maximo</span><input id="bundleMaxBundleLength" value="${planner.maxBundleLength || ""}" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Tag split rule<span class="es">Regla para dividir etiquetas</span><input id="bundleTagRule" value="${planner.tagRule || ""}" placeholder="Example: keep pier type together unless over limit" ${setupDisabled} /></label>
         </div>
       </div>
 
@@ -1841,10 +1997,10 @@ function renderBundlePlanner() {
           <p class="sub">These are the general lines from the detailer package. Open one to manage the separate tags/items inside it.</p>
         </div>
         <div class="form-grid">
-          <label>Control code<span class="es">Codigo</span><input id="newBundleCode" placeholder="AH6" /></label>
-          <label>Description<span class="es">Descripcion</span><input id="newBundleDescription" placeholder="Optional" /></label>
-          <label>Weight<span class="es">Peso</span><div class="unit-input"><input id="newBundleWeight" type="number" min="0" step="1" placeholder="0" /><span>lbs</span></div></label>
-          <button class="primary-action form-button" id="addBundleSection" type="button">${t("Add section", "Agregar seccion")}</button>
+          <label>Control code<span class="es">Codigo</span><input id="newBundleCode" placeholder="AH6" ${setupDisabled} /></label>
+          <label>Description<span class="es">Descripcion</span><input id="newBundleDescription" placeholder="Optional" ${setupDisabled} /></label>
+          <label>Weight<span class="es">Peso</span><div class="unit-input"><input id="newBundleWeight" type="number" min="0" step="1" placeholder="0" ${setupDisabled} /><span>lbs</span></div></label>
+          <button class="primary-action form-button" id="addBundleSection" type="button" ${setupDisabled}>${t("Add section", "Agregar seccion")}</button>
         </div>
       <div class="table-wrap">
         <table class="bundle-table">
@@ -1866,25 +2022,25 @@ function renderBundlePlanner() {
               .map((bundle) => `
                 <tr class="${bundle.id === planner.selectedSectionId ? "selected-row" : ""}">
                   <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="description" value="${bundle.description || ""}" /></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="scanCode" value="${bundle.scanCode || ""}" placeholder="Scan value" /></td>
-                  <td><div class="unit-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" /><span>lbs</span></div></td>
+                  <td><input data-bundle="${bundle.id}" data-bundle-field="description" value="${bundle.description || ""}" ${setupDisabled} /></td>
+                  <td><input data-bundle="${bundle.id}" data-bundle-field="scanCode" value="${bundle.scanCode || ""}" placeholder="Scan value" ${setupDisabled} /></td>
+                  <td><div class="unit-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" ${setupDisabled} /><span>lbs</span></div></td>
                   <td>
                     <div class="process-check-grid">
-                      ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${bundle.id}" data-bundle-field="process.${key}" type="checkbox" ${bundle.process?.[key] ? "checked" : ""} /> ${label}<span class="es">${es}</span></label>`).join("")}
+                      ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${bundle.id}" data-bundle-field="process.${key}" type="checkbox" ${bundle.process?.[key] ? "checked" : ""} ${statusDisabled} /> ${label}<span class="es">${es}</span></label>`).join("")}
                     </div>
                     <span class="tag">${bundleCurrentStatus(bundle)}</span>
                   </td>
                   <td>
                     <div class="quality-grid">
-                      <label>Rejected<span class="es">Rechazadas</span><input data-bundle="${bundle.id}" data-bundle-field="rejectedPieces" type="number" min="0" step="1" value="${bundle.rejectedPieces || 0}" /></label>
-                      <label>Reason<span class="es">Razon</span><select data-bundle="${bundle.id}" data-bundle-field="rejectReason">${setOptions(qualityRejectReasons, bundle.rejectReason || "None")}</select></label>
-                      <label>QC notes<span class="es">Notas calidad</span><input data-bundle="${bundle.id}" data-bundle-field="qualityNotes" value="${bundle.qualityNotes || ""}" placeholder="Optional" /></label>
+                      <label>Rejected<span class="es">Rechazadas</span><input data-bundle="${bundle.id}" data-bundle-field="rejectedPieces" type="number" min="0" step="1" value="${bundle.rejectedPieces || 0}" ${qualityDisabled} /></label>
+                      <label>Reason<span class="es">Razon</span><select data-bundle="${bundle.id}" data-bundle-field="rejectReason" ${qualityDisabled}>${setOptions(qualityRejectReasons, bundle.rejectReason || "None")}</select></label>
+                      <label>QC notes<span class="es">Notas calidad</span><input data-bundle="${bundle.id}" data-bundle-field="qualityNotes" value="${bundle.qualityNotes || ""}" placeholder="Optional" ${qualityDisabled} /></label>
                     </div>
                   </td>
-                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer"><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" /></td>
-                  <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">Open<span class="es">Abrir</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button">Delete<span class="es">Borrar</span></button></td>
+                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer" ${setupDisabled}><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
+                  <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" ${statusDisabled} /></td>
+                  <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">Open<span class="es">Abrir</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
                 </tr>
               `)
               .join("")}
@@ -1900,14 +2056,14 @@ function renderBundlePlanner() {
         </div>
         ${section ? `
           <div class="form-grid">
-            <label>Item<span class="es">Partida</span><input id="newBundleItemNumber" placeholder="1" /></label>
-            <label>Qty<span class="es">Cantidad</span><input id="newBundleItemQty" type="number" min="0" step="1" placeholder="0" /></label>
-            <label>Size<span class="es">Tamano</span><input id="newBundleItemSize" placeholder="10" /></label>
-            <label>Length<span class="es">Largo</span><input id="newBundleItemLength" placeholder="30-00" /></label>
-            <label>Mark<span class="es">Marca</span><input id="newBundleItemMark" placeholder="10E104" /></label>
-            <label>Shape<span class="es">Forma</span><input id="newBundleItemShape" placeholder="4" /></label>
-            <label>Weight<span class="es">Peso</span><div class="unit-input"><input id="newBundleItemWeight" type="number" min="0" step="1" placeholder="0" /><span>lbs</span></div></label>
-            <button class="primary-action form-button" id="addBundleItem" type="button">${t("Add tag/item", "Agregar etiqueta")}</button>
+            <label>Item<span class="es">Partida</span><input id="newBundleItemNumber" placeholder="1" ${setupDisabled} /></label>
+            <label>Qty<span class="es">Cantidad</span><input id="newBundleItemQty" type="number" min="0" step="1" placeholder="0" ${setupDisabled} /></label>
+            <label>Size<span class="es">Tamano</span><input id="newBundleItemSize" placeholder="10" ${setupDisabled} /></label>
+            <label>Length<span class="es">Largo</span><input id="newBundleItemLength" placeholder="30-00" ${setupDisabled} /></label>
+            <label>Mark<span class="es">Marca</span><input id="newBundleItemMark" placeholder="10E104" ${setupDisabled} /></label>
+            <label>Shape<span class="es">Forma</span><input id="newBundleItemShape" placeholder="4" ${setupDisabled} /></label>
+            <label>Weight<span class="es">Peso</span><div class="unit-input"><input id="newBundleItemWeight" type="number" min="0" step="1" placeholder="0" ${setupDisabled} /><span>lbs</span></div></label>
+            <button class="primary-action form-button" id="addBundleItem" type="button" ${setupDisabled}>${t("Add tag/item", "Agregar etiqueta")}</button>
           </div>
           <div class="table-wrap compact-table-wrap section-gap">
             <table class="bundle-item-table">
@@ -1916,15 +2072,15 @@ function renderBundlePlanner() {
                 ${(section.items || []).length
                   ? section.items.map((item) => `
                     <tr>
-                      <td><input data-bundle-item="${item.id}" data-item-field="item" value="${item.item || ""}" /></td>
-                      <td><input data-bundle-item="${item.id}" data-item-field="qty" type="number" min="0" step="1" value="${item.qty || 0}" /></td>
-                      <td><input data-bundle-item="${item.id}" data-item-field="size" value="${item.size || ""}" /></td>
-                      <td><input data-bundle-item="${item.id}" data-item-field="length" value="${item.length || ""}" /></td>
-                      <td><input data-bundle-item="${item.id}" data-item-field="mark" value="${item.mark || ""}" /></td>
-                      <td><input data-bundle-item="${item.id}" data-item-field="shape" value="${item.shape || ""}" /></td>
-                      <td><div class="unit-input"><input data-bundle-item="${item.id}" data-item-field="weight" type="number" min="0" step="1" value="${item.weight || 0}" /><span>lbs</span></div></td>
-                      <td><select data-bundle-item="${item.id}" data-item-field="status">${setOptions(plannerStatuses, item.status || "Planned")}</select></td>
-                      <td class="row-actions"><button class="danger-action small-action" data-delete-bundle-item="${item.id}" type="button">Delete<span class="es">Borrar</span></button></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="item" value="${item.item || ""}" ${setupDisabled} /></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="qty" type="number" min="0" step="1" value="${item.qty || 0}" ${setupDisabled} /></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="size" value="${item.size || ""}" ${setupDisabled} /></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="length" value="${item.length || ""}" ${setupDisabled} /></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="mark" value="${item.mark || ""}" ${setupDisabled} /></td>
+                      <td><input data-bundle-item="${item.id}" data-item-field="shape" value="${item.shape || ""}" ${setupDisabled} /></td>
+                      <td><div class="unit-input"><input data-bundle-item="${item.id}" data-item-field="weight" type="number" min="0" step="1" value="${item.weight || 0}" ${setupDisabled} /><span>lbs</span></div></td>
+                      <td><select data-bundle-item="${item.id}" data-item-field="status" ${setupDisabled}>${setOptions(plannerStatuses, item.status || "Planned")}</select></td>
+                      <td class="row-actions"><button class="danger-action small-action" data-delete-bundle-item="${item.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
                     </tr>
                   `).join("")
                   : `<tr><td colspan="9"><strong>No detailed tags/items yet.</strong><span class="es">Todavia no hay etiquetas detalladas.</span></td></tr>`}
@@ -1940,7 +2096,7 @@ function renderBundlePlanner() {
             <h3>${t("8. Trailer / load assignment", "8. Asignacion de trailer / carga")}</h3>
             <p class="sub">This happens after the control codes and tag specifications are known.</p>
           </div>
-          <label class="inline-limit">Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" /><span>lbs</span></div></label>
+          <label class="inline-limit">Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" ${setupDisabled} /><span>lbs</span></div></label>
         </div>
         <div class="trailer-grid section-gap">
           ${planner.trailers
@@ -3096,6 +3252,7 @@ function selectBundleJob(jobId) {
 }
 
 function createBundleJob() {
+  if (!canManageBundlePlanner()) return;
   const name = $("newBundleJobName")?.value.trim();
   if (!name) {
     showToast("Enter a job name");
@@ -3131,6 +3288,7 @@ function selectBundleSection(sectionId) {
 }
 
 function addBundleSection() {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   if (!job) return;
   const code = $("newBundleCode")?.value.trim();
@@ -3166,6 +3324,7 @@ function addBundleSection() {
 }
 
 function deleteBundleSection(sectionId) {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   const section = job?.bundles.find((bundle) => bundle.id === sectionId);
   if (!job || !section) return;
@@ -3180,6 +3339,7 @@ function deleteBundleSection(sectionId) {
 }
 
 function addBundleItem() {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   const section = currentBundleSection();
   if (!job || !section) return;
@@ -3207,6 +3367,7 @@ function addBundleItem() {
 }
 
 function updateBundleItem(event) {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   const section = currentBundleSection();
   const item = section?.items?.find((entry) => entry.id === event.target.dataset.bundleItem);
@@ -3223,6 +3384,7 @@ function updateBundleItem(event) {
 }
 
 function deleteBundleItem(itemId) {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   const section = currentBundleSection();
   const item = section?.items?.find((entry) => entry.id === itemId);
@@ -3526,6 +3688,7 @@ function bindTabEvents() {
 }
 
 function updateBundlePlannerSettings(event) {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   const field = event.target.id;
   const textFields = {
@@ -3563,6 +3726,7 @@ function updateBundleScanLookup(event) {
 }
 
 function recordPackageUpload(event) {
+  if (!canManageBundlePlanner()) return;
   const job = currentBundleJob();
   if (!job) return;
   const files = Array.from(event.target.files || []);
@@ -3601,7 +3765,16 @@ function hasUploadedFileName(fragment) {
   return uploadedPackageNames().some((name) => name.includes(normalized));
 }
 
+function packageLooksLikeTlinePiers(job) {
+  const packageText = [job?.jobName, job?.jobNumber, job?.customer, job?.packageType, job?.source, ...uploadedPackageNames()].join(" ").toLowerCase();
+  return ["t-line", "tline", "substation", "pier", "piers", "rhome", "rhone", "overland", "lcra"].some((fragment) => packageText.includes(fragment));
+}
+
 function analyzeDetailerPackage() {
+  if (!canManageBundlePlanner()) {
+    showToast("Admin or Quality can analyze packages");
+    return;
+  }
   const planner = state.bundlePlanner;
   const job = currentBundleJob();
   if (!job?.imports?.length) {
@@ -3612,20 +3785,46 @@ function analyzeDetailerPackage() {
   const hasPhilipPackage = uploadedPackageNames().some((name) => name.includes("philip wind project"));
   const hasCcList = hasUploadedFileName("cc list");
   const hasBarList = hasUploadedFileName("bar list");
+  const hasTlinePierPackage = packageLooksLikeTlinePiers(job) && (hasCcList || hasUploadedFileName("control code"));
 
-  if (!hasPhilipPackage || !hasCcList) {
+  if (!hasPhilipPackage && !hasTlinePierPackage) {
     job.analysis = {
       status: "Needs parser template",
       source: "No supported package pattern found",
       analyzedAt: timestamp(),
       rows: [],
-      message: "CrewForge recorded the files, but this trial parser only knows the Philip Wind CC List / Bar List format right now."
+      message: "CrewForge recorded the files, but this trial parser only knows the Philip Wind and T-line pier Control Code List Summary formats right now."
     };
     syncBundlePlannerFromJob(job);
     logActivity("Detailer package analysis blocked", { job: job.jobName, field: "unsupported package" });
     saveState();
     render();
     showToast("This package needs a parser template");
+    return;
+  }
+
+  if (hasTlinePierPackage && (!hasPhilipPackage || /t-?line|substation|pier|rhome|rhone|overland|lcra/i.test([job.jobName, job.packageType, job.source, uploadedPackageNames().join(" ")].join(" ")))) {
+    const rows = structuredClone(rhoneTlinePierTrialRows);
+    const totalWeight = rows.reduce((sum, row) => sum + (Number(row.weight) || 0), 0);
+    job.analysis = {
+      status: "Ready for review",
+      source: "T-line pier Control Code List Summary",
+      analyzedAt: timestamp(),
+      rows,
+      message: `CrewForge found ${rows.length} T-line pier control-code rows from the summary sheet, including status, release, customer, job, description, and ${number(totalWeight)} lbs total.`
+    };
+    job.jobName = job.jobName || "RTX - Rhome T-line Piers";
+    job.customer = job.customer || "Saber Power";
+    job.jobNumber = job.jobNumber || "VS26-OVE";
+    job.detailer = job.detailer || "RTX";
+    job.packageType = "T-line Substation Piers";
+    job.source = "Parsed Control Code List Summary trial";
+    planner.maxTrailerWeight = Number(planner.maxTrailerWeight) || 48000;
+    syncBundlePlannerFromJob(job);
+    logActivity("Detailer package analyzed", { job: job.jobName, field: `${rows.length} T-line pier rows` });
+    saveState();
+    render();
+    showToast(`${rows.length} T-line pier rows ready to review`);
     return;
   }
 
@@ -3653,7 +3852,25 @@ function analyzeDetailerPackage() {
   showToast(`${rows.length} rows ready to review`);
 }
 
+function processFromImportedStatus(status = "") {
+  const normalized = status.toLowerCase();
+  const shipped = normalized.includes("shipped");
+  return {
+    received: shipped,
+    cut: shipped,
+    fabricated: shipped,
+    qc: false,
+    staged: shipped,
+    loaded: shipped,
+    shipped
+  };
+}
+
 function importAnalyzedPackageRows() {
+  if (!canManageBundlePlanner()) {
+    showToast("Admin or Quality can import package rows");
+    return;
+  }
   const planner = state.bundlePlanner;
   const job = currentBundleJob();
   const rows = job?.analysis?.rows || [];
@@ -3663,29 +3880,29 @@ function importAnalyzedPackageRows() {
   }
   const importedAt = Date.now();
   job.bundles = rows.map((row, index) => ({
-    id: `philip-${row.controlCode.toLowerCase()}-${importedAt}-${index}`,
+    id: `import-${row.controlCode.toLowerCase()}-${importedAt}-${index}`,
     tag: row.controlCode,
     controlCode: row.controlCode,
     release: row.release || "",
-    scanCode: row.scanCode || "",
+    scanCode: row.scanCode || `${row.jobNumber || job.jobNumber || "JOB"}-${row.controlCode}-${index + 1}`,
     description: row.description || "",
     pieces: Number(row.pieces) || "",
     weight: Number(row.weight) || 0,
+    library: row.library || "",
+    detailerLocation: row.detailerLocation || "",
+    fabLocation: row.fabLocation || "",
+    activityDate: row.activityDate || "",
+    customer: row.customer || job.customer || "",
+    jobNumber: row.jobNumber || job.jobNumber || "",
+    jobName: row.jobName || job.jobName || "",
+    initials: row.initials || "",
     trailer: "",
-    status: "Planned",
-    process: {
-      received: false,
-      cut: false,
-      fabricated: false,
-      qc: false,
-      staged: false,
-      loaded: false,
-      shipped: false
-    },
+    status: row.status || "Planned",
+    process: processFromImportedStatus(row.status),
     rejectedPieces: 0,
     rejectReason: "None",
     qualityNotes: "",
-    notes: `Imported from ${row.source || "detailer package"}`,
+    notes: `Imported from ${row.source || "detailer package"}${row.activityDate ? ` · ${row.activityDate}` : ""}`,
     items: []
   }));
   job.importedAt = timestamp();
@@ -3708,6 +3925,11 @@ function updateBundleRow(event) {
   const bundle = job?.bundles.find((item) => item.id === event.target.dataset.bundle);
   if (!bundle) return;
   const field = event.target.dataset.bundleField;
+  const statusField = field.startsWith("process.") || field === "notes";
+  const qualityField = ["rejectedPieces", "rejectReason", "qualityNotes"].includes(field);
+  if (statusField && !canUpdateBundleProductionStatus()) return;
+  if (qualityField && !canManageBundlePlanner()) return;
+  if (!statusField && !qualityField && !canManageBundlePlanner()) return;
   if (field.startsWith("process.")) {
     const processField = field.split(".")[1];
     bundle.process = bundle.process || {};
@@ -3730,6 +3952,7 @@ function updateBundleRow(event) {
 }
 
 function addTrailerToPlanner() {
+  if (!canManageBundlePlanner()) return;
   const nextNumber = state.bundlePlanner.trailers.length + 1;
   const trailerName = `Trailer ${nextNumber}`;
   state.bundlePlanner.trailers.push(trailerName);
@@ -3739,6 +3962,7 @@ function addTrailerToPlanner() {
 }
 
 function autoAssignTrailers() {
+  if (!canManageBundlePlanner()) return;
   const planner = state.bundlePlanner;
   const job = currentBundleJob();
   const limit = Number(planner.maxTrailerWeight) || 48000;
