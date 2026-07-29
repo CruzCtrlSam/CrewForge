@@ -1431,6 +1431,29 @@ tr:last-child td {
   border-color: #c43b2f;
 }
 
+.analysis-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.analysis-panel {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #f7fafc;
+  padding: 14px;
+}
+
+.analysis-panel.warning-panel {
+  border-color: #d49a1f;
+  background: #fff6df;
+}
+
+.extraction-review-table td:nth-child(3) {
+  min-width: 260px;
+}
+
 .bundle-table td:nth-child(2) {
   min-width: 320px;
 }

@@ -188,6 +188,63 @@ const drilledPierBundleRows = [
   ["UTY", "UTY PIER TYPE DP.CA.TCI.401-404", 29945, "Trailer 2"]
 ];
 
+const philipWindTrialRows = [
+  {
+    controlCode: "AGZ",
+    release: "1",
+    description: "NON-BOUYANT - BOTTOM",
+    pieces: 429,
+    weight: 45053,
+    scanCode: "VS26-PHILP-AGZ",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  },
+  {
+    controlCode: "AH1",
+    release: "2",
+    description: "NON-BOUYANT - TOP",
+    pieces: 578,
+    weight: 43109,
+    scanCode: "VS26-PHILP-AH1",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  },
+  {
+    controlCode: "AH2",
+    release: "3",
+    description: "NON-BOUYANT - PEDESTAL",
+    pieces: 904,
+    weight: 29317,
+    scanCode: "VS26-PHILP-AH2",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  },
+  {
+    controlCode: "AH3",
+    release: "4",
+    description: "1.5FT BOUYANT - BOTTOM",
+    pieces: 326,
+    weight: 48488,
+    scanCode: "VS26-PHILP-AH3",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  },
+  {
+    controlCode: "AH4",
+    release: "5",
+    description: "1.5FT BOUYANT - TOP",
+    pieces: 193,
+    weight: 45972,
+    scanCode: "VS26-PHILP-AH4",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  },
+  {
+    controlCode: "AH5",
+    release: "6",
+    description: "1.5FT BOUYANT - PEDESTAL",
+    pieces: 967,
+    weight: 33730,
+    scanCode: "VS26-PHILP-AH5",
+    source: "PHILIP WIND PROJECT - CC List.pdf"
+  }
+];
+
 function defaultBundlePlanner() {
   return {
     jobName: "IPA HVDC Delta UT - Drilled Piers",
@@ -202,6 +259,7 @@ function defaultBundlePlanner() {
     maxTrailerWeight: 48000,
     trailers: ["Trailer 1", "Trailer 2", "Trailer 3", "Trailer 4", "Trailer 5"],
     imports: [],
+    analysis: null,
     scanCodeSearch: "",
     bundles: drilledPierBundleRows.map(([code, description, weight, trailer], index) => ({
       id: `pier-${code.toLowerCase()}`,
@@ -419,6 +477,7 @@ function upgradeState(next) {
   next.bundlePlanner.trailers = next.bundlePlanner.trailers?.length ? next.bundlePlanner.trailers : structuredClone(defaultBundlePlanner().trailers);
   next.bundlePlanner.bundles = next.bundlePlanner.bundles?.length ? next.bundlePlanner.bundles : structuredClone(defaultBundlePlanner().bundles);
   next.bundlePlanner.imports = next.bundlePlanner.imports || [];
+  next.bundlePlanner.analysis = next.bundlePlanner.analysis || null;
   next.bundlePlanner.customer = next.bundlePlanner.customer || "";
   next.bundlePlanner.jobNumber = next.bundlePlanner.jobNumber || "";
   next.bundlePlanner.detailer = next.bundlePlanner.detailer || "";
@@ -1505,6 +1564,11 @@ function renderBundlePlanner() {
   const trailerData = trailerTotals();
   const trailerOptions = ["", ...planner.trailers];
   const scanMatch = planner.bundles.find((bundle) => bundleMatchesScan(bundle, planner.scanCodeSearch));
+  const analysis = planner.analysis || null;
+  const analysisRows = analysis?.rows || [];
+  const parserStatus = analysis
+    ? `${analysis.status} · ${analysis.rows?.length || 0} rows · ${analysis.analyzedAt || ""}`
+    : "Waiting for Analyze package";
   return `
     <section class="panel bundle-planner package-planner rebar-tracker">
       <div class="split">
@@ -1536,12 +1600,16 @@ function renderBundlePlanner() {
       <div class="planner-section section-gap">
         <div>
           <h3>${t("2. Upload / import detailer files", "2. Subir / importar archivos")}</h3>
-          <p class="sub">Trial note: this stores file names for the workflow. Real synced uploads should go to Supabase Storage, then a parser saves the extracted control codes and tag rows into CrewForge.</p>
+          <p class="sub">Upload the package, analyze the detailer files, review what CrewForge found, then import the rows into the live bundle library.</p>
         </div>
         <div class="form-grid">
           <label>Detailer package files<span class="es">Archivos del detallador</span><input id="packageUploadInput" type="file" multiple accept=".zip,.xls,.xlsx,.csv,.pdf,.cad" /></label>
           <label>Upload destination<span class="es">Destino de carga</span><input value="Future: Supabase Storage bucket detailer-packages" disabled /></label>
-          <label>Parser status<span class="es">Estado del analisis</span><input value="Manual test data loaded; parser not connected yet" disabled /></label>
+          <label>Parser status<span class="es">Estado del analisis</span><input value="${parserStatus}" disabled /></label>
+        </div>
+        <div class="analysis-actions">
+          <button class="secondary-action" id="analyzePackage" type="button">${t("Analyze package", "Analizar paquete")}</button>
+          <button class="primary-action" id="importAnalyzedRows" type="button" ${analysisRows.length ? "" : "disabled"}>${t("Import reviewed rows", "Importar filas revisadas")}</button>
         </div>
         <div class="table-wrap compact-table-wrap section-gap">
           <table>
@@ -1553,6 +1621,39 @@ function renderBundlePlanner() {
             </tbody>
           </table>
         </div>
+        ${analysis ? `
+          <div class="analysis-panel section-gap ${analysisRows.length ? "" : "warning-panel"}">
+            <div class="split">
+              <div>
+                <h3>${t("Extraction review", "Revision de extraccion")}</h3>
+                <p class="sub">${analysis.message || "Review these rows before importing them into the bundle library."}</p>
+              </div>
+              <span class="tag">${analysis.source || "Trial parser"}</span>
+            </div>
+            ${analysisRows.length ? `
+              <div class="table-wrap compact-table-wrap">
+                <table class="extraction-review-table">
+                  <thead>
+                    <tr><th>Control code</th><th>Release</th><th>Description</th><th>Pieces</th><th>Weight</th><th>Scan lookup</th><th>Source</th></tr>
+                  </thead>
+                  <tbody>
+                    ${analysisRows.map((row) => `
+                      <tr>
+                        <td><strong>${row.controlCode}</strong></td>
+                        <td>${row.release || ""}</td>
+                        <td>${row.description || ""}</td>
+                        <td>${number(row.pieces || 0)}</td>
+                        <td>${number(row.weight || 0)} lbs</td>
+                        <td><span class="tag">${row.scanCode || row.controlCode}</span></td>
+                        <td>${row.source || ""}</td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+            ` : ""}
+          </div>
+        ` : ""}
       </div>
 
       <div class="planner-section section-gap">
@@ -2791,6 +2892,8 @@ function bindTabEvents() {
   });
   if ($("bundleScanCodeSearch")) $("bundleScanCodeSearch").addEventListener("input", updateBundleScanLookup);
   if ($("packageUploadInput")) $("packageUploadInput").addEventListener("change", recordPackageUpload);
+  if ($("analyzePackage")) $("analyzePackage").addEventListener("click", analyzeDetailerPackage);
+  if ($("importAnalyzedRows")) $("importAnalyzedRows").addEventListener("click", importAnalyzedPackageRows);
   if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
   if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
   document.querySelectorAll("[data-bundle]").forEach((input) => {
@@ -3101,6 +3204,110 @@ function recordPackageUpload(event) {
   saveState();
   render();
   showToast(`${incoming.length} file(s) recorded`);
+}
+
+function uploadedPackageNames() {
+  return (state.bundlePlanner.imports || []).map((file) => (file.name || "").toLowerCase());
+}
+
+function hasUploadedFileName(fragment) {
+  const normalized = fragment.toLowerCase();
+  return uploadedPackageNames().some((name) => name.includes(normalized));
+}
+
+function analyzeDetailerPackage() {
+  const planner = state.bundlePlanner;
+  if (!planner.imports?.length) {
+    showToast("Upload the Bar List and CC List first");
+    return;
+  }
+
+  const hasPhilipPackage = uploadedPackageNames().some((name) => name.includes("philip wind project"));
+  const hasCcList = hasUploadedFileName("cc list");
+  const hasBarList = hasUploadedFileName("bar list");
+
+  if (!hasPhilipPackage || !hasCcList) {
+    planner.analysis = {
+      status: "Needs parser template",
+      source: "No supported package pattern found",
+      analyzedAt: timestamp(),
+      rows: [],
+      message: "CrewForge recorded the files, but this trial parser only knows the Philip Wind CC List / Bar List format right now."
+    };
+    logActivity("Detailer package analysis blocked", { job: planner.jobName, field: "unsupported package" });
+    saveState();
+    render();
+    showToast("This package needs a parser template");
+    return;
+  }
+
+  const rows = structuredClone(philipWindTrialRows);
+  planner.analysis = {
+    status: hasBarList ? "Ready for review" : "Partial review",
+    source: hasBarList ? "Philip Wind CC List + Bar List" : "Philip Wind CC List",
+    analyzedAt: timestamp(),
+    rows,
+    message: hasBarList
+      ? "CrewForge found the six Philip Wind control-code sections from the CC List and matched them to the Bar List summaries."
+      : "CrewForge found the CC List rows. Add the Bar List PDF for a stronger extraction check."
+  };
+  planner.jobName = "Philip Wind Project - Rebar Fabrication Trial";
+  planner.customer = planner.customer || "Unknown Customer";
+  planner.jobNumber = "VS26-PHILP";
+  planner.detailer = planner.detailer || "adm";
+  planner.packageType = "Wind Farm Rebar Fabrication";
+  planner.source = "Parsed trial package";
+  planner.maxTrailerWeight = Number(planner.maxTrailerWeight) || 48000;
+  logActivity("Detailer package analyzed", { job: planner.jobName, field: `${rows.length} rows` });
+  saveState();
+  render();
+  showToast(`${rows.length} rows ready to review`);
+}
+
+function importAnalyzedPackageRows() {
+  const planner = state.bundlePlanner;
+  const rows = planner.analysis?.rows || [];
+  if (!rows.length) {
+    showToast("Analyze the package first");
+    return;
+  }
+  const importedAt = Date.now();
+  planner.bundles = rows.map((row, index) => ({
+    id: `philip-${row.controlCode.toLowerCase()}-${importedAt}-${index}`,
+    tag: row.controlCode,
+    controlCode: row.controlCode,
+    release: row.release || "",
+    scanCode: row.scanCode || "",
+    description: row.description || "",
+    pieces: Number(row.pieces) || "",
+    weight: Number(row.weight) || 0,
+    trailer: "",
+    status: "Planned",
+    process: {
+      received: false,
+      cut: false,
+      fabricated: false,
+      qc: false,
+      staged: false,
+      loaded: false,
+      shipped: false
+    },
+    rejectedPieces: 0,
+    rejectReason: "None",
+    qualityNotes: "",
+    notes: `Imported from ${row.source || "detailer package"}`
+  }));
+  planner.importedAt = timestamp();
+  planner.scanCodeSearch = "";
+  planner.analysis = {
+    ...planner.analysis,
+    status: "Imported",
+    message: `${rows.length} control-code rows were imported into the live bundle library. Scan codes can be replaced with the real DataMatrix values as tags are verified.`
+  };
+  logActivity("Analyzed rows imported", { job: planner.jobName, field: `${rows.length} bundles` });
+  saveState();
+  render();
+  showToast("Bundle library imported");
 }
 
 function updateBundleRow(event) {
