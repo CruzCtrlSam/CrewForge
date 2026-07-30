@@ -640,6 +640,12 @@ function upgradeState(next) {
   next.bundlePlanner.tagRule = next.bundlePlanner.tagRule || "";
   next.bundlePlanner.maxTrailerWeight = Number(next.bundlePlanner.maxTrailerWeight) || 48000;
   next.bundlePlanner.scanCodeSearch = next.bundlePlanner.scanCodeSearch || "";
+  next.bundlePlanner.openPanels = {
+    jobs: true,
+    metrics: true,
+    sections: true,
+    ...(next.bundlePlanner.openPanels || {})
+  };
   next.bundlePlanner.bundles = next.bundlePlanner.bundles.map((bundle, index) => {
     const sampleScanCode = ["1516900001", "1516970001", "1516990001"][index] || "";
     return {
@@ -1821,6 +1827,70 @@ function bundleJobTotals(job) {
   return { totalWeight, fabricated, shipped, itemCount };
 }
 
+function bundlePanelIsOpen(panelId, fallback = false) {
+  const openPanels = state.bundlePlanner.openPanels || {};
+  return Object.prototype.hasOwnProperty.call(openPanels, panelId) ? openPanels[panelId] : fallback;
+}
+
+function renderBundlePanel(panelId, title, titleEs, body, options = {}) {
+  const isOpen = bundlePanelIsOpen(panelId, Boolean(options.open));
+  const summary = options.summary || "";
+  const badge = options.badge ? `<span class="tag">${options.badge}</span>` : "";
+  return `
+    <div class="planner-section collapsible-section ${isOpen ? "is-open" : "is-collapsed"} section-gap" data-panel="${panelId}">
+      <button class="planner-section-toggle" data-toggle-bundle-panel="${panelId}" type="button" aria-expanded="${isOpen ? "true" : "false"}">
+        <span>
+          <strong>${title}</strong>
+          <span class="es">${titleEs}</span>
+          ${summary ? `<small>${summary}</small>` : ""}
+        </span>
+        <span class="toggle-mark">${isOpen ? "Close" : "Open"}<span class="es">${isOpen ? "Cerrar" : "Abrir"}</span></span>
+      </button>
+      ${badge}
+      <div class="planner-section-body">${body}</div>
+    </div>
+  `;
+}
+
+function toggleBundlePanel(panelId) {
+  state.bundlePlanner.openPanels = state.bundlePlanner.openPanels || {};
+  state.bundlePlanner.openPanels[panelId] = !bundlePanelIsOpen(panelId);
+  saveState();
+  render();
+}
+
+function initializeBundlePanelControls() {
+  const panelIds = ["jobs", "setup", "imports", "rules", "scan", "sections", "items", "trailers", "log"];
+  document.querySelectorAll(".bundle-planner > .planner-section").forEach((section, index) => {
+    const panelId = panelIds[index];
+    if (!panelId) return;
+    const isOpen = bundlePanelIsOpen(panelId, ["jobs", "sections"].includes(panelId));
+    const header = section.firstElementChild;
+    section.dataset.panel = panelId;
+    section.classList.add("collapsible-section");
+    section.classList.toggle("is-open", isOpen);
+    section.classList.toggle("is-collapsed", !isOpen);
+    if (!header) return;
+    header.classList.add("planner-section-toggle");
+    header.setAttribute("role", "button");
+    header.setAttribute("tabindex", "0");
+    header.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    if (!header.querySelector(".toggle-mark")) {
+      header.insertAdjacentHTML("beforeend", `<span class="toggle-mark">${isOpen ? "Close" : "Open"}<span class="es">${isOpen ? "Cerrar" : "Abrir"}</span></span>`);
+    }
+    const activate = (event) => {
+      if (event.target.closest("input, select, textarea, button, label, a")) return;
+      toggleBundlePanel(panelId);
+    };
+    header.addEventListener("click", activate);
+    header.addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      toggleBundlePanel(panelId);
+    });
+  });
+}
+
 function renderBundlePlanner() {
   const planner = state.bundlePlanner;
   const job = currentBundleJob();
@@ -2002,51 +2072,70 @@ function renderBundlePlanner() {
           <label>Weight<span class="es">Peso</span><div class="unit-input"><input id="newBundleWeight" type="number" min="0" step="1" placeholder="0" ${setupDisabled} /><span>lbs</span></div></label>
           <button class="primary-action form-button" id="addBundleSection" type="button" ${setupDisabled}>${t("Add section", "Agregar seccion")}</button>
         </div>
-      <div class="table-wrap">
-        <table class="bundle-table">
-          <thead>
-            <tr>
-              <th>Tag / code</th>
-              <th>Description</th>
-              <th>Scan code</th>
-              <th>Weight</th>
-              <th>Process</th>
-              <th>Quality</th>
-              <th>Trailer</th>
-              <th>Notes</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${bundles
-              .map((bundle) => `
-                <tr class="${bundle.id === planner.selectedSectionId ? "selected-row" : ""}">
-                  <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="description" value="${bundle.description || ""}" ${setupDisabled} /></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="scanCode" value="${bundle.scanCode || ""}" placeholder="Scan value" ${setupDisabled} /></td>
-                  <td><div class="unit-input"><input data-bundle="${bundle.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${bundle.weight || 0}" ${setupDisabled} /><span>lbs</span></div></td>
-                  <td>
-                    <div class="process-check-grid">
-                      ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${bundle.id}" data-bundle-field="process.${key}" type="checkbox" ${bundle.process?.[key] ? "checked" : ""} ${statusDisabled} /> ${label}<span class="es">${es}</span></label>`).join("")}
-                    </div>
-                    <span class="tag">${bundleCurrentStatus(bundle)}</span>
-                  </td>
-                  <td>
-                    <div class="quality-grid">
-                      <label>Rejected<span class="es">Rechazadas</span><input data-bundle="${bundle.id}" data-bundle-field="rejectedPieces" type="number" min="0" step="1" value="${bundle.rejectedPieces || 0}" ${qualityDisabled} /></label>
-                      <label>Reason<span class="es">Razon</span><select data-bundle="${bundle.id}" data-bundle-field="rejectReason" ${qualityDisabled}>${setOptions(qualityRejectReasons, bundle.rejectReason || "None")}</select></label>
-                      <label>QC notes<span class="es">Notas calidad</span><input data-bundle="${bundle.id}" data-bundle-field="qualityNotes" value="${bundle.qualityNotes || ""}" placeholder="Optional" ${qualityDisabled} /></label>
-                    </div>
-                  </td>
-                  <td><select data-bundle="${bundle.id}" data-bundle-field="trailer" ${setupDisabled}><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), bundle.trailer || "")}</select></td>
-                  <td><input data-bundle="${bundle.id}" data-bundle-field="notes" value="${bundle.notes || ""}" placeholder="Optional" ${statusDisabled} /></td>
-                  <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">Open<span class="es">Abrir</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
-                </tr>
-              `)
-              .join("")}
-          </tbody>
-        </table>
-      </div>
+        <div class="table-wrap">
+          <table class="bundle-table bundle-summary-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Weight</th>
+                <th>Status</th>
+                <th>Trailer</th>
+                <th>Rejects</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bundles.length
+                ? bundles.map((bundle) => `
+                  <tr class="${bundle.id === planner.selectedSectionId ? "selected-row" : ""}">
+                    <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
+                    <td>${bundle.description || "No description"}</td>
+                    <td>${number(bundle.weight || 0)} lbs</td>
+                    <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                    <td>${bundle.trailer || "Unassigned"}</td>
+                    <td>${number(bundle.rejectedPieces || 0)}</td>
+                    <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">${bundle.id === planner.selectedSectionId ? "Selected" : "Open"}<span class="es">${bundle.id === planner.selectedSectionId ? "Seleccionado" : "Abrir"}</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
+                  </tr>
+                `).join("")
+                : `<tr><td colspan="7"><strong>No control-code sections yet.</strong><span class="es">Todavia no hay secciones.</span></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+        ${section ? `
+          <div class="bundle-section-editor section-gap">
+            <div class="split">
+              <div>
+                <h3>${section.tag || section.controlCode} · ${bundleCurrentStatus(section)}</h3>
+                <p class="sub">Update only this selected control-code section.</p>
+              </div>
+              <span class="tag">${number(section.weight || 0)} lbs</span>
+            </div>
+            <div class="form-grid">
+              <label>Description<span class="es">Descripcion</span><input data-bundle="${section.id}" data-bundle-field="description" value="${section.description || ""}" ${setupDisabled} /></label>
+              <label>Scan code<span class="es">Codigo escaneado</span><input data-bundle="${section.id}" data-bundle-field="scanCode" value="${section.scanCode || ""}" placeholder="Scan value" ${setupDisabled} /></label>
+              <label>Weight<span class="es">Peso</span><div class="unit-input"><input data-bundle="${section.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${section.weight || 0}" ${setupDisabled} /><span>lbs</span></div></label>
+              <label>Trailer<span class="es">Trailer</span><select data-bundle="${section.id}" data-bundle-field="trailer" ${setupDisabled}><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), section.trailer || "")}</select></label>
+            </div>
+            <div class="selected-section-grid">
+              <div>
+                <h4>Production status<span class="es">Estado de produccion</span></h4>
+                <div class="process-check-grid selected-process-grid">
+                  ${fabricationProcessSteps.map(([key, label, es]) => `<label class="mini-check"><input data-bundle="${section.id}" data-bundle-field="process.${key}" type="checkbox" ${section.process?.[key] ? "checked" : ""} ${statusDisabled} /> ${label}<span class="es">${es}</span></label>`).join("")}
+                </div>
+              </div>
+              <div>
+                <h4>Quality<span class="es">Calidad</span></h4>
+                <div class="quality-grid">
+                  <label>Rejected<span class="es">Rechazadas</span><input data-bundle="${section.id}" data-bundle-field="rejectedPieces" type="number" min="0" step="1" value="${section.rejectedPieces || 0}" ${qualityDisabled} /></label>
+                  <label>Reason<span class="es">Razon</span><select data-bundle="${section.id}" data-bundle-field="rejectReason" ${qualityDisabled}>${setOptions(qualityRejectReasons, section.rejectReason || "None")}</select></label>
+                  <label>QC notes<span class="es">Notas calidad</span><input data-bundle="${section.id}" data-bundle-field="qualityNotes" value="${section.qualityNotes || ""}" placeholder="Optional" ${qualityDisabled} /></label>
+                </div>
+              </div>
+            </div>
+            <label>Notes<span class="es">Notas</span><input data-bundle="${section.id}" data-bundle-field="notes" value="${section.notes || ""}" placeholder="Optional" ${statusDisabled} /></label>
+          </div>
+        ` : ""}
       </div>
 
       <div class="planner-section section-gap">
@@ -3402,6 +3491,7 @@ function deleteBundleItem(itemId) {
 
 function bindTabEvents() {
   document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => window.print()));
+  initializeBundlePanelControls();
 
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
