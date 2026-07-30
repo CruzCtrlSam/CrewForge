@@ -668,6 +668,7 @@ function upgradeState(next) {
     rejectedPieces: Number(bundle.rejectedPieces) || 0,
     rejectReason: bundle.rejectReason || "None",
     qualityNotes: bundle.qualityNotes || "",
+    completedQty: Number(bundle.completedQty) || 0,
     items: bundle.items || []
   };
   });
@@ -690,6 +691,7 @@ function upgradeState(next) {
   next.bundlePlanner.jobs = next.bundlePlanner.jobs.map((job, jobIndex) => {
     const bundles = (job.bundles?.length ? job.bundles : jobIndex === 0 ? next.bundlePlanner.bundles : []).map((bundle) => ({
       ...bundle,
+      completedQty: Number(bundle.completedQty) || 0,
       items: bundle.items || []
     }));
     return {
@@ -1783,6 +1785,24 @@ function bundleCurrentStatus(bundle) {
   return latest ? latest[1] : bundle.status || "Planned";
 }
 
+function bundleQuantity(bundle) {
+  return Number(bundle?.pieces) || 0;
+}
+
+function bundleUnitWeight(bundle) {
+  const quantity = bundleQuantity(bundle);
+  return quantity ? (Number(bundle?.weight) || 0) / quantity : 0;
+}
+
+function bundleCompletedWeight(bundle) {
+  return (Number(bundle?.completedQty) || 0) * bundleUnitWeight(bundle);
+}
+
+function bundleCompletionPct(bundle) {
+  const quantity = bundleQuantity(bundle);
+  return quantity ? Math.min(100, Math.round(((Number(bundle?.completedQty) || 0) / quantity) * 100)) : 0;
+}
+
 function bundleMatchesScan(bundle, query) {
   if (!query) return false;
   const value = query.trim().toLowerCase();
@@ -2092,7 +2112,7 @@ function renderBundlePlanner() {
                     <td><strong>${bundle.tag || bundle.controlCode}</strong><span class="tag">${bundle.controlCode}</span></td>
                     <td>${bundle.description || "No description"}</td>
                     <td>${number(bundle.weight || 0)} lbs</td>
-                    <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                    <td><span class="tag">${bundleCurrentStatus(bundle)}</span><small>${bundleQuantity(bundle) ? `${preciseNumber(bundle.completedQty || 0)} / ${preciseNumber(bundleQuantity(bundle))} · ${bundleCompletionPct(bundle)}%` : "Qty needed"}</small></td>
                     <td>${bundle.trailer || "Unassigned"}</td>
                     <td>${number(bundle.rejectedPieces || 0)}</td>
                     <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">${bundle.id === planner.selectedSectionId ? "Selected" : "Open"}<span class="es">${bundle.id === planner.selectedSectionId ? "Seleccionado" : "Abrir"}</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
@@ -2109,13 +2129,19 @@ function renderBundlePlanner() {
                 <h3>${section.tag || section.controlCode} · ${bundleCurrentStatus(section)}</h3>
                 <p class="sub">Update only this selected control-code section.</p>
               </div>
-              <span class="tag">${number(section.weight || 0)} lbs</span>
+              <span class="tag">${number(section.weight || 0)} lbs · ${bundleCompletionPct(section)}%</span>
             </div>
             <div class="form-grid">
               <label>Description<span class="es">Descripcion</span><input data-bundle="${section.id}" data-bundle-field="description" value="${section.description || ""}" ${setupDisabled} /></label>
               <label>Scan code<span class="es">Codigo escaneado</span><input data-bundle="${section.id}" data-bundle-field="scanCode" value="${section.scanCode || ""}" placeholder="Scan value" ${setupDisabled} /></label>
               <label>Weight<span class="es">Peso</span><div class="unit-input"><input data-bundle="${section.id}" data-bundle-field="weight" type="number" min="0" step="1" value="${section.weight || 0}" ${setupDisabled} /><span>lbs</span></div></label>
+              <label>Total quantity<span class="es">Cantidad total</span><input data-bundle="${section.id}" data-bundle-field="pieces" type="number" min="0" step="1" value="${section.pieces || 0}" ${setupDisabled} /></label>
+              <label>Quantity completed<span class="es">Cantidad terminada</span><input data-bundle="${section.id}" data-bundle-field="completedQty" type="number" min="0" step="1" ${bundleQuantity(section) ? `max="${bundleQuantity(section)}"` : ""} value="${section.completedQty || 0}" ${statusDisabled} /></label>
               <label>Trailer<span class="es">Trailer</span><select data-bundle="${section.id}" data-bundle-field="trailer" ${setupDisabled}><option value="">Unassigned</option>${setOptions(trailerOptions.slice(1), section.trailer || "")}</select></label>
+            </div>
+            <div class="production-equation">
+              <strong>${bundleQuantity(section) ? `${preciseNumber(bundleQuantity(section))} total x ${preciseNumber(bundleUnitWeight(section))} lbs each = ${number(section.weight || 0)} lbs` : "Enter total quantity to calculate each weight."}</strong>
+              <span>${preciseNumber(section.completedQty || 0)} completed = ${number(bundleCompletedWeight(section))} lbs · ${bundleCompletionPct(section)}%</span>
             </div>
             <div class="selected-section-grid">
               <div>
@@ -2245,9 +2271,15 @@ function renderDashboard() {
         <div><h2>${t("Today at a glance", "Resumen rapido")}</h2><p class="sub">A management-friendly snapshot for the selected area.</p></div>
         <button class="secondary-action no-print" data-print="dashboard">${t("Export PDF", "Exportar PDF")}</button>
       </div>
-      <div class="report-grid section-gap">
-        <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
-        <div class="table-wrap">${productionSummaryTable()}</div>
+      <div class="report-grid dashboard-section-grid section-gap">
+        <section class="dashboard-data-section">
+          <h3>${t("Timesheets", "Registro de horas")}</h3>
+          <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
+        </section>
+        <section class="dashboard-data-section">
+          <h3>${t("Production", "Produccion")}</h3>
+          <div class="table-wrap">${productionSummaryTable()}</div>
+        </section>
       </div>
     </section>
     </section>
@@ -3187,9 +3219,17 @@ function renderDeliverables() {
         ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionTotals().completed)}</strong><small>Selected area</small></article>
         <article class="metric"><span>Delays</span><strong>${productionTotals().delayed}</strong><small>Production issues</small></article>` : ""}
       </div>
-      <div class="report-grid section-gap">
-        <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
-        ${showProductionDeliverables ? `<div class="table-wrap">${productionSummaryTable()}</div>` : ""}
+      <div class="report-grid dashboard-section-grid section-gap">
+        <section class="dashboard-data-section">
+          <h3>${t("Timesheets", "Registro de horas")}</h3>
+          <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
+        </section>
+        ${showProductionDeliverables ? `
+          <section class="dashboard-data-section">
+            <h3>${t("Production", "Produccion")}</h3>
+            <div class="table-wrap">${productionSummaryTable()}</div>
+          </section>
+        ` : ""}
       </div>
       ${roleIsElevated() ? `
         <div class="employee-report section-gap">
@@ -3393,6 +3433,7 @@ function addBundleSection() {
     scanCode: "",
     description: $("newBundleDescription")?.value.trim() || "",
     pieces: 0,
+    completedQty: 0,
     weight: Number($("newBundleWeight")?.value) || 0,
     trailer: "",
     status: "Planned",
@@ -3981,6 +4022,7 @@ function importAnalyzedPackageRows() {
     scanCode: row.scanCode || `${row.jobNumber || job.jobNumber || "JOB"}-${row.controlCode}-${index + 1}`,
     description: row.description || "",
     pieces: Number(row.pieces) || "",
+    completedQty: 0,
     weight: Number(row.weight) || 0,
     library: row.library || "",
     detailerLocation: row.detailerLocation || "",
@@ -4029,7 +4071,7 @@ function updateBundleRow(event) {
     bundle.process = bundle.process || {};
     bundle.process[processField] = event.target.checked;
     bundle.status = bundleCurrentStatus(bundle);
-  } else if (["weight", "pieces", "rejectedPieces"].includes(field)) {
+  } else if (["weight", "pieces", "completedQty", "rejectedPieces"].includes(field)) {
     bundle[field] = Number(event.target.value) || 0;
   } else {
     bundle[field] = event.target.value;

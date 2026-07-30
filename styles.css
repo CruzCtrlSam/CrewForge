@@ -1678,8 +1678,22 @@ tr:last-child td {
 
 .report-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
+}
+
+.dashboard-section-grid {
+  align-items: stretch;
+}
+
+.dashboard-data-section {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-data-section h3 {
+  color: var(--ink);
+  margin: 0;
 }
 
 .print-report-header {
@@ -2143,6 +2157,10 @@ tr:last-child td {
     grid-template-columns: 0.9fr 1.1fr;
     gap: 10px;
     align-items: start;
+  }
+
+  .dashboard-section-grid {
+    grid-template-columns: 1fr;
   }
 
   .report-panel {
