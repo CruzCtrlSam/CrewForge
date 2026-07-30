@@ -643,6 +643,7 @@ function upgradeState(next) {
   next.bundlePlanner.openPanels = {
     jobs: true,
     metrics: true,
+    summary: true,
     sections: true,
     ...(next.bundlePlanner.openPanels || {})
   };
@@ -1879,6 +1880,28 @@ function toggleBundlePanel(panelId) {
   render();
 }
 
+function renderBundleSummaryBar(totals, trailerData, bundles) {
+  const isOpen = bundlePanelIsOpen("summary", true);
+  return `
+    <aside class="tracker-summary-bar ${isOpen ? "is-open" : "is-collapsed"} section-gap">
+      <button class="tracker-summary-toggle" data-toggle-bundle-panel="summary" type="button" aria-expanded="${isOpen ? "true" : "false"}">
+        <span>
+          <strong>${t("Job Summary", "Resumen del trabajo")}</strong>
+          <small>${number(totals.totalWeight)} lbs · ${bundles.length} sections · ${trailerData.unassignedCount} unassigned</small>
+        </span>
+        <span class="toggle-mark">${isOpen ? "Hide" : "Show"}<span class="es">${isOpen ? "Ocultar" : "Mostrar"}</span></span>
+      </button>
+      <div class="metric-grid tracker-summary-metrics">
+        <article class="metric"><span>Total weight</span><strong>${number(totals.totalWeight)} lbs</strong><small>${bundles.length} control-code sections</small></article>
+        <article class="metric"><span>Fabricated</span><strong>${totals.processCounts.fabricated || 0}</strong><small>Bundles through fabrication</small></article>
+        <article class="metric"><span>QC checked</span><strong>${totals.processCounts.qc || 0}</strong><small>${number(totals.rejectedPieces)} pieces rejected</small></article>
+        <article class="metric"><span>Ready to ship</span><strong>${totals.processCounts.staged || 0}</strong><small>${trailerData.unassignedCount} unassigned</small></article>
+        <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
+      </div>
+    </aside>
+  `;
+}
+
 function initializeBundlePanelControls() {
   const panelIds = ["jobs", "setup", "imports", "rules", "scan", "sections", "items", "trailers", "log"];
   document.querySelectorAll(".bundle-planner > .planner-section").forEach((section, index) => {
@@ -1944,6 +1967,7 @@ function renderBundlePlanner() {
         </div>
       </div>
       ${!canManage ? `<div class="notice section-gap">Foreman view: update production status and notes only. Admin or Quality controls imports, setup, quality rejects, and trailer assignment. <span class="es">Vista de capataz: solo actualice estado de produccion y notas.</span></div>` : ""}
+      ${renderBundleSummaryBar(totals, trailerData, bundles)}
 
       <div class="planner-section section-gap">
         <div>
@@ -2059,14 +2083,6 @@ function renderBundlePlanner() {
           <label>Max bundle length<span class="es">Largo maximo</span><input id="bundleMaxBundleLength" value="${planner.maxBundleLength || ""}" placeholder="Optional" ${setupDisabled} /></label>
           <label>Tag split rule<span class="es">Regla para dividir etiquetas</span><input id="bundleTagRule" value="${planner.tagRule || ""}" placeholder="Example: keep pier type together unless over limit" ${setupDisabled} /></label>
         </div>
-      </div>
-
-      <div class="metric-grid section-gap">
-        <article class="metric"><span>Total weight</span><strong>${number(totals.totalWeight)} lbs</strong><small>${bundles.length} control-code sections</small></article>
-        <article class="metric"><span>Fabricated</span><strong>${totals.processCounts.fabricated || 0}</strong><small>Bundles through fabrication</small></article>
-        <article class="metric"><span>QC checked</span><strong>${totals.processCounts.qc || 0}</strong><small>${number(totals.rejectedPieces)} pieces rejected</small></article>
-        <article class="metric"><span>Ready to ship</span><strong>${totals.processCounts.staged || 0}</strong><small>${trailerData.unassignedCount} unassigned</small></article>
-        <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
       </div>
 
       <div class="planner-section section-gap">
@@ -3533,6 +3549,9 @@ function deleteBundleItem(itemId) {
 function bindTabEvents() {
   document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => window.print()));
   initializeBundlePanelControls();
+  document.querySelectorAll("[data-toggle-bundle-panel]").forEach((button) => {
+    button.addEventListener("click", () => toggleBundlePanel(button.dataset.toggleBundlePanel));
+  });
 
   const sheet = currentSheet();
   const editable = canEditSheet(sheet);
