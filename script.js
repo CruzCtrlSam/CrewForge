@@ -1849,7 +1849,7 @@ function renderBundlePlanner() {
         </div>
         <div class="button-pair">
           <button class="secondary-action" id="showBundleJobs" type="button">${t("Jobs", "Trabajos")}</button>
-          <button class="secondary-action" id="autoAssignTrailers" type="button" ${setupDisabled}>${t("Auto assign", "Asignar auto")}</button>
+          <button class="secondary-action" id="autoAssignTrailers" type="button" ${setupDisabled}>${t("Auto assign", "Auto asignar")}</button>
           <button class="primary-action" id="addTrailer" type="button" ${setupDisabled}>${t("Add trailer", "Agregar trailer")}</button>
         </div>
       </div>
