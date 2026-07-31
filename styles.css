@@ -366,12 +366,15 @@ h3 {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr);
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .sidebar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  bottom: 0;
+  width: 290px;
   height: 100vh;
   padding: 22px 16px;
   background: var(--steel-dark);
@@ -379,6 +382,12 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.workspace {
+  grid-column: 2;
 }
 
 .brand {
