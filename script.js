@@ -430,6 +430,7 @@ function defaultBundlePlanner() {
         source: "Detailer package trial",
         imports: [],
         analysis: null,
+        trailerSignoffs: {},
         bundles
       }
     ],
@@ -705,6 +706,7 @@ function upgradeState(next) {
       source: job.source || "",
       imports: job.imports || [],
       analysis: job.analysis || null,
+      trailerSignoffs: job.trailerSignoffs || {},
       bundles
     };
   });
@@ -938,7 +940,7 @@ function roleIsProductionVisible() {
 function canAccessSelectedArea(account) {
   if (!account) return false;
   if (state.selectedArea === "bundleLab") {
-    return ["Admin", "Quality", "Foreman"].includes(account.role);
+    return ["Admin", "Management", "Quality", "Foreman"].includes(account.role);
   }
   if (!state.selectedArea) return ["Payroll", "Management", "Admin"].includes(account.role);
   if (account.area && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) return false;
@@ -947,7 +949,7 @@ function canAccessSelectedArea(account) {
 }
 
 function canManageBundlePlanner() {
-  return ["Admin", "Quality"].includes(state.selectedRole);
+  return ["Admin", "Management", "Quality"].includes(state.selectedRole);
 }
 
 function canUpdateBundleProductionStatus() {
@@ -1753,6 +1755,28 @@ function trailerTotals() {
   return { totals, unassignedWeight, unassignedCount };
 }
 
+function trailerBundles(job, trailerCode) {
+  return (job?.bundles || []).filter((bundle) => bundle.trailer === trailerCode);
+}
+
+function trailerReadyForSignoff(job, trailerCode) {
+  const bundles = trailerBundles(job, trailerCode);
+  return Boolean(bundles.length) && bundles.every((bundle) => bundle.process?.loaded);
+}
+
+function trailerSignoff(job, trailerCode) {
+  return job?.trailerSignoffs?.[trailerCode] || null;
+}
+
+function trailerShippingStatus(job, trailerCode) {
+  const bundles = trailerBundles(job, trailerCode);
+  const signoff = trailerSignoff(job, trailerCode);
+  if (!bundles.length) return "No assigned codes";
+  if (signoff) return `Signed off by ${signoff.by}`;
+  if (trailerReadyForSignoff(job, trailerCode)) return "Ready for sign-off";
+  return "Needs loaded checks";
+}
+
 function bundlePlannerTotals() {
   const planner = state.bundlePlanner;
   const bundles = currentBundleJob()?.bundles || [];
@@ -1837,6 +1861,7 @@ function syncBundlePlannerFromJob(job) {
   state.bundlePlanner.imports = job.imports || [];
   state.bundlePlanner.analysis = job.analysis || null;
   state.bundlePlanner.bundles = job.bundles || [];
+  state.bundlePlanner.trailerSignoffs = job.trailerSignoffs || {};
 }
 
 function bundleJobTotals(job) {
@@ -1899,6 +1924,84 @@ function renderBundleSummaryBar(totals, trailerData, bundles) {
         <article class="metric ${totals.overLimitCount ? "danger-metric" : ""}"><span>Over limit</span><strong>${totals.overLimitCount}</strong><small>Trailers needing review</small></article>
       </div>
     </aside>
+  `;
+}
+
+function renderTrailerDashboard(job, planner, trailerData, setupDisabled) {
+  const canManage = canManageBundlePlanner();
+  const unassignedBundles = (job?.bundles || []).filter((bundle) => !bundle.trailer || !planner.trailers.includes(bundle.trailer));
+  return `
+    <div class="trailer-dashboard section-gap">
+      ${planner.trailers.map((trailer) => {
+        const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
+        const bundles = trailerBundles(job, trailer);
+        const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
+        const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
+        const signoff = trailerSignoff(job, trailer);
+        const ready = trailerReadyForSignoff(job, trailer);
+        return `
+          <article class="trailer-dashboard-card ${remaining < 0 ? "over-limit" : ""} ${signoff ? "signed-off" : ""}">
+            <header>
+              <div>
+                <strong>${trailer}</strong>
+                <span>${data.count} codes · ${number(data.weight)} lbs</span>
+              </div>
+              <span class="tag">${trailerShippingStatus(job, trailer)}</span>
+            </header>
+            <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="trailer-meta">
+              <span>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</span>
+              ${signoff ? `<span>Signed ${signoff.at}</span>` : `<span>${ready ? "Ready for final check" : "Load all codes before sign-off"}</span>`}
+            </div>
+            <div class="table-wrap compact-table-wrap">
+              <table class="trailer-code-table">
+                <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th><th>Loaded</th></tr></thead>
+                <tbody>
+                  ${bundles.length ? bundles.map((bundle) => `
+                    <tr>
+                      <td><strong>${bundle.tag || bundle.controlCode}</strong></td>
+                      <td>${bundle.description || "No description"}</td>
+                      <td>${number(bundle.weight || 0)} lbs</td>
+                      <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                      <td>${bundle.process?.loaded ? "Yes" : "No"}</td>
+                    </tr>
+                  `).join("") : `<tr><td colspan="5"><strong>No codes assigned.</strong><span class="es">No hay codigos asignados.</span></td></tr>`}
+                </tbody>
+              </table>
+            </div>
+            <div class="trailer-signoff-row">
+              ${signoff ? `
+                <strong>Final check signed by ${signoff.by}</strong>
+                <button class="danger-action small-action" data-clear-trailer-signoff="${trailer}" type="button" ${canManage ? "" : "disabled"}>Reopen<span class="es">Reabrir</span></button>
+              ` : `
+                <strong>${ready ? "Ready for final sign-off" : "Waiting on loaded checks"}</strong>
+                <button class="primary-action small-action" data-signoff-trailer="${trailer}" type="button" ${canManage && ready ? "" : "disabled"}>Sign off trailer<span class="es">Firmar trailer</span></button>
+              `}
+            </div>
+          </article>
+        `;
+      }).join("")}
+      ${trailerData.unassignedCount ? `
+        <article class="trailer-dashboard-card unassigned-card">
+          <header><div><strong>Unassigned</strong><span>${trailerData.unassignedCount} codes · ${number(trailerData.unassignedWeight)} lbs</span></div><span class="tag">Needs trailer code</span></header>
+          <div class="table-wrap compact-table-wrap">
+            <table class="trailer-code-table">
+              <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th></tr></thead>
+              <tbody>
+                ${unassignedBundles.map((bundle) => `
+                  <tr>
+                    <td><strong>${bundle.tag || bundle.controlCode}</strong></td>
+                    <td>${bundle.description || "No description"}</td>
+                    <td>${number(bundle.weight || 0)} lbs</td>
+                    <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      ` : ""}
+    </div>
   `;
 }
 
@@ -2225,37 +2328,15 @@ function renderBundlePlanner() {
         <div class="split">
           <div>
             <h3>${t("8. Trailer / load assignment", "8. Asignacion de trailer / carga")}</h3>
-            <p class="sub">This happens after the control codes and tag specifications are known.</p>
+            <p class="sub">Create trailer codes, assign control-code sections, verify loading, then require final sign-off before shipping.</p>
           </div>
           <label class="inline-limit">Max trailer weight<span class="es">Peso maximo por trailer</span><div class="money-input"><input id="bundleMaxWeight" type="number" min="1" step="100" value="${planner.maxTrailerWeight || 48000}" ${setupDisabled} /><span>lbs</span></div></label>
         </div>
-        <div class="trailer-grid section-gap">
-          ${planner.trailers
-            .map((trailer) => {
-              const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
-              const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
-              const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
-              return `
-                <article class="trailer-card ${remaining < 0 ? "over-limit" : ""}">
-                  <header>
-                    <strong>${trailer}</strong>
-                    <span>${data.count} tags</span>
-                  </header>
-                  <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-                  <p><strong>${number(data.weight)} lbs</strong> loaded</p>
-                  <small>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</small>
-                </article>
-              `;
-            })
-            .join("")}
-          ${trailerData.unassignedCount ? `
-            <article class="trailer-card unassigned-card">
-              <header><strong>Unassigned</strong><span>${trailerData.unassignedCount} tags</span></header>
-              <p><strong>${number(trailerData.unassignedWeight)} lbs</strong> waiting</p>
-              <small>Assign these before final shipping.</small>
-            </article>
-          ` : ""}
+        <div class="form-grid section-gap">
+          <label>New trailer code<span class="es">Codigo de trailer</span><input id="newTrailerCode" placeholder="Trailer 6, T-001, Load A" ${setupDisabled} /></label>
+          <button class="primary-action form-button" id="addTrailerFromCode" type="button" ${setupDisabled}>${t("Add trailer code", "Agregar codigo")}</button>
         </div>
+        ${renderTrailerDashboard(job, planner, trailerData, setupDisabled)}
       </div>
 
       <div class="planner-section section-gap">
@@ -3413,7 +3494,8 @@ function createBundleJob() {
     source: "Manual setup",
     imports: [],
     analysis: null,
-    bundles: []
+    bundles: [],
+    trailerSignoffs: {}
   };
   state.bundlePlanner.jobs.unshift(job);
   state.bundlePlanner.selectedJobId = job.id;
@@ -3567,6 +3649,7 @@ function bindTabEvents() {
   if ($("analyzePackage")) $("analyzePackage").addEventListener("click", analyzeDetailerPackage);
   if ($("importAnalyzedRows")) $("importAnalyzedRows").addEventListener("click", importAnalyzedPackageRows);
   if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
+  if ($("addTrailerFromCode")) $("addTrailerFromCode").addEventListener("click", addTrailerToPlanner);
   if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
   document.querySelectorAll("[data-bundle-job]").forEach((button) => {
     button.addEventListener("click", () => selectBundleJob(button.dataset.bundleJob));
@@ -3579,6 +3662,12 @@ function bindTabEvents() {
   });
   document.querySelectorAll("[data-delete-bundle-item]").forEach((button) => {
     button.addEventListener("click", () => deleteBundleItem(button.dataset.deleteBundleItem));
+  });
+  document.querySelectorAll("[data-signoff-trailer]").forEach((button) => {
+    button.addEventListener("click", () => signOffTrailer(button.dataset.signoffTrailer));
+  });
+  document.querySelectorAll("[data-clear-trailer-signoff]").forEach((button) => {
+    button.addEventListener("click", () => clearTrailerSignoff(button.dataset.clearTrailerSignoff));
   });
   document.querySelectorAll("[data-bundle]").forEach((input) => {
     input.addEventListener("change", updateBundleRow);
@@ -4085,6 +4174,9 @@ function updateBundleRow(event) {
   if (statusField && !canUpdateBundleProductionStatus()) return;
   if (qualityField && !canManageBundlePlanner()) return;
   if (!statusField && !qualityField && !canManageBundlePlanner()) return;
+  const previousTrailer = bundle.trailer || "";
+  const previousLoaded = Boolean(bundle.process?.loaded);
+  const previousShipped = Boolean(bundle.process?.shipped);
   if (field.startsWith("process.")) {
     const processField = field.split(".")[1];
     bundle.process = bundle.process || {};
@@ -4101,6 +4193,16 @@ function updateBundleRow(event) {
     to: field.startsWith("process.") ? event.target.checked : bundle[field],
     tag: bundle.tag || bundle.controlCode
   });
+  if (field === "trailer" && previousTrailer !== (bundle.trailer || "")) {
+    clearTrailerSignoffForChange(job, previousTrailer, "Trailer assignment changed");
+    clearTrailerSignoffForChange(job, bundle.trailer, "Trailer assignment changed");
+  }
+  if (field === "process.loaded" && previousLoaded !== Boolean(bundle.process?.loaded)) {
+    clearTrailerSignoffForChange(job, bundle.trailer, "Loaded status changed");
+  }
+  if (field === "process.shipped" && previousShipped !== Boolean(bundle.process?.shipped)) {
+    clearTrailerSignoffForChange(job, bundle.trailer, "Shipped status changed");
+  }
   syncBundlePlannerFromJob(job);
   saveState();
   render();
@@ -4108,12 +4210,52 @@ function updateBundleRow(event) {
 
 function addTrailerToPlanner() {
   if (!canManageBundlePlanner()) return;
+  const typedCode = $("newTrailerCode")?.value.trim();
   const nextNumber = state.bundlePlanner.trailers.length + 1;
-  const trailerName = `Trailer ${nextNumber}`;
+  const trailerName = typedCode || `Trailer ${nextNumber}`;
+  if (state.bundlePlanner.trailers.some((trailer) => sameName(trailer, trailerName))) {
+    showToast("Trailer code already exists");
+    return;
+  }
   state.bundlePlanner.trailers.push(trailerName);
-  logActivity("Trailer added", { job: state.bundlePlanner.jobName, field: trailerName });
+  logActivity("Trailer code added", { job: currentBundleJob()?.jobName || state.bundlePlanner.jobName, field: trailerName });
   saveState();
   render();
+}
+
+function signOffTrailer(trailerCode) {
+  if (!canManageBundlePlanner()) return;
+  const job = currentBundleJob();
+  if (!job || !trailerReadyForSignoff(job, trailerCode)) return;
+  job.trailerSignoffs = job.trailerSignoffs || {};
+  job.trailerSignoffs[trailerCode] = {
+    by: actorName(),
+    role: actorRole(),
+    at: timestamp()
+  };
+  syncBundlePlannerFromJob(job);
+  logActivity("Trailer signed off", { job: job.jobName, field: trailerCode, to: actorName() });
+  saveState();
+  render();
+  showToast("Trailer signed off");
+}
+
+function clearTrailerSignoffForChange(job, trailerCode, reason) {
+  if (!job?.trailerSignoffs?.[trailerCode]) return false;
+  const oldSignoff = job.trailerSignoffs[trailerCode];
+  delete job.trailerSignoffs[trailerCode];
+  logActivity("Trailer sign-off reopened", { job: job.jobName, field: trailerCode, from: oldSignoff.by, to: reason });
+  return true;
+}
+
+function clearTrailerSignoff(trailerCode) {
+  if (!canManageBundlePlanner()) return;
+  const job = currentBundleJob();
+  if (!clearTrailerSignoffForChange(job, trailerCode, "Manual reopen")) return;
+  syncBundlePlannerFromJob(job);
+  saveState();
+  render();
+  showToast("Trailer reopened");
 }
 
 function autoAssignTrailers() {
@@ -4122,10 +4264,12 @@ function autoAssignTrailers() {
   const job = currentBundleJob();
   const limit = Number(planner.maxTrailerWeight) || 48000;
   const trailers = planner.trailers.map((name) => ({ name, weight: 0 }));
+  const previousTrailerCodes = new Set((job?.bundles || []).map((bundle) => bundle.trailer).filter(Boolean));
   (job?.bundles || [])
     .slice()
     .sort((a, b) => (Number(b.weight) || 0) - (Number(a.weight) || 0))
     .forEach((bundle) => {
+      const oldTrailer = bundle.trailer || "";
       let trailer = trailers.find((candidate) => candidate.weight + (Number(bundle.weight) || 0) <= limit);
       if (!trailer) {
         trailer = { name: `Trailer ${trailers.length + 1}`, weight: 0 };
@@ -4133,8 +4277,13 @@ function autoAssignTrailers() {
       }
       trailer.weight += Number(bundle.weight) || 0;
       bundle.trailer = trailer.name;
+      if (oldTrailer !== bundle.trailer) {
+        previousTrailerCodes.add(oldTrailer);
+        previousTrailerCodes.add(bundle.trailer);
+      }
     });
   planner.trailers = trailers.map((trailer) => trailer.name);
+  previousTrailerCodes.forEach((trailerCode) => clearTrailerSignoffForChange(job, trailerCode, "Auto assignment changed"));
   syncBundlePlannerFromJob(job);
   logActivity("Bundles auto assigned to trailers", { job: job?.jobName, field: `${planner.trailers.length} trailers` });
   saveState();
