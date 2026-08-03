@@ -2506,6 +2506,103 @@ function deliverableTimesheetTotals(sheets) {
   );
 }
 
+function payrollSummaryRows(sheets) {
+  const byEmployee = new Map();
+  sheets.forEach((sheet) => {
+    (sheet.rows || []).forEach((row) => {
+      const person = personByName(row.employee) || {};
+      const regular = rowHours(row);
+      const pto = Number(row.pto) || 0;
+      const sick = Number(row.sick) || 0;
+      const total = regular + pto + sick;
+      const perDiem = Number(row.perDiem) || 0;
+      const reimbursement = Number(row.reimbursement) || 0;
+      const employee = row.employee || "Unknown";
+      if (!byEmployee.has(employee)) {
+        byEmployee.set(employee, {
+          employee,
+          normalCrew: person.group || "",
+          normalRole: person.role || "",
+          rate: Number(person.hourlyRate) || 0,
+          regular: 0,
+          pto: 0,
+          sick: 0,
+          total: 0,
+          perDiem: 0,
+          reimbursement: 0,
+          roles: new Set(),
+          foremen: new Set(),
+          crews: new Set(),
+          jobs: new Set(),
+          notes: [],
+          reimbursementNotes: []
+        });
+      }
+      const summary = byEmployee.get(employee);
+      summary.regular += regular;
+      summary.pto += pto;
+      summary.sick += sick;
+      summary.total += total;
+      summary.perDiem += perDiem;
+      summary.reimbursement += reimbursement;
+      if (rowRole(row)) summary.roles.add(rowRole(row));
+      if (sheet.foreman) summary.foremen.add(sheet.foreman);
+      if (sheet.group) summary.crews.add(sheet.group);
+      if (sheet.jobId) summary.jobs.add(jobName(sheet.jobId));
+      if ((row.notes || "").trim()) summary.notes.push(row.notes.trim());
+      if ((row.reimbursementNote || "").trim()) summary.reimbursementNotes.push(row.reimbursementNote.trim());
+    });
+  });
+  return [...byEmployee.values()]
+    .map((summary) => {
+      const grossWages = summary.total * summary.rate;
+      return {
+        ...summary,
+        roleList: [...summary.roles].join(", ") || summary.normalRole,
+        foremanList: [...summary.foremen].join(", "),
+        crewList: [...summary.crews].join(", ") || summary.normalCrew,
+        jobList: [...summary.jobs].join(", "),
+        notesList: [...new Set(summary.notes)].join("; "),
+        reimbursementNotesList: [...new Set(summary.reimbursementNotes)].join("; "),
+        grossWages,
+        totalPayable: grossWages + summary.perDiem + summary.reimbursement
+      };
+    })
+    .sort((a, b) => a.employee.localeCompare(b.employee));
+}
+
+function payrollSummaryTable(sheets) {
+  const rows = payrollSummaryRows(sheets);
+  if (!rows.length) return `<p class="sub">No payroll records found for this selection.</p>`;
+  return `
+    <table>
+      <thead>
+        <tr><th>Employee</th><th>Normal crew</th><th>Worked crew(s)</th><th>Role(s)</th><th>Regular</th><th>PTO</th><th>Sick</th><th>Total hours</th><th>Rate</th><th>Gross wages</th><th>Per diem</th><th>Reimbursement</th><th>Total payable est.</th><th>Reimb. note</th></tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map((row) => `<tr>
+            <td><strong>${escapeHtml(row.employee)}</strong></td>
+            <td>${escapeHtml(row.normalCrew || "")}</td>
+            <td>${escapeHtml(row.crewList || "")}</td>
+            <td>${escapeHtml(row.roleList || "")}</td>
+            <td>${preciseNumber(row.regular)}</td>
+            <td>${preciseNumber(row.pto)}</td>
+            <td>${preciseNumber(row.sick)}</td>
+            <td><strong>${preciseNumber(row.total)}</strong></td>
+            <td>${money(row.rate)}</td>
+            <td>${money(row.grossWages)}</td>
+            <td>${money(row.perDiem)}</td>
+            <td>${money(row.reimbursement)}</td>
+            <td><strong>${money(row.totalPayable)}</strong></td>
+            <td>${escapeHtml(row.reimbursementNotesList || "")}</td>
+          </tr>`)
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function deliverableTimesheetTable(sheets) {
   const showReimbursements = canManagePayrollAdjustments();
   const rows = sheets.flatMap((sheet) =>
@@ -3500,9 +3597,17 @@ function renderDeliverables() {
         <article class="metric"><span>Delays</span><strong>${productionStats.delayed}</strong><small>Production issues</small></article>` : ""}
       </div>
       <div class="deliverable-sections section-gap">
+        ${showTimesheets && canExportPayroll ? `
+        <section class="dashboard-data-section">
+          <h3>${t("Payroll Summary", "Resumen de nomina")}</h3>
+          <p class="sub">One row per employee for the selected period. Use this first for payroll review; use the timesheet detail below for audit questions.</p>
+          <div class="table-wrap">${payrollSummaryTable(sheets)}</div>
+        </section>
+        ` : ""}
         ${showTimesheets ? `
         <section class="dashboard-data-section">
-          <h3>${t("Timesheets", "Registro de horas")}</h3>
+          <h3>${t("Timesheet Detail", "Detalle de horas")}</h3>
+          <p class="sub">Detailed rows by foreman, crew, job, and week for review only.</p>
           <div class="table-wrap">${deliverableTimesheetTable(sheets)}</div>
         </section>
         ` : ""}
@@ -4572,41 +4677,31 @@ function submitProduction() {
 
 function exportPayrollCsv() {
   const sheets = state.activeTab === "deliverables" ? deliverableSheets() : [currentSheet()];
-  const headers = ["Area", "Week starting", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Reimbursement", "Reimbursement note", "Hourly rate", "Estimated gross pay", "Notes"];
-  const rows = sheets.flatMap((sheet) =>
-    sheet.rows.map((row) => {
-      const person = personByName(row.employee) || {};
-      const regular = rowHours(row);
-      const pto = Number(row.pto) || 0;
-      const sick = Number(row.sick) || 0;
-      const total = regular + pto + sick;
-      const perDiem = Number(row.perDiem) || 0;
-      const reimbursement = Number(row.reimbursement) || 0;
-      const rate = Number(person.hourlyRate) || 0;
-      const gross = total * rate + perDiem + reimbursement;
-      return [
-        areas[sheet.area]?.label || area().label,
-        sheet.weekStart || weekRangeDates(sheet.week).start,
-        sheet.week,
-        sheet.foreman,
-        jobName(sheet.jobId),
-        row.employee,
-        rowRole(row),
-        regular,
-        pto,
-        sick,
-        total,
-        perDiem,
-        reimbursement,
-        row.reimbursementNote || "",
-        rate,
-        gross.toFixed(2),
-        row.notes || ""
-      ];
-    })
-  );
-  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const range = state.activeTab === "deliverables" ? deliverableDateRange() : weekRangeDates(state.selectedWeek);
+  const headers = ["Area", "Period starting", "Period ending", "Employee", "Normal crew", "Worked crew(s)", "Foreman(s)", "Job(s)", "Role(s)", "Regular hours", "PTO", "Sick", "Total paid hours", "Hourly rate", "Gross wages", "Per diem", "Reimbursement", "Reimbursement note", "Total payable estimate", "Notes"];
+  const rows = payrollSummaryRows(sheets).map((row) => [
+    area().label,
+    range.fromDate || range.start,
+    range.toDate || range.end,
+    row.employee,
+    row.normalCrew,
+    row.crewList,
+    row.foremanList,
+    row.jobList,
+    row.roleList,
+    row.regular,
+    row.pto,
+    row.sick,
+    row.total,
+    row.rate,
+    row.grossWages.toFixed(2),
+    row.perDiem,
+    row.reimbursement,
+    row.reimbursementNotesList,
+    row.totalPayable.toFixed(2),
+    row.notesList
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const filename = `crewforge-payroll-${state.selectedArea}-${range.fromDate || range.start}-to-${range.toDate || range.end}.csv`;
   downloadFile(filename, csv);
   showToast("Payroll CSV exported");
