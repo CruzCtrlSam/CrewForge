@@ -74,13 +74,13 @@ const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman
 const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
-const assetVersion = "64";
+const assetVersion = "65";
 const asset = (path) => `${path}?v=${assetVersion}`;
 const areaArtwork = {
   rebarFab: asset("./assets/crewforge-rebar-fabrication.png"),
   solarPiles: asset("./assets/crewforge-solar-piles.png"),
   rebarInstall: asset("./assets/crewforge-thumbnail.png"),
-  bundleLab: asset("./assets/crewforge-rebar-fabrication.png")
+  bundleLab: asset("./assets/crewforge-bundle-tracking.svg")
 };
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
