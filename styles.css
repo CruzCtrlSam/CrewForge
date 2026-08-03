@@ -600,6 +600,10 @@ h3 {
   font-size: 16px;
 }
 
+.date-pill strong {
+  white-space: nowrap;
+}
+
 .login-pill small {
   margin-top: 2px;
   color: var(--blue-dark);
@@ -1884,7 +1888,12 @@ tr:last-child td {
 }
 
 .report-controls {
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.deliverable-sections {
+  display: grid;
+  gap: 16px;
 }
 
 .check-label {

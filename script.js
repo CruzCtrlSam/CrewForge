@@ -459,6 +459,10 @@ const defaultState = {
   selectedEmployeeReportToWeek: "2026-07-03",
   selectedEmployeeReportFromDate: "2026-06-29",
   selectedEmployeeReportToDate: "2026-07-03",
+  deliverableForeman: "all",
+  deliverablePackage: "timesheets",
+  deliverableFromDate: "2026-06-29",
+  deliverableToDate: "2026-07-03",
   jobDraftType: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
@@ -621,6 +625,10 @@ function upgradeState(next) {
   const defaultRange = weekRangeDates(next.selectedWeek || defaultState.selectedWeek);
   next.selectedEmployeeReportFromDate = next.selectedEmployeeReportFromDate || defaultRange.start;
   next.selectedEmployeeReportToDate = next.selectedEmployeeReportToDate || defaultRange.end;
+  next.deliverableForeman = next.deliverableForeman || "all";
+  next.deliverablePackage = next.deliverablePackage || "timesheets";
+  next.deliverableFromDate = next.deliverableFromDate || defaultRange.start;
+  next.deliverableToDate = next.deliverableToDate || defaultRange.end;
   next.selectedDocumentJob = next.selectedDocumentJob || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
@@ -1256,8 +1264,7 @@ function productionForArea() {
   });
 }
 
-function productionTotals() {
-  const items = productionForArea();
+function productionTotals(items = productionForArea()) {
   const planned = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : Number(item.planned) || 0), 0);
   const completed = items.reduce((sum, item) => sum + (item.productionMode === "foundation" ? 1 : item.productionMode === "custom" ? Number(item.completedQty) || 0 : completedWeight(item)), 0);
   const delayed = items.filter((item) => item.delay !== "No delay").length;
@@ -1675,11 +1682,12 @@ function renderShell() {
             </div>
             <p class="eyebrow">${area().label}</p>
             <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
-            ${isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${state.selectedWeek}</p>` : ""}
+            ${isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
-            <label class="select-label">Week ending<span class="es">Semana termina</span><select id="weekSelect">${setOptions(state.weeks, state.selectedWeek, (week) => week)}</select></label>
+            <label class="select-label">Week starting<span class="es">Semana empieza</span><input id="weekStartSelect" type="date" value="${selectedWeekStart()}" /></label>
+            <div class="login-pill date-pill">Week ending<span class="es">Semana termina</span><strong>${state.selectedWeek}</strong></div>
           </div>
         </header>
         ${renderActiveTab()}
@@ -1719,11 +1727,7 @@ function renderShell() {
     render();
     syncHistory(true);
   });
-  $("weekSelect").addEventListener("change", (event) => {
-    state.selectedWeek = event.target.value;
-    saveState();
-    render();
-  });
+  $("weekStartSelect").addEventListener("change", (event) => setSelectedWeekStart(event.target.value));
   bindTabEvents();
 }
 
@@ -2422,6 +2426,106 @@ function productionSummaryTable() {
   `;
 }
 
+function deliverablePackageLabel(value = state.deliverablePackage) {
+  if (value === "production") return "Production";
+  if (value === "both") return "Timesheets + Production";
+  return "Timesheets";
+}
+
+function deliverableForemanLabel(value = state.deliverableForeman) {
+  if (!value || value === "all") return "All foremen / crews";
+  return area().mode === "crew" ? `${value} / ${crewNameForForeman(value)}` : value;
+}
+
+function deliverableDateRange() {
+  const fallback = weekRangeDates(state.selectedWeek);
+  const fromDate = dateInputValue(state.deliverableFromDate, fallback.start);
+  const toDate = dateInputValue(state.deliverableToDate, fallback.end);
+  return fromDate <= toDate ? { fromDate, toDate } : { fromDate: toDate, toDate: fromDate };
+}
+
+function deliverableSheets() {
+  const { fromDate, toDate } = deliverableDateRange();
+  return Object.values(state.sheets || {})
+    .filter((sheet) => {
+      if (sheet.area !== state.selectedArea) return false;
+      if (state.deliverableForeman !== "all" && sheet.foreman !== state.deliverableForeman) return false;
+      const start = sheet.weekStart || weekRangeDates(sheet.week).start;
+      const end = sheet.week || addDays(start, 4);
+      return rangesOverlap(start, end, fromDate, toDate);
+    })
+    .sort((a, b) => `${a.week}:${a.foreman}`.localeCompare(`${b.week}:${b.foreman}`));
+}
+
+function deliverableProductionItems() {
+  const { fromDate, toDate } = deliverableDateRange();
+  const baseItems = roleIsElevated()
+    ? state.production.filter((item) => item.area === state.selectedArea)
+    : productionForArea();
+  return baseItems
+    .filter((item) => {
+      if (state.deliverableForeman !== "all" && (item.foreman || "") !== state.deliverableForeman) return false;
+      const itemDate = dateInputValue(item.completedAt || item.week || state.selectedWeek, state.selectedWeek);
+      return itemDate >= fromDate && itemDate <= toDate;
+    })
+    .sort((a, b) => `${a.completedAt || ""}:${a.foreman || ""}:${a.code || a.foundationId || ""}`.localeCompare(`${b.completedAt || ""}:${b.foreman || ""}:${b.code || b.foundationId || ""}`));
+}
+
+function deliverableTimesheetTotals(sheets) {
+  return sheets.reduce(
+    (totals, sheet) => {
+      totals.hours += totalHours(sheet);
+      totals.perDiem += totalPerDiem(sheet);
+      return totals;
+    },
+    { hours: 0, perDiem: 0 }
+  );
+}
+
+function deliverableTimesheetTable(sheets) {
+  const rows = sheets.flatMap((sheet) =>
+    sheet.rows.map((row) => {
+      const regular = rowHours(row);
+      const total = regular + (Number(row.pto) || 0) + (Number(row.sick) || 0);
+      return { sheet, row, regular, total };
+    })
+  );
+  if (!rows.length) return `<p class="sub">No timesheets found for this selection.</p>`;
+  return `
+    <table>
+      <thead><tr><th>Week</th><th>Foreman / crew</th><th>Job</th><th>Employee</th><th>Role</th><th>Total</th>${area().perDiem ? "<th>Per diem</th>" : ""}</tr></thead>
+      <tbody>
+        ${rows
+          .map(({ sheet, row, total }) => `<tr><td>${sheet.weekStart || weekRangeDates(sheet.week).start} to ${sheet.week}</td><td><strong>${sheet.foreman}</strong><br><small>${sheet.group || crewNameForForeman(sheet.foreman)}</small></td><td>${jobName(sheet.jobId)}</td><td><strong>${row.employee}</strong>${row.borrowed ? '<span class="tag">Borrowed</span>' : ""}</td><td>${rowRole(row)}</td><td>${preciseNumber(total)}</td>${area().perDiem ? `<td>${money(row.perDiem)}</td>` : ""}</tr>`)
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function deliverableProductionTable(items) {
+  if (!items.length) return `<p class="sub">No production records found for this selection.</p>`;
+  return `
+    <table>
+      <thead><tr><th>Date</th><th>Foreman</th><th>Code / ID</th><th>Job</th><th>Amount / Part</th><th>Progress</th><th>Delay</th></tr></thead>
+      <tbody>
+        ${items
+          .map((item) => {
+            const date = dateInputValue(item.completedAt || item.week || state.selectedWeek, state.selectedWeek);
+            if (item.productionMode === "foundation") {
+              return `<tr><td>${date}</td><td>${item.foreman || ""}</td><td><strong>${item.foundationId}</strong></td><td>${jobName(item.jobId)}</td><td>${item.component}</td><td>Complete</td><td>${item.delay}</td></tr>`;
+            }
+            if (item.productionMode === "custom") {
+              return `<tr><td>${date}</td><td>${item.foreman || ""}</td><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} ${item.unit || ""}</td><td>${preciseNumber(item.completedQty || 0)} / ${preciseNumber(item.planned || 0)} ${item.unit || ""}</td><td>${item.delay}</td></tr>`;
+            }
+            return `<tr><td>${date}</td><td>${item.foreman || ""}</td><td><strong>${item.code}</strong></td><td>${jobName(item.jobId)}</td><td>${preciseNumber(item.completedQty || 0)} / ${productionQuantity(item) || "-"}</td><td>${number(completedWeight(item))} lbs</td><td>${item.delay}</td></tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function uniqueEmployees() {
   return [...new Set(state.people.map((person) => person.name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
@@ -2440,6 +2544,27 @@ function addDays(dateValue, amount) {
 function weekRangeDates(weekEnding) {
   const end = dateInputValue(weekEnding, defaultState.selectedWeek);
   return { start: addDays(end, -4), end };
+}
+
+function selectedWeekStart() {
+  return weekRangeDates(state.selectedWeek).start;
+}
+
+function setSelectedWeekStart(value) {
+  const fallbackStart = selectedWeekStart();
+  const start = dateInputValue(value, fallbackStart);
+  const weekEnding = addDays(start, 4);
+  state.selectedWeek = weekEnding;
+  if (!state.weeks.includes(weekEnding)) {
+    state.weeks.push(weekEnding);
+    state.weeks.sort();
+  }
+  const key = sheetKey(weekEnding, state.selectedArea, state.currentForeman);
+  if (!state.sheets[key]) state.sheets[key] = seedSheet();
+  state.sheets[key].week = weekEnding;
+  state.sheets[key].weekStart = start;
+  saveState();
+  render();
 }
 
 function rangesOverlap(startA, endA, startB, endB) {
@@ -2668,6 +2793,7 @@ function renderTimesheet() {
       <div class="form-grid section-gap">
         ${showTimesheetJob ? `<label>Job<span class="es">Trabajo</span><select id="sheetJob" ${!editable ? "disabled" : ""}>${setOptions(selectedJobs(), sheet.jobId, (job) => job.name, (job) => job.id)}</select></label>` : ""}
         <label>Week starting<span class="es">Semana empieza</span><input id="sheetWeekStart" type="date" value="${sheet.weekStart || weekRangeDates(sheet.week).start}" ${!editable ? "disabled" : ""} /></label>
+        <label>Week ending<span class="es">Semana termina</span><input value="${sheet.week}" disabled /></label>
         <label>Foreman<span class="es">Capataz</span><select id="sheetForeman" ${!editable || state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), sheet.foreman)}</select></label>
         ${isCrewArea ? `<label>Crew<span class="es">Cuadrilla</span><input value="${sheet.group || crewNameForForeman(sheet.foreman)}" disabled /></label>` : `<label>Shift<span class="es">Turno</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>`}
         <label>Status<span class="es">Estado</span><select id="sheetStatus" ${!roleIsElevated() ? "disabled" : ""}>${setOptions(["Draft", "Submitted", "Approved"], sheet.status)}</select></label>
@@ -3298,37 +3424,56 @@ function renderEmployeeReports() {
 }
 
 function renderDeliverables() {
-  const sheet = currentSheet();
   const canExportPayroll = ["Admin", "Payroll"].includes(state.selectedRole);
-  const showProductionDeliverables = state.selectedRole !== "Payroll";
+  const foremen = foremenForArea();
+  if (state.deliverableForeman !== "all" && !foremen.some((person) => person.name === state.deliverableForeman)) {
+    state.deliverableForeman = "all";
+  }
+  const reportPackage = state.deliverablePackage || "timesheets";
+  const showTimesheets = reportPackage === "timesheets" || reportPackage === "both";
+  const showProductionDeliverables = reportPackage === "production" || reportPackage === "both";
+  const sheets = deliverableSheets();
+  const productionItems = deliverableProductionItems();
+  const timesheetTotals = deliverableTimesheetTotals(sheets);
+  const productionStats = productionTotals(productionItems);
+  const { fromDate, toDate } = deliverableDateRange();
+  const foremanOptions = [{ value: "all", label: "All foremen / crews" }, ...foremen.map((person) => ({ value: person.name, label: deliverableForemanLabel(person.name) }))];
+  const subtitle = `${deliverableForemanLabel()} · ${deliverablePackageLabel(reportPackage)} · ${fromDate} to ${toDate}`;
   return `
     <section class="panel printable-report deliverables-report">
-      ${reportHeader("Deliverables", state.selectedWeek)}
+      ${reportHeader("Deliverables", subtitle)}
       <div class="split">
-        <div><h2>${t("Deliverables", "Entregables")}</h2><p class="sub">Choose the package payroll or management needs.</p></div>
+        <div><h2>${t("Deliverables", "Entregables")}</h2><p class="sub">Choose the foreman/crew, report type, and dates before printing or exporting.</p></div>
       </div>
       <div class="form-grid section-gap report-controls no-print">
-        <label>Total period<span class="es">Periodo total</span><select id="periodSelect">${setOptions(["This week", "This month", "Custom weeks"], "This week")}</select></label>
-        <label>From week<span class="es">Desde semana</span><select id="fromWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
-        <label>To week<span class="es">Hasta semana</span><select id="toWeek">${setOptions(state.weeks, state.selectedWeek)}</select></label>
+        <label>Foreman / crew<span class="es">Capataz / cuadrilla</span><select id="deliverableForeman">${setOptions(foremanOptions, state.deliverableForeman, (option) => option.label, (option) => option.value)}</select></label>
+        <label>Report type<span class="es">Tipo de reporte</span><select id="deliverablePackage">${setOptions([
+          { value: "timesheets", label: "Timesheets" },
+          { value: "production", label: "Production" },
+          { value: "both", label: "Timesheets + Production" }
+        ], reportPackage, (option) => option.label, (option) => option.value)}</select></label>
+        <label>From date<span class="es">Desde fecha</span><input id="deliverableFromDate" type="date" value="${fromDate}" /></label>
+        <label>To date<span class="es">Hasta fecha</span><input id="deliverableToDate" type="date" value="${toDate}" /></label>
         <button class="secondary-action" data-print="deliverables">${t("Export PDF", "Exportar PDF")}</button>
-        ${canExportPayroll ? `<button class="secondary-action" id="exportPayrollCsv" type="button">${t("Export Payroll CSV", "Exportar CSV nomina")}</button>` : ""}
+        ${canExportPayroll && showTimesheets ? `<button class="secondary-action" id="exportPayrollCsv" type="button">${t("Export Payroll CSV", "Exportar CSV nomina")}</button>` : ""}
       </div>
       <div class="metric-grid section-gap">
-        <article class="metric"><span>Hours</span><strong>${number(totalHours(sheet))}</strong><small>Selected week</small></article>
-        ${area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(totalPerDiem(sheet))}</strong><small>Installation only</small></article>` : ""}
-        ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionTotals().completed)}</strong><small>Selected area</small></article>
-        <article class="metric"><span>Delays</span><strong>${productionTotals().delayed}</strong><small>Production issues</small></article>` : ""}
+        ${showTimesheets ? `<article class="metric"><span>Hours</span><strong>${number(timesheetTotals.hours)}</strong><small>${sheets.length} timesheet(s)</small></article>` : ""}
+        ${showTimesheets && area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(timesheetTotals.perDiem)}</strong><small>Installation only</small></article>` : ""}
+        ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionStats.completed)}</strong><small>${productionItems.length} production record(s)</small></article>
+        <article class="metric"><span>Delays</span><strong>${productionStats.delayed}</strong><small>Production issues</small></article>` : ""}
       </div>
-      <div class="report-grid dashboard-section-grid section-gap">
+      <div class="deliverable-sections section-gap">
+        ${showTimesheets ? `
         <section class="dashboard-data-section">
           <h3>${t("Timesheets", "Registro de horas")}</h3>
-          <div class="table-wrap">${timesheetSummaryTable(sheet)}</div>
+          <div class="table-wrap">${deliverableTimesheetTable(sheets)}</div>
         </section>
+        ` : ""}
         ${showProductionDeliverables ? `
           <section class="dashboard-data-section">
             <h3>${t("Production", "Produccion")}</h3>
-            <div class="table-wrap">${productionSummaryTable()}</div>
+            <div class="table-wrap">${deliverableProductionTable(productionItems)}</div>
           </section>
         ` : ""}
       </div>
@@ -3681,11 +3826,39 @@ function bindTabEvents() {
   });
 
   if ($("sheetJob")) $("sheetJob").addEventListener("change", (event) => updateSheet({ jobId: event.target.value }));
-  if ($("sheetWeekStart")) $("sheetWeekStart").addEventListener("change", (event) => updateSheet({ weekStart: event.target.value }, "Week start updated"));
+  if ($("sheetWeekStart")) $("sheetWeekStart").addEventListener("change", (event) => setSelectedWeekStart(event.target.value));
   if ($("sheetForeman")) {
     $("sheetForeman").addEventListener("change", (event) => {
       if (!editable) return;
       state.currentForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("deliverableForeman")) {
+    $("deliverableForeman").addEventListener("change", (event) => {
+      state.deliverableForeman = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("deliverablePackage")) {
+    $("deliverablePackage").addEventListener("change", (event) => {
+      state.deliverablePackage = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("deliverableFromDate")) {
+    $("deliverableFromDate").addEventListener("change", (event) => {
+      state.deliverableFromDate = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("deliverableToDate")) {
+    $("deliverableToDate").addEventListener("change", (event) => {
+      state.deliverableToDate = event.target.value;
       saveState();
       render();
     });
@@ -4361,37 +4534,40 @@ function submitProduction() {
 }
 
 function exportPayrollCsv() {
-  const sheet = currentSheet();
+  const sheets = state.activeTab === "deliverables" ? deliverableSheets() : [currentSheet()];
   const headers = ["Area", "Week starting", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Notes"];
-  const rows = sheet.rows.map((row) => {
-    const person = personByName(row.employee) || {};
-    const regular = rowHours(row);
-    const pto = Number(row.pto) || 0;
-    const sick = Number(row.sick) || 0;
-    const total = regular + pto + sick;
-    const perDiem = Number(row.perDiem) || 0;
-    const rate = Number(person.hourlyRate) || 0;
-    const gross = total * rate + perDiem;
-    return [
-      area().label,
-      sheet.weekStart || weekRangeDates(sheet.week).start,
-      sheet.week,
-      sheet.foreman,
-      jobName(sheet.jobId),
-      row.employee,
-      rowRole(row),
-      regular,
-      pto,
-      sick,
-      total,
-      perDiem,
-      rate,
-      gross.toFixed(2),
-      row.notes || ""
-    ];
-  });
+  const rows = sheets.flatMap((sheet) =>
+    sheet.rows.map((row) => {
+      const person = personByName(row.employee) || {};
+      const regular = rowHours(row);
+      const pto = Number(row.pto) || 0;
+      const sick = Number(row.sick) || 0;
+      const total = regular + pto + sick;
+      const perDiem = Number(row.perDiem) || 0;
+      const rate = Number(person.hourlyRate) || 0;
+      const gross = total * rate + perDiem;
+      return [
+        areas[sheet.area]?.label || area().label,
+        sheet.weekStart || weekRangeDates(sheet.week).start,
+        sheet.week,
+        sheet.foreman,
+        jobName(sheet.jobId),
+        row.employee,
+        rowRole(row),
+        regular,
+        pto,
+        sick,
+        total,
+        perDiem,
+        rate,
+        gross.toFixed(2),
+        row.notes || ""
+      ];
+    })
+  );
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
-  const filename = `crewforge-payroll-${state.selectedArea}-${state.selectedWeek}.csv`;
+  const range = state.activeTab === "deliverables" ? deliverableDateRange() : weekRangeDates(state.selectedWeek);
+  const filename = `crewforge-payroll-${state.selectedArea}-${range.fromDate || range.start}-to-${range.toDate || range.end}.csv`;
   downloadFile(filename, csv);
   showToast("Payroll CSV exported");
 }
@@ -5099,12 +5275,13 @@ function deleteJob(jobId) {
 }
 
 function duplicateWeek() {
-  const nextDate = new Date(`${state.selectedWeek}T00:00:00`);
-  nextDate.setDate(nextDate.getDate() + 7);
-  const week = prompt("Duplicate to week ending:", nextDate.toISOString().slice(0, 10));
-  if (!week) return;
+  const nextStart = addDays(selectedWeekStart(), 7);
+  const weekStart = dateInputValue(prompt("Duplicate to week starting:", nextStart), "");
+  if (!weekStart) return;
+  const week = addDays(weekStart, 4);
   const copy = structuredClone(currentSheet());
   copy.week = week;
+  copy.weekStart = weekStart;
   copy.status = "Draft";
   state.sheets[sheetKey(week, state.selectedArea, copy.foreman)] = copy;
   if (!state.weeks.includes(week)) state.weeks.push(week);
