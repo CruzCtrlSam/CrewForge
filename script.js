@@ -772,6 +772,8 @@ function upgradeState(next) {
     sheet.rows = (sheet.rows || []).map((row) => ({
       ...row,
       employee: aliasName(row.employee),
+      reimbursement: Number(row.reimbursement) || 0,
+      reimbursementNote: row.reimbursementNote || "",
       lightDuty: row.lightDuty || {}
     }));
   });
@@ -939,6 +941,18 @@ function roleIsElevated() {
 
 function roleIsOffice() {
   return ["Payroll", "Management", "Admin"].includes(state.selectedRole);
+}
+
+function canManagePeopleSetup() {
+  return state.selectedRole === "Admin";
+}
+
+function canEditPayRates() {
+  return ["Admin", "Payroll"].includes(state.selectedRole);
+}
+
+function canManagePayrollAdjustments() {
+  return ["Admin", "Payroll"].includes(state.selectedRole);
 }
 
 function roleIsProductionVisible() {
@@ -1128,6 +1142,8 @@ function blankRow(person) {
     pto: 0,
     sick: 0,
     perDiem: 0,
+    reimbursement: 0,
+    reimbursementNote: "",
     lightDuty: {},
     borrowed: false,
     notes: ""
@@ -1140,6 +1156,8 @@ function rowHasEnteredData(row) {
     Number(row.pto) ||
     Number(row.sick) ||
     Number(row.perDiem) ||
+    Number(row.reimbursement) ||
+    Boolean((row.reimbursementNote || "").trim()) ||
     Boolean((row.notes || "").trim())
   );
 }
@@ -1243,6 +1261,10 @@ function totalHours(sheet = currentSheet()) {
 
 function totalPerDiem(sheet = currentSheet()) {
   return sheet.rows.reduce((sum, row) => sum + (Number(row.perDiem) || 0), 0);
+}
+
+function totalReimbursement(sheet = currentSheet()) {
+  return sheet.rows.reduce((sum, row) => sum + (Number(row.reimbursement) || 0), 0);
 }
 
 function personByName(name) {
@@ -2390,14 +2412,15 @@ function renderDashboard() {
 }
 
 function timesheetSummaryTable(sheet) {
+  const showReimbursements = canManagePayrollAdjustments();
   return `
     <table>
-      <thead><tr><th>Employee</th><th>Role</th><th>Total</th>${area().perDiem ? "<th>Per diem</th>" : ""}</tr></thead>
+      <thead><tr><th>Employee</th><th>Role</th><th>Total</th>${area().perDiem ? "<th>Per diem</th>" : ""}${showReimbursements ? "<th>Reimbursement</th>" : ""}</tr></thead>
       <tbody>
         ${sheet.rows
           .map((row) => {
             const person = personByName(row.employee) || {};
-            return `<tr><td><strong>${row.employee}</strong>${row.borrowed ? '<span class="tag">Borrowed</span>' : ""}</td><td>${rowRole(row)}</td><td>${rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0)}</td>${area().perDiem ? `<td>${money(row.perDiem)}</td>` : ""}</tr>`;
+            return `<tr><td><strong>${row.employee}</strong>${row.borrowed ? '<span class="tag">Borrowed</span>' : ""}</td><td>${rowRole(row)}</td><td>${rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0)}</td>${area().perDiem ? `<td>${money(row.perDiem)}</td>` : ""}${showReimbursements ? `<td>${money(row.reimbursement)}</td>` : ""}</tr>`;
           })
           .join("")}
       </tbody>
@@ -2476,13 +2499,15 @@ function deliverableTimesheetTotals(sheets) {
     (totals, sheet) => {
       totals.hours += totalHours(sheet);
       totals.perDiem += totalPerDiem(sheet);
+      totals.reimbursement += totalReimbursement(sheet);
       return totals;
     },
-    { hours: 0, perDiem: 0 }
+    { hours: 0, perDiem: 0, reimbursement: 0 }
   );
 }
 
 function deliverableTimesheetTable(sheets) {
+  const showReimbursements = canManagePayrollAdjustments();
   const rows = sheets.flatMap((sheet) =>
     sheet.rows.map((row) => {
       const regular = rowHours(row);
@@ -2493,10 +2518,10 @@ function deliverableTimesheetTable(sheets) {
   if (!rows.length) return `<p class="sub">No timesheets found for this selection.</p>`;
   return `
     <table>
-      <thead><tr><th>Week</th><th>Foreman / crew</th><th>Job</th><th>Employee</th><th>Role</th><th>Total</th>${area().perDiem ? "<th>Per diem</th>" : ""}</tr></thead>
+      <thead><tr><th>Week</th><th>Foreman / crew</th><th>Job</th><th>Employee</th><th>Role</th><th>Total</th>${area().perDiem ? "<th>Per diem</th>" : ""}${showReimbursements ? "<th>Reimbursement</th><th>Reimb. note</th>" : ""}</tr></thead>
       <tbody>
         ${rows
-          .map(({ sheet, row, total }) => `<tr><td>${sheet.weekStart || weekRangeDates(sheet.week).start} to ${sheet.week}</td><td><strong>${sheet.foreman}</strong><br><small>${sheet.group || crewNameForForeman(sheet.foreman)}</small></td><td>${jobName(sheet.jobId)}</td><td><strong>${row.employee}</strong>${row.borrowed ? '<span class="tag">Borrowed</span>' : ""}</td><td>${rowRole(row)}</td><td>${preciseNumber(total)}</td>${area().perDiem ? `<td>${money(row.perDiem)}</td>` : ""}</tr>`)
+          .map(({ sheet, row, total }) => `<tr><td>${sheet.weekStart || weekRangeDates(sheet.week).start} to ${sheet.week}</td><td><strong>${sheet.foreman}</strong><br><small>${sheet.group || crewNameForForeman(sheet.foreman)}</small></td><td>${jobName(sheet.jobId)}</td><td><strong>${row.employee}</strong>${row.borrowed ? '<span class="tag">Borrowed</span>' : ""}</td><td>${rowRole(row)}</td><td>${preciseNumber(total)}</td>${area().perDiem ? `<td>${money(row.perDiem)}</td>` : ""}${showReimbursements ? `<td>${money(row.reimbursement)}</td><td>${escapeHtml(row.reimbursementNote || "")}</td>` : ""}</tr>`)
           .join("")}
       </tbody>
     </table>
@@ -2611,6 +2636,7 @@ function employeeReportRecords(employee, fromDate = state.selectedWeek, toDate =
           const pto = Number(row.pto) || 0;
           const sick = Number(row.sick) || 0;
           const perDiem = Number(row.perDiem) || 0;
+          const reimbursement = Number(row.reimbursement) || 0;
           const rate = Number(person.hourlyRate) || 0;
           const lightDutyDays = days.filter((day) => row.lightDuty?.[day]).map((day) => dayLabels[days.indexOf(day)]);
           return {
@@ -2629,8 +2655,10 @@ function employeeReportRecords(employee, fromDate = state.selectedWeek, toDate =
             sick,
             total: regular + pto + sick,
             perDiem,
+            reimbursement,
+            reimbursementNote: row.reimbursementNote || "",
             rate,
-            gross: (regular + pto + sick) * rate + perDiem,
+            gross: (regular + pto + sick) * rate + perDiem + reimbursement,
             borrowed: row.borrowed,
             dol: person.dol,
             lightDutyDays,
@@ -2650,6 +2678,7 @@ function employeeReportTotals(records) {
     sick: records.reduce((sum, record) => sum + record.sick, 0),
     total: records.reduce((sum, record) => sum + record.total, 0),
     perDiem: records.reduce((sum, record) => sum + record.perDiem, 0),
+    reimbursement: records.reduce((sum, record) => sum + record.reimbursement, 0),
     gross: records.reduce((sum, record) => sum + record.gross, 0)
   };
 }
@@ -2661,7 +2690,7 @@ function employeeReportTable(records) {
   return `
     <table>
       <thead>
-        <tr><th>Work period</th><th>Area</th><th>Job</th><th>Foreman</th><th>Role</th><th>Hours</th><th>PTO</th><th>Sick</th><th>Per diem</th><th>Rate</th><th>Gross est.</th><th>Notes</th></tr>
+        <tr><th>Work period</th><th>Area</th><th>Job</th><th>Foreman</th><th>Role</th><th>Hours</th><th>PTO</th><th>Sick</th><th>Per diem</th><th>Reimbursement</th><th>Rate</th><th>Gross est.</th><th>Notes</th><th>Reimb. note</th></tr>
       </thead>
       <tbody>
         ${records
@@ -2675,9 +2704,11 @@ function employeeReportTable(records) {
             <td>${preciseNumber(record.pto)}</td>
             <td>${preciseNumber(record.sick)}</td>
             <td>${money(record.perDiem)}</td>
+            <td>${money(record.reimbursement)}</td>
             <td>${money(record.rate)}</td>
             <td>${money(record.gross)}</td>
-            <td>${record.notes}</td>
+            <td>${escapeHtml(record.notes)}</td>
+            <td>${escapeHtml(record.reimbursementNote)}</td>
           </tr>`)
           .join("")}
       </tbody>
@@ -2778,6 +2809,7 @@ function renderTimesheet() {
   const useCards = isFieldEntryMode();
   const showTimesheetJob = state.selectedArea === "rebarInstall";
   const isCrewArea = area().mode === "crew";
+  const showPayrollAdjustments = canManagePayrollAdjustments();
   const helperText =
     isCrewArea
       ? t("Choose a foreman and that foreman's crew fills in automatically.", "Escoja un capataz y se llena su cuadrilla automaticamente.")
@@ -2804,7 +2836,7 @@ function renderTimesheet() {
         <table class="entry-table ${!editable ? "locked" : ""}">
           <thead>
             <tr>
-              <th>Employee</th><th>Role</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>PTO</th><th>Sick</th>${area().perDiem ? "<th>Per diem</th>" : ""}${area().dol ? "<th>DOL</th>" : ""}<th>Total</th><th>Notes</th><th>Actions</th>
+              <th>Employee</th><th>Role</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th><th>PTO</th><th>Sick</th>${area().perDiem ? "<th>Per diem</th>" : ""}${showPayrollAdjustments ? `<th>Reimbursement<span class="es">Reembolso</span></th><th>Reimb. note<span class="es">Nota reembolso</span></th>` : ""}${area().dol ? "<th>DOL</th>" : ""}<th>Total</th><th>Notes</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2817,6 +2849,7 @@ function renderTimesheet() {
       <div class="action-row section-gap">
         <strong>Total: ${number(totalHours(sheet))} hours</strong>
         ${area().perDiem ? `<strong>Per diem: ${money(totalPerDiem(sheet))}</strong>` : ""}
+        ${showPayrollAdjustments ? `<strong>Reimbursements: ${money(totalReimbursement(sheet))}</strong>` : ""}
         <button class="secondary-action" id="duplicateWeek" type="button">${t("Duplicate Week", "Duplicar semana")}</button>
         <button class="secondary-action" data-print="timesheet" type="button">${t("Export PDF", "Exportar PDF")}</button>
         <button class="primary-action" id="submitSheet" type="button" ${!editable ? "disabled" : ""}>${t("Submit Week", "Enviar semana")}</button>
@@ -2938,6 +2971,7 @@ function renderTimesheetRow(row, index, editable) {
       <td><input data-row="${index}" data-field="pto" type="number" min="0" step="0.25" value="${row.pto || 0}" ${disabled} /></td>
       <td><input data-row="${index}" data-field="sick" type="number" min="0" step="0.25" value="${row.sick || 0}" ${disabled} /></td>
       ${area().perDiem ? `<td><div class="money-input"><span>$</span><input data-row="${index}" data-field="perDiem" type="number" min="0" step="1" value="${row.perDiem || 0}" ${disabled} /></div></td>` : ""}
+      ${canManagePayrollAdjustments() ? `<td><div class="money-input"><span>$</span><input data-row="${index}" data-field="reimbursement" type="number" min="0" step="0.01" value="${row.reimbursement || 0}" ${disabled} /></div></td><td><input class="compact-note" data-row="${index}" data-field="reimbursementNote" value="${escapeHtml(row.reimbursementNote || "")}" placeholder="Reason" ${disabled} /></td>` : ""}
       ${area().dol ? `<td>${person.dol ? "Yes" : ""}</td>` : ""}
       <td><strong>${rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0)}</strong></td>
       <td><textarea data-row="${index}" data-field="notes" ${disabled}>${row.notes || ""}</textarea></td>
@@ -3410,13 +3444,14 @@ function renderEmployeeReports() {
         <article class="metric"><span>Normal crew</span><strong>${normalCrew}</strong><small>${areaLabel}</small></article>
         <article class="metric"><span>Normal role</span><strong>${normalRole}</strong><small>Current people setup</small></article>
         <article class="metric"><span>Hourly rate</span><strong>${money(person.hourlyRate || 0)}</strong><small>Visible to office users</small></article>
-        <article class="metric"><span>Selected period gross est.</span><strong>${money(employeeTotals.gross)}</strong><small>Hours x rate + per diem</small></article>
+        <article class="metric"><span>Selected period gross est.</span><strong>${money(employeeTotals.gross)}</strong><small>Hours x rate + per diem + reimbursements</small></article>
       </div>
       <div class="metric-grid section-gap">
         <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
         <article class="metric"><span>Regular hours</span><strong>${preciseNumber(employeeTotals.regular)}</strong><small>Across selected period</small></article>
         <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
         <article class="metric"><span>Per diem</span><strong>${money(employeeTotals.perDiem)}</strong><small>Installation only</small></article>
+        <article class="metric"><span>Reimbursements</span><strong>${money(employeeTotals.reimbursement)}</strong><small>Payroll/admin entered</small></article>
       </div>
       <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
     </section>
@@ -3460,6 +3495,7 @@ function renderDeliverables() {
       <div class="metric-grid section-gap">
         ${showTimesheets ? `<article class="metric"><span>Hours</span><strong>${number(timesheetTotals.hours)}</strong><small>${sheets.length} timesheet(s)</small></article>` : ""}
         ${showTimesheets && area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(timesheetTotals.perDiem)}</strong><small>Installation only</small></article>` : ""}
+        ${showTimesheets && canExportPayroll ? `<article class="metric"><span>Reimbursements</span><strong>${money(timesheetTotals.reimbursement)}</strong><small>Payroll adjustments</small></article>` : ""}
         ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionStats.completed)}</strong><small>${productionItems.length} production record(s)</small></article>
         <article class="metric"><span>Delays</span><strong>${productionStats.delayed}</strong><small>Production issues</small></article>` : ""}
       </div>
@@ -3491,9 +3527,10 @@ function renderDeliverables() {
 }
 
 function renderSetup() {
-  const admin = ["Admin", "Payroll"].includes(state.selectedRole);
-  if (area().mode === "crew") return renderCrewSetup(admin);
-  return renderShiftSetup(admin);
+  const canManage = canManagePeopleSetup();
+  const canEditRates = canEditPayRates();
+  if (area().mode === "crew") return renderCrewSetup(canManage, canEditRates);
+  return renderShiftSetup(canManage, canEditRates);
 }
 
 function renderForemanRenameTool(foreman) {
@@ -3529,7 +3566,7 @@ function renderForemanCrewAdminTool(foreman, crewMembers) {
   `;
 }
 
-function renderCrewSetup(admin) {
+function renderCrewSetup(canManage, canEditRates) {
   const foreman = setupForemanName();
   const crew = foreman ? crewNameForForeman(foreman) : "";
   const crewMembers = peopleForArea().filter((person) => person.group === crew);
@@ -3539,21 +3576,21 @@ function renderCrewSetup(admin) {
       <div class="split">
         <div><h2>${t("People / Crews", "Personas / Cuadrillas")}</h2><p class="sub">Select a foreman to manage the default crew assigned to that foreman.</p></div>
       </div>
-      ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or crews. <span class="es">Solo Payroll/Admin puede cambiar cuadrillas permanentes.</span></div>` : ""}
+      ${!canManage ? `<div class="notice">Only Admin can permanently change people or crews. Payroll can update hourly rates. <span class="es">Solo Admin puede cambiar personas o cuadrillas. Payroll puede actualizar pagos por hora.</span></div>` : ""}
       <div class="form-grid section-gap">
         <label>Foreman<span class="es">Capataz</span><select id="setupForemanSelect">${foreman ? setOptions(foremenForArea().map((person) => person.name), foreman) : '<option value="">No foremen set up</option>'}</select></label>
         <label>Crew<span class="es">Cuadrilla</span><input value="${crew || "No crew selected"}" disabled /></label>
         <label>Crew size<span class="es">Integrantes</span><input value="${crewMembers.length}" disabled /></label>
       </div>
-      ${admin ? renderForemanCrewAdminTool(foreman, crewMembers) : ""}
-      ${admin && foreman ? renderForemanRenameTool(foreman) : ""}
+      ${canManage ? renderForemanCrewAdminTool(foreman, crewMembers) : ""}
+      ${canManage && foreman ? renderForemanRenameTool(foreman) : ""}
       <div class="crew-add-grid section-gap">
-        <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!admin ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
-        <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!admin ? "disabled" : ""} /></label>
-        <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles.filter((role) => role !== "Foreman"), "Rodbuster")}</select></label>
-        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="crewHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!admin ? "disabled" : ""} /></div></label>
-        <label class="check-label"><input id="crewNewDol" type="checkbox" ${!admin ? "disabled" : ""} /> DOL apprentice</label>
-        <button class="primary-action compact-add" id="addCrewPerson" type="button" ${!admin ? "disabled" : ""}>${t("Add", "Agregar")}</button>
+        <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!canManage ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
+        <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!canManage ? "disabled" : ""} /></label>
+        <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles.filter((role) => role !== "Foreman"), "Rodbuster")}</select></label>
+        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="crewHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!canManage ? "disabled" : ""} /></div></label>
+        <label class="check-label"><input id="crewNewDol" type="checkbox" ${!canManage ? "disabled" : ""} /> DOL apprentice</label>
+        <button class="primary-action compact-add" id="addCrewPerson" type="button" ${!canManage ? "disabled" : ""}>${t("Add", "Agregar")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
@@ -3562,11 +3599,11 @@ function renderCrewSetup(admin) {
             ${crewMembers
               .map((person) => `<tr>
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!admin || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
                 <td>${person.group}</td>
-                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!admin ? "disabled" : ""} /></div></td>
+                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
                 <td>${person.dol ? "Yes" : "No"}</td>
-                <td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!admin ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td>
+                <td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!canManage ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td>
               </tr>`)
               .join("")}
           </tbody>
@@ -3576,21 +3613,21 @@ function renderCrewSetup(admin) {
   `;
 }
 
-function renderShiftSetup(admin) {
+function renderShiftSetup(canManage, canEditRates) {
   const selectedForeman = setupForemanName();
   return `
     <section class="panel">
       <div class="split">
         <div><h2>${t("People / Shifts", "Personas / Turnos")}</h2><p class="sub">Admin keeps default day or night shift assignments here.</p></div>
       </div>
-      ${!admin ? `<div class="notice">Only Payroll/Admin can permanently change people or shifts. <span class="es">Solo Payroll/Admin puede cambiar turnos permanentes.</span></div>` : ""}
-      ${admin && selectedForeman ? renderForemanRenameTool(selectedForeman) : ""}
+      ${!canManage ? `<div class="notice">Only Admin can permanently change people or shifts. Payroll can update hourly rates. <span class="es">Solo Admin puede cambiar personas o turnos. Payroll puede actualizar pagos por hora.</span></div>` : ""}
+      ${canManage && selectedForeman ? renderForemanRenameTool(selectedForeman) : ""}
       <div class="people-form section-gap">
-        <label>Name<span class="es">Nombre</span><input id="personName" ${!admin ? "disabled" : ""} /></label>
-        <label>Role<span class="es">Puesto</span><select id="personRole" ${!admin ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
-        <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
-        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="personHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!admin ? "disabled" : ""} /></div></label>
-        <button class="primary-action" id="savePerson" type="button" ${!admin ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
+        <label>Name<span class="es">Nombre</span><input id="personName" ${!canManage ? "disabled" : ""} /></label>
+        <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
+        <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
+        <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="personHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!canManage ? "disabled" : ""} /></div></label>
+        <button class="primary-action" id="savePerson" type="button" ${!canManage ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
@@ -3599,10 +3636,10 @@ function renderShiftSetup(admin) {
             ${peopleForArea()
               .map((person) => `<tr>
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!admin || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
-                <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!admin ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
-                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!admin ? "disabled" : ""} /></div></td>
-                <td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!admin || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
+                <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
+                <td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
               .join("")}
           </tbody>
@@ -3906,7 +3943,7 @@ function bindTabEvents() {
       if (!editable) return;
       const row = sheet.rows[Number(event.target.dataset.row)];
       const field = event.target.dataset.field;
-      const textFields = ["notes", "employee", "roleOverride"];
+      const textFields = ["notes", "employee", "roleOverride", "reimbursementNote"];
       const oldValue = event.target.dataset.startValue ?? (field.startsWith("lightDuty.") ? row.lightDuty?.[field.split(".")[1]] || false : row[field]);
       if (field.startsWith("lightDuty.")) {
         const day = field.split(".")[1];
@@ -4535,7 +4572,7 @@ function submitProduction() {
 
 function exportPayrollCsv() {
   const sheets = state.activeTab === "deliverables" ? deliverableSheets() : [currentSheet()];
-  const headers = ["Area", "Week starting", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Notes"];
+  const headers = ["Area", "Week starting", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Reimbursement", "Reimbursement note", "Hourly rate", "Estimated gross pay", "Notes"];
   const rows = sheets.flatMap((sheet) =>
     sheet.rows.map((row) => {
       const person = personByName(row.employee) || {};
@@ -4544,8 +4581,9 @@ function exportPayrollCsv() {
       const sick = Number(row.sick) || 0;
       const total = regular + pto + sick;
       const perDiem = Number(row.perDiem) || 0;
+      const reimbursement = Number(row.reimbursement) || 0;
       const rate = Number(person.hourlyRate) || 0;
-      const gross = total * rate + perDiem;
+      const gross = total * rate + perDiem + reimbursement;
       return [
         areas[sheet.area]?.label || area().label,
         sheet.weekStart || weekRangeDates(sheet.week).start,
@@ -4559,6 +4597,8 @@ function exportPayrollCsv() {
         sick,
         total,
         perDiem,
+        reimbursement,
+        row.reimbursementNote || "",
         rate,
         gross.toFixed(2),
         row.notes || ""
@@ -4577,7 +4617,7 @@ function exportEmployeeCsv() {
   const employee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
   const { fromDate, toDate } = selectedEmployeeDateRange();
   const records = employeeReportRecords(employee, fromDate, toDate, state.selectedEmployeeReportArea || "all");
-  const headers = ["Employee", "Week starting", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
+  const headers = ["Employee", "Week starting", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Reimbursement", "Reimbursement note", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
   const rows = records.map((record) => [
     record.employee,
     record.weekStart,
@@ -4592,6 +4632,8 @@ function exportEmployeeCsv() {
     record.sick,
     record.total,
     record.perDiem,
+    record.reimbursement,
+    record.reimbursementNote,
     record.rate,
     record.gross.toFixed(2),
     record.borrowed ? "Yes" : "No",
@@ -4640,6 +4682,7 @@ function addPersonRow(person, borrowed) {
 }
 
 function addCrewPerson() {
+  if (!canManagePeopleSetup()) return;
   const foreman = setupForemanName();
   if (!foreman) {
     showToast("Add a foreman first");
@@ -4678,10 +4721,6 @@ function addCrewPerson() {
   saveState();
   render();
   showToast(`${person.name} added to ${crew}`);
-}
-
-function canManagePeopleSetup() {
-  return ["Admin", "Payroll"].includes(state.selectedRole);
 }
 
 function addForemanCrew() {
@@ -4809,6 +4848,7 @@ function renameSelectedForeman() {
 }
 
 function removeCrewPerson(name) {
+  if (!canManagePeopleSetup()) return;
   const person = personByName(name);
   if (!person || person.role === "Foreman") return;
   if (!confirm(`Remove ${name} from this crew?`)) return;
@@ -4822,10 +4862,11 @@ function removeCrewPerson(name) {
 }
 
 function updatePersonField(event) {
-  if (!canManagePeopleSetup()) return;
   const person = personByName(event.target.dataset.personName);
   if (!person) return;
   const field = event.target.dataset.personField;
+  if (field === "hourlyRate" && !canEditPayRates()) return;
+  if (field !== "hourlyRate" && !canManagePeopleSetup()) return;
   const oldValue = person[field];
   person[field] = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
   logActivity("Person updated", { employee: person.name, field, from: oldValue, to: person[field] });
@@ -4834,6 +4875,7 @@ function updatePersonField(event) {
 }
 
 function removePerson(name) {
+  if (!canManagePeopleSetup()) return;
   const person = personByName(name);
   if (!person || person.role === "Foreman") return;
   if (!confirm(`Delete ${name}?`)) return;
@@ -4994,6 +5036,7 @@ function addSolarListValue(listKey, inputId, message) {
 }
 
 function savePerson() {
+  if (!canManagePeopleSetup()) return;
   const name = $("personName").value.trim();
   if (!name) {
     showToast("Enter a name");
