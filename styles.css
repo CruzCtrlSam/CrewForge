@@ -511,10 +511,13 @@ h3 {
 .workspace {
   min-width: 0;
   padding: 26px;
+  width: 100%;
+  max-width: 1920px;
 }
 
 .foreman-shell .workspace {
   width: 100%;
+  max-width: none;
   min-width: 0;
 }
 
@@ -533,6 +536,15 @@ h3 {
 .topbar-title {
   display: grid;
   gap: 8px;
+}
+
+.topbar-title h1 {
+  color: #f4f7f8;
+}
+
+.topbar-title > .eyebrow,
+.topbar-title > .sub {
+  color: #d8dde0;
 }
 
 .topbar-brandlockup {
@@ -1869,6 +1881,10 @@ tr:last-child td {
 
 .report-controls .secondary-action {
   align-self: end;
+}
+
+.report-controls {
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
 }
 
 .check-label {
