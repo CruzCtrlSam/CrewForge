@@ -1192,6 +1192,7 @@ function seedSheet() {
   return {
     area: state.selectedArea,
     week: state.selectedWeek,
+    weekStart: weekRangeDates(state.selectedWeek).start,
     jobId: selectedJobs()[0]?.id || "",
     foreman,
     group,
@@ -1219,6 +1220,7 @@ function currentSheet() {
   if (validForemen.length && !validForemen.includes(sheet.foreman)) {
     setSheetForeman(sheet, validForemen[0]);
   }
+  if (!sheet.weekStart) sheet.weekStart = weekRangeDates(sheet.week || state.selectedWeek).start;
   if (syncSheetCrewRows(sheet)) saveState();
   return sheet;
 }
@@ -2489,6 +2491,7 @@ function employeeReportRecords(employee, fromDate = state.selectedWeek, toDate =
           return {
             areaId: sheet.area,
             areaLabel: areas[sheet.area]?.label || sheet.area,
+            weekStart: sheet.weekStart || weekRangeDates(sheet.week).start,
             week: sheet.week,
             foreman: sheet.foreman,
             group: sheet.group,
@@ -2657,13 +2660,14 @@ function renderTimesheet() {
   return `
     ${!editable ? `<div class="notice">Read only for this login. Payroll/Admin can edit all records. <span class="es">Solo lectura para este usuario.</span></div>` : ""}
     <section class="panel printable-report timesheet-report ${useCards ? "foreman-panel" : ""}">
-      ${reportHeader("Timesheet", `${state.selectedWeek} · ${sheet.foreman || ""}`)}
+      ${reportHeader("Timesheet", `${sheet.weekStart || weekRangeDates(sheet.week).start} to ${sheet.week} · ${sheet.foreman || ""}`)}
       <div class="split">
         <div><h2>${t("Timesheet", "Registro de horas")}</h2><p class="sub">${helperText}</p></div>
         <span class="tag">${sheet.status}</span>
       </div>
       <div class="form-grid section-gap">
         ${showTimesheetJob ? `<label>Job<span class="es">Trabajo</span><select id="sheetJob" ${!editable ? "disabled" : ""}>${setOptions(selectedJobs(), sheet.jobId, (job) => job.name, (job) => job.id)}</select></label>` : ""}
+        <label>Week starting<span class="es">Semana empieza</span><input id="sheetWeekStart" type="date" value="${sheet.weekStart || weekRangeDates(sheet.week).start}" ${!editable ? "disabled" : ""} /></label>
         <label>Foreman<span class="es">Capataz</span><select id="sheetForeman" ${!editable || state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), sheet.foreman)}</select></label>
         ${isCrewArea ? `<label>Crew<span class="es">Cuadrilla</span><input value="${sheet.group || crewNameForForeman(sheet.foreman)}" disabled /></label>` : `<label>Shift<span class="es">Turno</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>`}
         <label>Status<span class="es">Estado</span><select id="sheetStatus" ${!roleIsElevated() ? "disabled" : ""}>${setOptions(["Draft", "Submitted", "Approved"], sheet.status)}</select></label>
@@ -3677,6 +3681,7 @@ function bindTabEvents() {
   });
 
   if ($("sheetJob")) $("sheetJob").addEventListener("change", (event) => updateSheet({ jobId: event.target.value }));
+  if ($("sheetWeekStart")) $("sheetWeekStart").addEventListener("change", (event) => updateSheet({ weekStart: event.target.value }, "Week start updated"));
   if ($("sheetForeman")) {
     $("sheetForeman").addEventListener("change", (event) => {
       if (!editable) return;
@@ -4357,7 +4362,7 @@ function submitProduction() {
 
 function exportPayrollCsv() {
   const sheet = currentSheet();
-  const headers = ["Area", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Notes"];
+  const headers = ["Area", "Week starting", "Week ending", "Foreman", "Job", "Employee", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Notes"];
   const rows = sheet.rows.map((row) => {
     const person = personByName(row.employee) || {};
     const regular = rowHours(row);
@@ -4369,6 +4374,7 @@ function exportPayrollCsv() {
     const gross = total * rate + perDiem;
     return [
       area().label,
+      sheet.weekStart || weekRangeDates(sheet.week).start,
       sheet.week,
       sheet.foreman,
       jobName(sheet.jobId),
@@ -4395,9 +4401,10 @@ function exportEmployeeCsv() {
   const employee = state.selectedEmployeeReport && employees.includes(state.selectedEmployeeReport) ? state.selectedEmployeeReport : employees[0] || "";
   const { fromDate, toDate } = selectedEmployeeDateRange();
   const records = employeeReportRecords(employee, fromDate, toDate, state.selectedEmployeeReportArea || "all");
-  const headers = ["Employee", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
+  const headers = ["Employee", "Week starting", "Week ending", "Area", "Job", "Foreman", "Crew/shift", "Role", "Regular hours", "PTO", "Sick", "Total hours", "Per diem", "Hourly rate", "Estimated gross pay", "Borrowed", "DOL", "Light duty days", "Status", "Notes"];
   const rows = records.map((record) => [
     record.employee,
+    record.weekStart,
     record.week,
     record.areaLabel,
     record.job,
