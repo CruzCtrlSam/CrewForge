@@ -578,6 +578,49 @@ h3 {
   gap: 10px;
 }
 
+.date-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.date-arrow {
+  min-height: 50px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  padding: 7px 11px;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.date-arrow span,
+.date-arrow small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.date-arrow span {
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.date-arrow small {
+  margin-top: 2px;
+  color: var(--blue-dark);
+}
+
+.date-arrow:hover,
+.date-arrow:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(247, 181, 27, 0.18);
+  outline: 0;
+}
+
 .login-pill {
   min-width: 170px;
   border: 2px solid var(--line);
@@ -1884,6 +1927,10 @@ tr:last-child td {
 }
 
 .report-controls .secondary-action {
+  align-self: end;
+}
+
+.report-controls .date-nav {
   align-self: end;
 }
 

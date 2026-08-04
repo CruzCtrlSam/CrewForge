@@ -1710,6 +1710,7 @@ function renderShell() {
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
             <label class="select-label">Week starting<span class="es">Semana empieza</span><input id="weekStartSelect" type="date" value="${selectedWeekStart()}" /></label>
             <div class="login-pill date-pill">Week ending<span class="es">Semana termina</span><strong>${state.selectedWeek}</strong></div>
+            ${dateShiftControls("selectedWeek", "Back one week", "Forward one week")}
           </div>
         </header>
         ${renderActiveTab()}
@@ -2689,6 +2690,44 @@ function setSelectedWeekStart(value) {
   render();
 }
 
+function shiftSelectedWeek(daysDelta) {
+  setSelectedWeekStart(addDays(selectedWeekStart(), daysDelta));
+}
+
+function shiftedDateRange(fromDate, toDate, daysDelta) {
+  return {
+    fromDate: addDays(fromDate, daysDelta),
+    toDate: addDays(toDate, daysDelta)
+  };
+}
+
+function shiftDeliverableDateRange(daysDelta) {
+  const { fromDate, toDate } = deliverableDateRange();
+  const shifted = shiftedDateRange(fromDate, toDate, daysDelta);
+  state.deliverableFromDate = shifted.fromDate;
+  state.deliverableToDate = shifted.toDate;
+  saveState();
+  render();
+}
+
+function shiftEmployeeReportDateRange(daysDelta) {
+  const { fromDate, toDate } = selectedEmployeeDateRange();
+  const shifted = shiftedDateRange(fromDate, toDate, daysDelta);
+  state.selectedEmployeeReportFromDate = shifted.fromDate;
+  state.selectedEmployeeReportToDate = shifted.toDate;
+  saveState();
+  render();
+}
+
+function dateShiftControls(target, previousLabel = "Previous week", nextLabel = "Next week") {
+  return `
+    <div class="date-nav no-print" aria-label="Date navigation">
+      <button class="date-arrow" type="button" data-date-shift="${target}" data-days="-7">&larr;<span>${previousLabel}</span><small class="es">Semana anterior</small></button>
+      <button class="date-arrow" type="button" data-date-shift="${target}" data-days="7">&rarr;<span>${nextLabel}</span><small class="es">Semana siguiente</small></button>
+    </div>
+  `;
+}
+
 function rangesOverlap(startA, endA, startB, endB) {
   return startA <= endB && startB <= endA;
 }
@@ -3536,6 +3575,7 @@ function renderEmployeeReports() {
         <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
         <label>From day<span class="es">Desde dia</span><input id="employeeReportFromDate" type="date" value="${fromDate}" /></label>
         <label>To day<span class="es">Hasta dia</span><input id="employeeReportToDate" type="date" value="${toDate}" /></label>
+        ${dateShiftControls("employeeReports", "Back range", "Forward range")}
       </div>
       <div class="metric-grid section-gap">
         <article class="metric"><span>Normal crew</span><strong>${normalCrew}</strong><small>${areaLabel}</small></article>
@@ -3586,6 +3626,7 @@ function renderDeliverables() {
         ], reportPackage, (option) => option.label, (option) => option.value)}</select></label>
         <label>From date<span class="es">Desde fecha</span><input id="deliverableFromDate" type="date" value="${fromDate}" /></label>
         <label>To date<span class="es">Hasta fecha</span><input id="deliverableToDate" type="date" value="${toDate}" /></label>
+        ${dateShiftControls("deliverables", "Back range", "Forward range")}
         <button class="secondary-action" data-print="deliverables">${t("Export PDF", "Exportar PDF")}</button>
         ${canExportPayroll && showTimesheets ? `<button class="secondary-action" id="exportPayrollCsv" type="button">${t("Export Payroll CSV", "Exportar CSV nomina")}</button>` : ""}
       </div>
@@ -3921,6 +3962,14 @@ function deleteBundleItem(itemId) {
 
 function bindTabEvents() {
   document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => window.print()));
+  document.querySelectorAll("[data-date-shift]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const daysDelta = Number(button.dataset.days) || 0;
+      if (button.dataset.dateShift === "selectedWeek") shiftSelectedWeek(daysDelta);
+      if (button.dataset.dateShift === "deliverables") shiftDeliverableDateRange(daysDelta);
+      if (button.dataset.dateShift === "employeeReports") shiftEmployeeReportDateRange(daysDelta);
+    });
+  });
   initializeBundlePanelControls();
   document.querySelectorAll("[data-toggle-bundle-panel]").forEach((button) => {
     button.addEventListener("click", () => toggleBundlePanel(button.dataset.toggleBundlePanel));
