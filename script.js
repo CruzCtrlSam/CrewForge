@@ -986,7 +986,7 @@ function trialTimesheetRow(person, foremanIndex, rowIndex) {
     sun: 0,
     pto: 0,
     sick: 0,
-    perDiem,
+    perDiem: 0,
     reimbursement: 0,
     reimbursementNote: "",
     lightDuty: {},
