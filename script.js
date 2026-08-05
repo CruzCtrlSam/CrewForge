@@ -3824,7 +3824,7 @@ function renderEmployeeReports() {
         <article class="metric"><span>Total paid hours</span><strong>${preciseNumber(employeeTotals.total)}</strong><small>${employeeTotals.weeks} week(s)</small></article>
         <article class="metric"><span>Regular hours</span><strong>${preciseNumber(employeeTotals.regular)}</strong><small>Across selected period</small></article>
         <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
-        <article class="metric"><span>Per diem</span><strong>${money(employeeTotals.perDiem)}</strong><small>Installation only</small></article>
+        <article class="metric"><span>Per diem</span><strong>${money(employeeTotals.perDiem)}</strong><small>Field install only</small></article>
         <article class="metric"><span>Reimbursements</span><strong>${money(employeeTotals.reimbursement)}</strong><small>Payroll/admin entered</small></article>
       </div>
       <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
@@ -3869,7 +3869,7 @@ function renderDeliverables() {
       </div>
       <div class="metric-grid section-gap">
         ${showTimesheets ? `<article class="metric"><span>Hours</span><strong>${number(timesheetTotals.hours)}</strong><small>${sheets.length} timesheet(s)</small></article>` : ""}
-        ${showTimesheets && area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(timesheetTotals.perDiem)}</strong><small>Installation only</small></article>` : ""}
+        ${showTimesheets && area().perDiem ? `<article class="metric"><span>Per diem</span><strong>${money(timesheetTotals.perDiem)}</strong><small>Field install only</small></article>` : ""}
         ${showTimesheets && canExportPayroll ? `<article class="metric"><span>Reimbursements</span><strong>${money(timesheetTotals.reimbursement)}</strong><small>Payroll adjustments</small></article>` : ""}
         ${showProductionDeliverables ? `<article class="metric"><span>Production completed</span><strong>${number(productionStats.completed)}</strong><small>${productionItems.length} production record(s)</small></article>
         <article class="metric"><span>Delays</span><strong>${productionStats.delayed}</strong><small>Production issues</small></article>` : ""}
