@@ -82,6 +82,81 @@ const areaArtwork = {
   rebarInstall: asset("./assets/crewforge-thumbnail.png"),
   bundleLab: asset("./assets/crewforge-bundle-tracking.svg")
 };
+const mockTrialCrews = [
+  {
+    foreman: "Gregorio Izaguirre",
+    perDiem: 175,
+    workers: [
+      ["Miguel Sandoval", "Rodbuster", 28],
+      ["Rafael Campos", "Rodbuster", 29],
+      ["Oscar Medina", "Ironworker", 30],
+      ["Julian Ortega", "Rodbuster", 31],
+      ["Hector Salinas", "Rodbuster", 32],
+      ["Noe Paredes", "Ironworker", 33],
+      ["Marco Villarreal", "Rodbuster", 34],
+      ["Andres Prieto", "Rodbuster", 35]
+    ]
+  },
+  {
+    foreman: "Hugo Martinez",
+    perDiem: 250,
+    workers: [
+      ["Ramiro Lopez", "Rodbuster", 28],
+      ["Esteban Rivas", "Ironworker", 29],
+      ["Alonso Carrillo", "Rodbuster", 30],
+      ["Javier Nunez", "Rodbuster", 31],
+      ["Emilio Santos", "Ironworker", 32],
+      ["Tomas Aguilar", "Rodbuster", 33],
+      ["Ruben Montoya", "Rodbuster", 34],
+      ["Cristian Pena", "Ironworker", 35],
+      ["Manuel Flores", "Rodbuster", 30]
+    ]
+  },
+  {
+    foreman: "Paco",
+    perDiem: 350,
+    workers: [
+      ["Diego Ramirez", "Rodbuster", 28],
+      ["Sergio Navarro", "Rodbuster", 29],
+      ["Arturo Vega", "Ironworker", 30],
+      ["Felix Robles", "Rodbuster", 31],
+      ["Pablo Moreno", "Rodbuster", 32],
+      ["Raul Cardenas", "Ironworker", 33],
+      ["Gerardo Silva", "Rodbuster", 34],
+      ["Ivan Escobar", "Rodbuster", 35]
+    ]
+  },
+  {
+    foreman: "Erik",
+    perDiem: 450,
+    workers: [
+      ["Samuel Torres", "Rodbuster", 28],
+      ["Victor Molina", "Ironworker", 29],
+      ["Nicolas Duarte", "Rodbuster", 30],
+      ["Adrian Solis", "Rodbuster", 31],
+      ["Mario Cantu", "Ironworker", 32],
+      ["Joel Figueroa", "Rodbuster", 33],
+      ["Cesar Benitez", "Rodbuster", 34],
+      ["Edgar Ibarra", "Ironworker", 35],
+      ["Luis Galvan", "Rodbuster", 31],
+      ["Rene Zamora", "Rodbuster", 32]
+    ]
+  },
+  {
+    foreman: "Paul Featherhat",
+    perDiem: 600,
+    workers: [
+      ["Tony Baker", "Ironworker", 28],
+      ["Chris Wilson", "Rodbuster", 29],
+      ["Aaron Miller", "Rodbuster", 30],
+      ["James Carter", "Ironworker", 31],
+      ["Ryan Cooper", "Rodbuster", 32],
+      ["Brandon Hayes", "Rodbuster", 33],
+      ["Kevin Price", "Ironworker", 34],
+      ["Matthew Reed", "Rodbuster", 35]
+    ]
+  }
+];
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
@@ -126,6 +201,7 @@ const defaultPeople = [
   ["Francisco Ibarra", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
   ["Juan Cano", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
   ["Julio Lugo", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
+  ...mockTrialCrews.flatMap((crew) => crew.workers.map(([name, role, hourlyRate]) => [name, role, "rebarInstall", `${crew.foreman} Crew`, false, hourlyRate])),
   ["Jose Machine Operator", "Machine Operator", "rebarFab", "Day Shift", false],
   ["Carlos Helper", "Helper", "rebarFab", "Day Shift", false],
   ["Rebar QC", "Quality Control", "rebarFab", "Day Shift", false],
@@ -134,7 +210,7 @@ const defaultPeople = [
   ["Solar Helper", "Helper", "solarPiles", "Night Shift", false],
   ["Solar QC", "Quality Control", "solarPiles", "Day Shift", false],
   ["Solar Cleaning", "Cleaning", "solarPiles", "Night Shift", false]
-].map(([name, role, area, group, dol]) => ({ name, role, area, group, dol, hourlyRate: 0 }));
+].map(([name, role, area, group, dol, hourlyRate = 0]) => ({ name, role, area, group, dol, hourlyRate }));
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -777,6 +853,7 @@ function upgradeState(next) {
       lightDuty: row.lightDuty || {}
     }));
   });
+  seedCurrentWeekMockTrialCrews(next);
   bakersfieldControlCodes.forEach((seedItem) => {
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
@@ -797,6 +874,80 @@ function upgradeState(next) {
     item.completed = completedWeight(item);
   });
   return next;
+}
+
+function seedCurrentWeekMockTrialCrews(next) {
+  const week = next.selectedWeek || defaultState.selectedWeek;
+  const weekStart = weekRangeDates(week).start;
+  if (!next.weeks.includes(week)) {
+    next.weeks.push(week);
+    next.weeks.sort();
+  }
+
+  mockTrialCrews.forEach((crew) => {
+    const crewName = crewNameForForeman(crew.foreman);
+    const foremanPerson = next.people.find((person) => person.area === "rebarInstall" && person.name === crew.foreman);
+    if (foremanPerson && !Number(foremanPerson.hourlyRate)) foremanPerson.hourlyRate = 35;
+    crew.workers.forEach(([name, , hourlyRate]) => {
+      const person = next.people.find((entry) => entry.area === "rebarInstall" && entry.name === name);
+      if (person && !Number(person.hourlyRate)) person.hourlyRate = hourlyRate;
+    });
+
+    const key = `rebarInstall:${week}:${normalizeForemanName(crew.foreman)}`;
+    const expectedPeople = next.people.filter((person) => person.area === "rebarInstall" && (person.group === crewName || person.name === crew.foreman));
+    if (!next.sheets[key]) {
+      next.sheets[key] = {
+        area: "rebarInstall",
+        week,
+        weekStart,
+        jobId: "concho",
+        foreman: crew.foreman,
+        group: crewName,
+        status: "Draft",
+        rows: expectedPeople.map((person) => trialBlankTimesheetRow(person, person.name === crew.foreman ? crew.perDiem : 0))
+      };
+      return;
+    }
+
+    const sheet = next.sheets[key];
+    sheet.area = "rebarInstall";
+    sheet.week = week;
+    sheet.weekStart = sheet.weekStart || weekStart;
+    sheet.foreman = crew.foreman;
+    sheet.group = crewName;
+    sheet.status = sheet.status || "Draft";
+    sheet.rows = sheet.rows || [];
+    const existingNames = new Set(sheet.rows.map((row) => row.employee));
+    expectedPeople.forEach((person) => {
+      if (!existingNames.has(person.name)) {
+        sheet.rows.push(trialBlankTimesheetRow(person, person.name === crew.foreman ? crew.perDiem : 0));
+      }
+    });
+    const foremanRow = sheet.rows.find((row) => row.employee === crew.foreman);
+    if (foremanRow && !Number(foremanRow.perDiem)) foremanRow.perDiem = crew.perDiem;
+  });
+}
+
+function trialBlankTimesheetRow(person, perDiem = 0) {
+  return {
+    employee: person.name,
+    roleOverride: "",
+    mon: 0,
+    tue: 0,
+    wed: 0,
+    thu: 0,
+    fri: 0,
+    sat: 0,
+    sun: 0,
+    pto: 0,
+    sick: 0,
+    perDiem,
+    reimbursement: 0,
+    reimbursementNote: "",
+    lightDuty: {},
+    borrowed: false,
+    notes: ""
+  };
 }
 
 function saveState() {
@@ -1793,6 +1944,15 @@ function trailerReadyForSignoff(job, trailerCode) {
   return Boolean(bundles.length) && bundles.every((bundle) => bundle.process?.loaded);
 }
 
+function trailerProcessCounts(job, trailerCode) {
+  const bundles = trailerBundles(job, trailerCode);
+  return {
+    loaded: bundles.filter((bundle) => bundle.process?.loaded).length,
+    shipped: bundles.filter((bundle) => bundle.process?.shipped).length,
+    total: bundles.length
+  };
+}
+
 function trailerSignoff(job, trailerCode) {
   return job?.trailerSignoffs?.[trailerCode] || null;
 }
@@ -1837,6 +1997,27 @@ function bundleCurrentStatus(bundle) {
     .reverse()
     .find(([key]) => bundle.process?.[key]);
   return latest ? latest[1] : bundle.status || "Planned";
+}
+
+function bundleCurrentStatusKey(bundle) {
+  const latest = fabricationProcessSteps
+    .slice()
+    .reverse()
+    .find(([key]) => bundle.process?.[key]);
+  return latest ? latest[0] : "";
+}
+
+function setBundleStatusStep(bundle, stepKey) {
+  bundle.process = {};
+  if (!stepKey) {
+    bundle.status = "Planned";
+    return;
+  }
+  const targetIndex = fabricationProcessSteps.findIndex(([key]) => key === stepKey);
+  fabricationProcessSteps.forEach(([key], index) => {
+    bundle.process[key] = index <= targetIndex;
+  });
+  bundle.status = bundleCurrentStatus(bundle);
 }
 
 function bundleQuantity(bundle) {
@@ -1958,12 +2139,16 @@ function renderBundleSummaryBar(totals, trailerData, bundles) {
 
 function renderTrailerDashboard(job, planner, trailerData, setupDisabled) {
   const canManage = canManageBundlePlanner();
+  const statusDisabled = canUpdateBundleProductionStatus() ? "" : "disabled";
+  const trailerOptions = ["", ...planner.trailers];
+  const statusOptions = [{ value: "", label: "Planned" }, ...fabricationProcessSteps.map(([key, label]) => ({ value: key, label }))];
   const unassignedBundles = (job?.bundles || []).filter((bundle) => !bundle.trailer || !planner.trailers.includes(bundle.trailer));
   return `
     <div class="trailer-dashboard section-gap">
       ${planner.trailers.map((trailer) => {
         const data = trailerData.totals[trailer] || { weight: 0, count: 0 };
         const bundles = trailerBundles(job, trailer);
+        const counts = trailerProcessCounts(job, trailer);
         const remaining = (Number(planner.maxTrailerWeight) || 0) - data.weight;
         const pct = planner.maxTrailerWeight ? Math.min(100, Math.round((data.weight / planner.maxTrailerWeight) * 100)) : 0;
         const signoff = trailerSignoff(job, trailer);
@@ -1980,21 +2165,24 @@ function renderTrailerDashboard(job, planner, trailerData, setupDisabled) {
             <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
             <div class="trailer-meta">
               <span>${remaining >= 0 ? `${number(remaining)} lbs remaining` : `${number(Math.abs(remaining))} lbs over limit`}</span>
+              <span>${counts.loaded} / ${counts.total} loaded</span>
+              <span>${counts.shipped} shipped</span>
               ${signoff ? `<span>Signed ${signoff.at}</span>` : `<span>${ready ? "Ready for final check" : "Load all codes before sign-off"}</span>`}
             </div>
             <div class="table-wrap compact-table-wrap">
               <table class="trailer-code-table">
-                <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th><th>Loaded</th></tr></thead>
+                <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th><th>Trailer</th><th>Loaded</th></tr></thead>
                 <tbody>
                   ${bundles.length ? bundles.map((bundle) => `
                     <tr>
                       <td><strong>${bundle.tag || bundle.controlCode}</strong></td>
                       <td>${bundle.description || "No description"}</td>
                       <td>${number(bundle.weight || 0)} lbs</td>
-                      <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                      <td><select class="compact-select" data-bundle="${bundle.id}" data-bundle-field="statusStep" ${statusDisabled}>${setOptions(statusOptions, bundleCurrentStatusKey(bundle), (option) => option.label, (option) => option.value)}</select></td>
+                      <td><select class="compact-select" data-bundle="${bundle.id}" data-bundle-field="trailer" ${setupDisabled}>${setOptions(trailerOptions, bundle.trailer || "", (option) => option || "Unassigned", (option) => option)}</select></td>
                       <td>${bundle.process?.loaded ? "Yes" : "No"}</td>
                     </tr>
-                  `).join("") : `<tr><td colspan="5"><strong>No codes assigned.</strong><span class="es">No hay codigos asignados.</span></td></tr>`}
+                  `).join("") : `<tr><td colspan="6"><strong>No codes assigned.</strong><span class="es">No hay codigos asignados.</span></td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -2015,14 +2203,15 @@ function renderTrailerDashboard(job, planner, trailerData, setupDisabled) {
           <header><div><strong>Unassigned</strong><span>${trailerData.unassignedCount} codes · ${number(trailerData.unassignedWeight)} lbs</span></div><span class="tag">Needs trailer code</span></header>
           <div class="table-wrap compact-table-wrap">
             <table class="trailer-code-table">
-              <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th></tr></thead>
+              <thead><tr><th>Code</th><th>Description</th><th>Weight</th><th>Current step</th><th>Trailer</th></tr></thead>
               <tbody>
                 ${unassignedBundles.map((bundle) => `
                   <tr>
                     <td><strong>${bundle.tag || bundle.controlCode}</strong></td>
                     <td>${bundle.description || "No description"}</td>
                     <td>${number(bundle.weight || 0)} lbs</td>
-                    <td><span class="tag">${bundleCurrentStatus(bundle)}</span></td>
+                    <td><select class="compact-select" data-bundle="${bundle.id}" data-bundle-field="statusStep" ${statusDisabled}>${setOptions(statusOptions, bundleCurrentStatusKey(bundle), (option) => option.label, (option) => option.value)}</select></td>
+                    <td><select class="compact-select" data-bundle="${bundle.id}" data-bundle-field="trailer" ${setupDisabled}>${setOptions(trailerOptions, bundle.trailer || "", (option) => option || "Unassigned", (option) => option)}</select></td>
                   </tr>
                 `).join("")}
               </tbody>
@@ -2261,7 +2450,7 @@ function renderBundlePlanner() {
                     <td>${bundle.description || "No description"}</td>
                     <td>${number(bundle.weight || 0)} lbs</td>
                     <td><span class="tag">${bundleCurrentStatus(bundle)}</span><small>${bundleQuantity(bundle) ? `${preciseNumber(bundle.completedQty || 0)} / ${preciseNumber(bundleQuantity(bundle))} · ${bundleCompletionPct(bundle)}%` : "Qty needed"}</small></td>
-                    <td>${bundle.trailer || "Unassigned"}</td>
+                    <td><select class="compact-select" data-bundle="${bundle.id}" data-bundle-field="trailer" ${setupDisabled}>${setOptions(trailerOptions, bundle.trailer || "", (option) => option || "Unassigned", (option) => option)}</select></td>
                     <td>${number(bundle.rejectedPieces || 0)}</td>
                     <td class="row-actions"><button class="secondary-action small-action" data-open-bundle-section="${bundle.id}" type="button">${bundle.id === planner.selectedSectionId ? "Selected" : "Open"}<span class="es">${bundle.id === planner.selectedSectionId ? "Seleccionado" : "Abrir"}</span></button><button class="danger-action small-action" data-delete-bundle-section="${bundle.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td>
                   </tr>
@@ -4538,7 +4727,7 @@ function updateBundleRow(event) {
   const bundle = job?.bundles.find((item) => item.id === event.target.dataset.bundle);
   if (!bundle) return;
   const field = event.target.dataset.bundleField;
-  const statusField = field.startsWith("process.") || field === "notes";
+  const statusField = field.startsWith("process.") || field === "statusStep" || field === "notes";
   const qualityField = ["rejectedPieces", "rejectReason", "qualityNotes"].includes(field);
   if (statusField && !canUpdateBundleProductionStatus()) return;
   if (qualityField && !canManageBundlePlanner()) return;
@@ -4546,11 +4735,25 @@ function updateBundleRow(event) {
   const previousTrailer = bundle.trailer || "";
   const previousLoaded = Boolean(bundle.process?.loaded);
   const previousShipped = Boolean(bundle.process?.shipped);
+  if ((field === "process.shipped" && event.target.checked) || (field === "statusStep" && event.target.value === "shipped")) {
+    if (!bundle.trailer) {
+      showToast("Assign a trailer before marking shipped");
+      render();
+      return;
+    }
+    if (!trailerSignoff(job, bundle.trailer)) {
+      showToast("Trailer needs final sign-off before shipping");
+      render();
+      return;
+    }
+  }
   if (field.startsWith("process.")) {
     const processField = field.split(".")[1];
     bundle.process = bundle.process || {};
     bundle.process[processField] = event.target.checked;
     bundle.status = bundleCurrentStatus(bundle);
+  } else if (field === "statusStep") {
+    setBundleStatusStep(bundle, event.target.value);
   } else if (["weight", "pieces", "completedQty", "rejectedPieces"].includes(field)) {
     bundle[field] = Number(event.target.value) || 0;
   } else {
@@ -4569,8 +4772,14 @@ function updateBundleRow(event) {
   if (field === "process.loaded" && previousLoaded !== Boolean(bundle.process?.loaded)) {
     clearTrailerSignoffForChange(job, bundle.trailer, "Loaded status changed");
   }
-  if (field === "process.shipped" && previousShipped !== Boolean(bundle.process?.shipped)) {
-    clearTrailerSignoffForChange(job, bundle.trailer, "Shipped status changed");
+  if (previousShipped !== Boolean(bundle.process?.shipped)) {
+    logActivity("Bundle shipment status changed", {
+      job: job.jobName,
+      field: bundle.trailer || "Unassigned trailer",
+      from: previousShipped ? "Shipped" : "Not shipped",
+      to: bundle.process?.shipped ? "Shipped" : "Not shipped",
+      tag: bundle.tag || bundle.controlCode
+    });
   }
   syncBundlePlannerFromJob(job);
   saveState();

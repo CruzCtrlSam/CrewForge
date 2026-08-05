@@ -1692,7 +1692,14 @@ tr:last-child td {
 }
 
 .trailer-code-table {
-  min-width: 720px;
+  min-width: 880px;
+}
+
+.compact-select {
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 0.9rem;
 }
 
 .trailer-signoff-row {
