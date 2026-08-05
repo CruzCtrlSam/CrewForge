@@ -144,7 +144,7 @@ const mockTrialCrews = [
   },
   {
     foreman: "Paul Featherhat",
-    perDiem: 600,
+    perDiem: 575,
     workers: [
       ["Tony Baker", "Ironworker", 28],
       ["Chris Wilson", "Rodbuster", 29],
@@ -157,6 +157,19 @@ const mockTrialCrews = [
     ]
   }
 ];
+const trialWeekHourPatterns = [
+  { mon: 8, tue: 8, wed: 8, thu: 8, fri: 8, sat: 0, sun: 0 },
+  { mon: 10, tue: 9, wed: 8, thu: 8, fri: 7, sat: 0, sun: 0 },
+  { mon: 9, tue: 9, wed: 9, thu: 9, fri: 8, sat: 0, sun: 0 },
+  { mon: 10, tue: 10, wed: 10, thu: 9, fri: 8, sat: 0, sun: 0 },
+  { mon: 8, tue: 8, wed: 10, thu: 10, fri: 9, sat: 0, sun: 0 },
+  { mon: 10, tue: 9, wed: 9, thu: 9, fri: 9, sat: 0, sun: 0 },
+  { mon: 9, tue: 10, wed: 10, thu: 10, fri: 8, sat: 0, sun: 0 },
+  { mon: 10, tue: 10, wed: 10, thu: 10, fri: 8, sat: 0, sun: 0 },
+  { mon: 8, tue: 9, wed: 10, thu: 9, fri: 9, sat: 0, sun: 0 },
+  { mon: 10, tue: 10, wed: 9, thu: 9, fri: 9, sat: 0, sun: 0 }
+];
+const trialPerDiems = [175, 225, 275, 325, 350, 400, 450, 500, 525, 575];
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
@@ -853,7 +866,7 @@ function upgradeState(next) {
       lightDuty: row.lightDuty || {}
     }));
   });
-  seedCurrentWeekMockTrialCrews(next);
+  seedCurrentWeekInstallationTrialData(next);
   bakersfieldControlCodes.forEach((seedItem) => {
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
@@ -876,7 +889,7 @@ function upgradeState(next) {
   return next;
 }
 
-function seedCurrentWeekMockTrialCrews(next) {
+function seedCurrentWeekInstallationTrialData(next) {
   const week = next.selectedWeek || defaultState.selectedWeek;
   const weekStart = weekRangeDates(week).start;
   if (!next.weeks.includes(week)) {
@@ -884,27 +897,26 @@ function seedCurrentWeekMockTrialCrews(next) {
     next.weeks.sort();
   }
 
-  mockTrialCrews.forEach((crew) => {
-    const crewName = crewNameForForeman(crew.foreman);
-    const foremanPerson = next.people.find((person) => person.area === "rebarInstall" && person.name === crew.foreman);
-    if (foremanPerson && !Number(foremanPerson.hourlyRate)) foremanPerson.hourlyRate = 35;
-    crew.workers.forEach(([name, , hourlyRate]) => {
-      const person = next.people.find((entry) => entry.area === "rebarInstall" && entry.name === name);
-      if (person && !Number(person.hourlyRate)) person.hourlyRate = hourlyRate;
-    });
+  const installationPeople = next.people.filter((person) => person.area === "rebarInstall");
+  installationPeople.forEach((person, index) => {
+    if (!Number(person.hourlyRate)) person.hourlyRate = trialHourlyRate(person, index);
+  });
 
-    const key = `rebarInstall:${week}:${normalizeForemanName(crew.foreman)}`;
-    const expectedPeople = next.people.filter((person) => person.area === "rebarInstall" && (person.group === crewName || person.name === crew.foreman));
+  foremanNames.forEach((foreman, foremanIndex) => {
+    const crewName = crewNameForForeman(foreman);
+    const key = `rebarInstall:${week}:${normalizeForemanName(foreman)}`;
+    const expectedPeople = installationPeople.filter((person) => person.group === crewName || person.name === foreman);
+    if (!expectedPeople.length) return;
     if (!next.sheets[key]) {
       next.sheets[key] = {
         area: "rebarInstall",
         week,
         weekStart,
         jobId: "concho",
-        foreman: crew.foreman,
+        foreman,
         group: crewName,
         status: "Draft",
-        rows: expectedPeople.map((person) => trialBlankTimesheetRow(person, person.name === crew.foreman ? crew.perDiem : 0))
+        rows: expectedPeople.map((person, rowIndex) => trialTimesheetRow(person, foremanIndex, rowIndex))
       };
       return;
     }
@@ -913,23 +925,56 @@ function seedCurrentWeekMockTrialCrews(next) {
     sheet.area = "rebarInstall";
     sheet.week = week;
     sheet.weekStart = sheet.weekStart || weekStart;
-    sheet.foreman = crew.foreman;
+    sheet.foreman = foreman;
     sheet.group = crewName;
     sheet.status = sheet.status || "Draft";
     sheet.rows = sheet.rows || [];
     const existingNames = new Set(sheet.rows.map((row) => row.employee));
-    expectedPeople.forEach((person) => {
+    expectedPeople.forEach((person, rowIndex) => {
       if (!existingNames.has(person.name)) {
-        sheet.rows.push(trialBlankTimesheetRow(person, person.name === crew.foreman ? crew.perDiem : 0));
+        sheet.rows.push(trialTimesheetRow(person, foremanIndex, rowIndex));
       }
     });
-    const foremanRow = sheet.rows.find((row) => row.employee === crew.foreman);
-    if (foremanRow && !Number(foremanRow.perDiem)) foremanRow.perDiem = crew.perDiem;
+    sheet.rows.forEach((row, rowIndex) => {
+      if (!Number(row.perDiem)) row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
+      if (!rowHasManualTimeData(row)) applyTrialHours(row, foremanIndex, rowIndex);
+    });
   });
 }
 
-function trialBlankTimesheetRow(person, perDiem = 0) {
-  return {
+function trialHourlyRate(person, index) {
+  if (person.role === "Foreman") return 35;
+  return 28 + (index % 8);
+}
+
+function trialPerDiemForRow(foremanIndex, rowIndex) {
+  return trialPerDiems[(foremanIndex + rowIndex) % trialPerDiems.length];
+}
+
+function trialHoursForRow(foremanIndex, rowIndex) {
+  return trialWeekHourPatterns[(foremanIndex + rowIndex) % trialWeekHourPatterns.length];
+}
+
+function rowHasManualTimeData(row) {
+  return (
+    days.some((day) => Number(row[day])) ||
+    Number(row.pto) ||
+    Number(row.sick) ||
+    Number(row.reimbursement) ||
+    Boolean((row.reimbursementNote || "").trim()) ||
+    Boolean((row.notes || "").trim())
+  );
+}
+
+function applyTrialHours(row, foremanIndex, rowIndex) {
+  const pattern = trialHoursForRow(foremanIndex, rowIndex);
+  days.forEach((day) => {
+    row[day] = pattern[day] || 0;
+  });
+}
+
+function trialTimesheetRow(person, foremanIndex, rowIndex) {
+  const row = {
     employee: person.name,
     roleOverride: "",
     mon: 0,
@@ -948,6 +993,9 @@ function trialBlankTimesheetRow(person, perDiem = 0) {
     borrowed: false,
     notes: ""
   };
+  row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
+  applyTrialHours(row, foremanIndex, rowIndex);
+  return row;
 }
 
 function saveState() {
