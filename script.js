@@ -1223,8 +1223,33 @@ function availableTabs() {
 function canEditSheet(sheet) {
   if (state.selectedRole === "Management") return false;
   if (roleIsElevated()) return true;
+  if (!sheetIsInFieldEntryEditWindow(sheet)) return false;
   if (isApproverMode()) return sheet.area === "rebarInstall" && sheet.status !== "Approved";
   return sheet.foreman === state.currentForeman && sheet.status !== "Approved";
+}
+
+function latestTimesheetWeek(areaId = state.selectedArea) {
+  const weeks = new Set(state.weeks || []);
+  Object.values(state.sheets || {}).forEach((sheet) => {
+    if (!areaId || sheet.area === areaId) weeks.add(sheet.week);
+  });
+  return [...weeks].filter(Boolean).sort().at(-1) || state.selectedWeek || defaultState.selectedWeek;
+}
+
+function sheetIsInFieldEntryEditWindow(sheet) {
+  if (!isFieldEntryMode()) return true;
+  const latestWeek = latestTimesheetWeek(sheet?.area || state.selectedArea);
+  const oldestEditableWeek = addDays(latestWeek, -7);
+  return dateInputValue(sheet?.week || state.selectedWeek, state.selectedWeek) >= oldestEditableWeek;
+}
+
+function sheetReadOnlyReason(sheet) {
+  if (state.selectedRole === "Management") return "Management can review but not edit timesheets.";
+  if (isFieldEntryMode() && !sheetIsInFieldEntryEditWindow(sheet)) {
+    return "This week is locked for field entry. Payroll/Admin can edit older records.";
+  }
+  if (sheet.status === "Approved") return "Approved timesheets are locked unless Payroll/Admin reopens them.";
+  return "Read only for this login. Payroll/Admin can edit all records.";
 }
 
 function canManageProductionItem(item = {}) {
@@ -1464,6 +1489,79 @@ function totalPerDiem(sheet = currentSheet()) {
 
 function totalReimbursement(sheet = currentSheet()) {
   return sheet.rows.reduce((sum, row) => sum + (Number(row.reimbursement) || 0), 0);
+}
+
+function timesheetDayLabel(day) {
+  return dayLabels[days.indexOf(day)] || day;
+}
+
+function timesheetOverlapIssues(targetSheet = currentSheet()) {
+  const issues = [];
+  const sheets = Object.values(state.sheets || {}).filter((sheet) => sheet.area === targetSheet.area && sheet.week === targetSheet.week);
+  targetSheet.rows.forEach((row) => {
+    days.forEach((day) => {
+      const hours = Number(row[day]) || 0;
+      if (!hours) return;
+      sheets.forEach((sheet) => {
+        if (sheet === targetSheet) return;
+        sheet.rows?.forEach((otherRow) => {
+          const otherHours = Number(otherRow[day]) || 0;
+          if (!otherHours || !sameName(otherRow.employee, row.employee)) return;
+          issues.push({
+            employee: row.employee,
+            day,
+            hours,
+            otherHours,
+            foreman: sheet.foreman,
+            crew: sheet.group || crewNameForForeman(sheet.foreman),
+            job: jobName(sheet.jobId)
+          });
+        });
+      });
+    });
+  });
+  return issues;
+}
+
+function rowOverlapIssues(sheet, row, daysToCheck = days) {
+  const issues = [];
+  Object.values(state.sheets || {}).forEach((otherSheet) => {
+    if (otherSheet === sheet || otherSheet.area !== sheet.area || otherSheet.week !== sheet.week) return;
+    otherSheet.rows?.forEach((otherRow) => {
+      if (!sameName(otherRow.employee, row.employee)) return;
+      daysToCheck.forEach((day) => {
+        const hours = Number(row[day]) || 0;
+        const otherHours = Number(otherRow[day]) || 0;
+        if (!hours || !otherHours) return;
+        issues.push({
+          employee: row.employee,
+          day,
+          hours,
+          otherHours,
+          foreman: otherSheet.foreman,
+          crew: otherSheet.group || crewNameForForeman(otherSheet.foreman),
+          job: jobName(otherSheet.jobId)
+        });
+      });
+    });
+  });
+  return issues;
+}
+
+function overlapNotice(sheet) {
+  const issues = timesheetOverlapIssues(sheet);
+  if (!issues.length) return "";
+  const items = issues.slice(0, 6).map((issue) => (
+    `<li><strong>${escapeHtml(issue.employee)}</strong> has hours on ${timesheetDayLabel(issue.day)} in ${escapeHtml(issue.crew)} / ${escapeHtml(issue.job)}.</li>`
+  )).join("");
+  const extra = issues.length > 6 ? `<li>${issues.length - 6} more overlap(s) need review.</li>` : "";
+  return `
+    <div class="notice warning-panel section-gap">
+      <strong>Overlap needs authorization</strong>
+      <span class="es">Cruce de horas necesita autorizacion</span>
+      <ul>${items}${extra}</ul>
+    </div>
+  `;
 }
 
 function personByName(name) {
@@ -3188,7 +3286,7 @@ function renderTimesheet() {
       ? t("Choose a foreman and that foreman's crew fills in automatically.", "Escoja un capataz y se llena su cuadrilla automaticamente.")
       : t("Choose day or night shift; no crews needed for shop fabrication.", "Escoja turno de dia o noche; no se necesitan cuadrillas para fabricacion.");
   return `
-    ${!editable ? `<div class="notice">Read only for this login. Payroll/Admin can edit all records. <span class="es">Solo lectura para este usuario.</span></div>` : ""}
+    ${!editable ? `<div class="notice">${sheetReadOnlyReason(sheet)} <span class="es">Solo lectura para este usuario.</span></div>` : ""}
     <section class="panel printable-report timesheet-report ${useCards ? "foreman-panel" : ""}">
       ${reportHeader("Timesheet", `${sheet.weekStart || weekRangeDates(sheet.week).start} to ${sheet.week} · ${sheet.foreman || ""}`)}
       <div class="split">
@@ -3203,6 +3301,7 @@ function renderTimesheet() {
         ${isCrewArea ? `<label>Crew<span class="es">Cuadrilla</span><input value="${sheet.group || crewNameForForeman(sheet.foreman)}" disabled /></label>` : `<label>Shift<span class="es">Turno</span><select id="sheetGroup" ${!editable ? "disabled" : ""}>${setOptions(groupOptions(), sheet.group)}</select></label>`}
         <label>Status<span class="es">Estado</span><select id="sheetStatus" ${!roleIsElevated() ? "disabled" : ""}>${setOptions(["Draft", "Submitted", "Approved"], sheet.status)}</select></label>
       </div>
+      ${overlapNotice(sheet)}
       ${renderWorkerAdder(editable)}
       ${useCards ? renderForemanTimeCards(sheet, editable) : `
       <div class="timesheet-wrap section-gap office-timesheet">
@@ -3223,7 +3322,7 @@ function renderTimesheet() {
         <strong>Total: ${number(totalHours(sheet))} hours</strong>
         ${area().perDiem ? `<strong>Per diem: ${money(totalPerDiem(sheet))}</strong>` : ""}
         ${showPayrollAdjustments ? `<strong>Reimbursements: ${money(totalReimbursement(sheet))}</strong>` : ""}
-        <button class="secondary-action" id="duplicateWeek" type="button">${t("Duplicate Week", "Duplicar semana")}</button>
+        <button class="secondary-action" id="duplicateWeek" type="button" ${!editable ? "disabled" : ""}>${t("Duplicate Week", "Duplicar semana")}</button>
         <button class="secondary-action" data-print="timesheet" type="button">${t("Export PDF", "Exportar PDF")}</button>
         <button class="primary-action" id="submitSheet" type="button" ${!editable ? "disabled" : ""}>${t("Submit Week", "Enviar semana")}</button>
       </div>
@@ -4336,6 +4435,7 @@ function bindTabEvents() {
       const field = event.target.dataset.field;
       const textFields = ["notes", "employee", "roleOverride", "reimbursementNote"];
       const oldValue = event.target.dataset.startValue ?? (field.startsWith("lightDuty.") ? row.lightDuty?.[field.split(".")[1]] || false : row[field]);
+      const beforeRow = structuredClone(row);
       if (field.startsWith("lightDuty.")) {
         const day = field.split(".")[1];
         row.lightDuty = row.lightDuty || {};
@@ -4347,6 +4447,13 @@ function bindTabEvents() {
         row.employee = event.target.value;
         row.roleOverride = "";
         row.borrowed = !peopleForArea().some((person) => person.name === row.employee && person.group === sheet.group);
+      }
+      const overlapDays = days.includes(field) ? [field] : field === "employee" ? days : [];
+      if (!roleIsElevated() && overlapDays.length && rowOverlapIssues(sheet, row, overlapDays).length) {
+        Object.assign(row, beforeRow);
+        showToast(`${row.employee} already has hours on that day in another crew. Payroll/Admin must authorize overlaps.`);
+        render();
+        return;
       }
       sheet.status = "Draft";
       setLastEdited(sheet, "Timesheet edited");
@@ -4932,6 +5039,12 @@ function updateSheet(values, message) {
 
 function submitSheet() {
   const sheet = currentSheet();
+  const overlapCount = timesheetOverlapIssues(sheet).length;
+  if (!roleIsElevated() && overlapCount) {
+    showToast("This timesheet has overlapping days. Payroll/Admin must authorize before submitting.");
+    render();
+    return;
+  }
   const stamp = new Date().toLocaleString("en-US", {
     month: "short",
     day: "numeric",
