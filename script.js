@@ -966,6 +966,19 @@ function rowHasManualTimeData(row) {
   );
 }
 
+function clearTimesheetRowEntries(row) {
+  days.forEach((day) => {
+    row[day] = 0;
+  });
+  row.pto = 0;
+  row.sick = 0;
+  row.perDiem = 0;
+  row.reimbursement = 0;
+  row.reimbursementNote = "";
+  row.notes = "";
+  row.lightDuty = {};
+}
+
 function applyTrialHours(row, foremanIndex, rowIndex) {
   const pattern = trialHoursForRow(foremanIndex, rowIndex);
   days.forEach((day) => {
@@ -3399,7 +3412,7 @@ function renderForemanTimeRow(row, index, editable) {
       ${area().perDiem ? `<td><div class="money-input"><span>$</span><input data-row="${index}" data-field="perDiem" type="number" min="0" step="1" value="${row.perDiem || 0}" ${disabled} /></div></td>` : ""}
       <td><strong>${number(rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0))}</strong></td>
       <td><input class="compact-note" data-row="${index}" data-field="notes" value="${row.notes || ""}" ${disabled} /></td>
-      <td><button class="danger-action icon-action" data-delete-row="${index}" type="button" ${disabled}>Remove<span class="es">Quitar</span></button></td>
+      <td><div class="row-actions timesheet-row-actions"><button class="secondary-action icon-action clear-action" data-clear-row="${index}" type="button" ${disabled}>Clear Hours<span class="es">Borrar horas</span></button><button class="danger-action icon-action" data-delete-row="${index}" type="button" ${disabled}>Remove<span class="es">Quitar</span></button></div></td>
     </tr>
   `;
 }
@@ -3428,7 +3441,7 @@ function renderWorkerCard(row, index, editable) {
         ${area().dol ? `<div class="static-field">DOL<span class="es">Aprendiz</span><strong>${person.dol ? "Yes" : "No"}</strong></div>` : ""}
       </div>
       <label class="card-notes">Notes<span class="es">Notas</span><textarea data-row="${index}" data-field="notes" ${disabled}>${row.notes || ""}</textarea></label>
-      <button class="danger-action table-action" data-delete-row="${index}" type="button" ${disabled}>Remove from week<span class="es">Quitar de semana</span></button>
+      <div class="row-actions"><button class="secondary-action table-action clear-action" data-clear-row="${index}" type="button" ${disabled}>Clear Hours<span class="es">Borrar horas</span></button><button class="danger-action table-action" data-delete-row="${index}" type="button" ${disabled}>Remove from week<span class="es">Quitar de semana</span></button></div>
     </article>
   `;
 }
@@ -3471,7 +3484,7 @@ function renderTimesheetRow(row, index, editable) {
       ${area().dol ? `<td>${person.dol ? "Yes" : ""}</td>` : ""}
       <td><strong>${rowHours(row) + Number(row.pto || 0) + Number(row.sick || 0)}</strong></td>
       <td><textarea data-row="${index}" data-field="notes" ${disabled}>${row.notes || ""}</textarea></td>
-      <td><button class="danger-action table-action" data-delete-row="${index}" type="button" ${disabled}>Remove<span class="es">Quitar</span></button></td>
+      <td><div class="row-actions timesheet-row-actions"><button class="secondary-action table-action clear-action" data-clear-row="${index}" type="button" ${disabled}>Clear Hours<span class="es">Borrar horas</span></button><button class="danger-action table-action" data-delete-row="${index}" type="button" ${disabled}>Remove<span class="es">Quitar</span></button></div></td>
     </tr>
   `;
 }
@@ -4607,6 +4620,24 @@ function bindTabEvents() {
     button.addEventListener("click", () => {
       const person = personByName(button.dataset.addPerson);
       if (person) addPersonRow(person, true);
+    });
+  });
+
+  document.querySelectorAll("[data-clear-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!editable) return;
+      const index = Number(button.dataset.clearRow);
+      const row = sheet.rows[index];
+      const name = row?.employee || "worker";
+      if (!row) return;
+      if (!confirm(`Clear ${name}'s hours and weekly entries?`)) return;
+      clearTimesheetRowEntries(row);
+      sheet.status = "Draft";
+      setLastEdited(sheet, "Worker week entries cleared");
+      logActivity("Worker week entries cleared", { foreman: sheet.foreman, employee: name, job: jobName(sheet.jobId) });
+      saveState();
+      render();
+      showToast(`${name}'s hours cleared`);
     });
   });
 

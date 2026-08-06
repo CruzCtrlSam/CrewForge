@@ -1806,6 +1806,17 @@ tr:last-child td {
   align-items: center;
 }
 
+.timesheet-row-actions {
+  align-items: stretch;
+  flex-direction: column;
+  min-width: 104px;
+}
+
+.timesheet-row-actions .icon-action,
+.timesheet-row-actions .table-action {
+  width: 100%;
+}
+
 .small-action {
   min-height: 34px;
   padding: 6px 10px;
