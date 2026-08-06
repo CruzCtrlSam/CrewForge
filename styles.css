@@ -1380,6 +1380,18 @@ tr:last-child td {
   margin-bottom: 14px;
 }
 
+.overlap-warning {
+  border-color: #f59e0b;
+  background: #ffedd5;
+  color: #7c2d12;
+  box-shadow: 0 10px 24px rgba(245, 158, 11, 0.18);
+}
+
+.overlap-warning ul {
+  margin: 10px 0 0;
+  padding-left: 22px;
+}
+
 .compact-notice {
   margin-top: 8px;
   margin-bottom: 0;

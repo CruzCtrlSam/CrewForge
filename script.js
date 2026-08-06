@@ -1495,6 +1495,8 @@ function timesheetDayLabel(day) {
   return dayLabels[days.indexOf(day)] || day;
 }
 
+const dailyOverlapAuthorizationLimit = 12;
+
 function timesheetOverlapIssues(targetSheet = currentSheet()) {
   const issues = [];
   const sheets = Object.values(state.sheets || {}).filter((sheet) => sheet.area === targetSheet.area && sheet.week === targetSheet.week);
@@ -1502,22 +1504,33 @@ function timesheetOverlapIssues(targetSheet = currentSheet()) {
     days.forEach((day) => {
       const hours = Number(row[day]) || 0;
       if (!hours) return;
+      const matches = [];
+      let otherTotal = 0;
       sheets.forEach((sheet) => {
         if (sheet === targetSheet) return;
         sheet.rows?.forEach((otherRow) => {
           const otherHours = Number(otherRow[day]) || 0;
           if (!otherHours || !sameName(otherRow.employee, row.employee)) return;
-          issues.push({
-            employee: row.employee,
-            day,
-            hours,
-            otherHours,
+          otherTotal += otherHours;
+          matches.push({
+            hours: otherHours,
             foreman: sheet.foreman,
             crew: sheet.group || crewNameForForeman(sheet.foreman),
             job: jobName(sheet.jobId)
           });
         });
       });
+      const totalHours = hours + otherTotal;
+      if (totalHours > dailyOverlapAuthorizationLimit) {
+        issues.push({
+          employee: row.employee,
+          day,
+          hours,
+          otherHours: otherTotal,
+          totalHours,
+          matches
+        });
+      }
     });
   });
   return issues;
@@ -1525,25 +1538,36 @@ function timesheetOverlapIssues(targetSheet = currentSheet()) {
 
 function rowOverlapIssues(sheet, row, daysToCheck = days) {
   const issues = [];
-  Object.values(state.sheets || {}).forEach((otherSheet) => {
-    if (otherSheet === sheet || otherSheet.area !== sheet.area || otherSheet.week !== sheet.week) return;
-    otherSheet.rows?.forEach((otherRow) => {
-      if (!sameName(otherRow.employee, row.employee)) return;
-      daysToCheck.forEach((day) => {
-        const hours = Number(row[day]) || 0;
+  daysToCheck.forEach((day) => {
+    const hours = Number(row[day]) || 0;
+    if (!hours) return;
+    let otherTotal = 0;
+    const matches = [];
+    Object.values(state.sheets || {}).forEach((otherSheet) => {
+      if (otherSheet === sheet || otherSheet.area !== sheet.area || otherSheet.week !== sheet.week) return;
+      otherSheet.rows?.forEach((otherRow) => {
         const otherHours = Number(otherRow[day]) || 0;
-        if (!hours || !otherHours) return;
-        issues.push({
-          employee: row.employee,
-          day,
-          hours,
-          otherHours,
+        if (!otherHours || !sameName(otherRow.employee, row.employee)) return;
+        otherTotal += otherHours;
+        matches.push({
+          hours: otherHours,
           foreman: otherSheet.foreman,
           crew: otherSheet.group || crewNameForForeman(otherSheet.foreman),
           job: jobName(otherSheet.jobId)
         });
       });
     });
+    const totalHours = hours + otherTotal;
+    if (totalHours > dailyOverlapAuthorizationLimit) {
+      issues.push({
+        employee: row.employee,
+        day,
+        hours,
+        otherHours: otherTotal,
+        totalHours,
+        matches
+      });
+    }
   });
   return issues;
 }
@@ -1552,11 +1576,11 @@ function overlapNotice(sheet) {
   const issues = timesheetOverlapIssues(sheet);
   if (!issues.length) return "";
   const items = issues.slice(0, 6).map((issue) => (
-    `<li><strong>${escapeHtml(issue.employee)}</strong> has hours on ${timesheetDayLabel(issue.day)} in ${escapeHtml(issue.crew)} / ${escapeHtml(issue.job)}.</li>`
+    `<li><strong>${escapeHtml(issue.employee)}</strong> has ${number(issue.totalHours)} total hours on ${timesheetDayLabel(issue.day)} across crews. Limit before authorization is ${dailyOverlapAuthorizationLimit} hours.</li>`
   )).join("");
   const extra = issues.length > 6 ? `<li>${issues.length - 6} more overlap(s) need review.</li>` : "";
   return `
-    <div class="notice warning-panel section-gap">
+    <div class="notice overlap-warning section-gap">
       <strong>Overlap needs authorization</strong>
       <span class="es">Cruce de horas necesita autorizacion</span>
       <ul>${items}${extra}</ul>
@@ -4449,9 +4473,10 @@ function bindTabEvents() {
         row.borrowed = !peopleForArea().some((person) => person.name === row.employee && person.group === sheet.group);
       }
       const overlapDays = days.includes(field) ? [field] : field === "employee" ? days : [];
-      if (!roleIsElevated() && overlapDays.length && rowOverlapIssues(sheet, row, overlapDays).length) {
+      const rowIssues = overlapDays.length ? rowOverlapIssues(sheet, row, overlapDays) : [];
+      if (!roleIsElevated() && rowIssues.length) {
         Object.assign(row, beforeRow);
-        showToast(`${row.employee} already has hours on that day in another crew. Payroll/Admin must authorize overlaps.`);
+        showToast(`${row.employee} would exceed ${dailyOverlapAuthorizationLimit} hours in one day. Payroll/Admin must authorize.`);
         render();
         return;
       }
@@ -5041,7 +5066,7 @@ function submitSheet() {
   const sheet = currentSheet();
   const overlapCount = timesheetOverlapIssues(sheet).length;
   if (!roleIsElevated() && overlapCount) {
-    showToast("This timesheet has overlapping days. Payroll/Admin must authorize before submitting.");
+    showToast(`This timesheet has daily totals over ${dailyOverlapAuthorizationLimit} hours. Payroll/Admin must authorize before submitting.`);
     render();
     return;
   }
