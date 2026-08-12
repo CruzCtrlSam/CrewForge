@@ -1030,6 +1030,56 @@ textarea {
   justify-content: flex-end;
 }
 
+.sync-tag {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.offline-note {
+  border: 2px dashed #8ba0ad;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.audit-check-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audit-check {
+  min-height: 54px;
+}
+
+.audit-list {
+  display: grid;
+  gap: 12px;
+}
+
+.audit-card {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.audit-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.audit-card header span,
+.audit-card p {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .custom-tracking-grid {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(140px, 0.6fr) minmax(140px, 0.6fr);
@@ -2111,7 +2161,8 @@ tr:last-child td {
   .production-add-grid,
   .people-form,
   .mini-grid,
-  .day-grid {
+  .day-grid,
+  .audit-check-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2141,6 +2192,10 @@ tr:last-child td {
 
   .document-actions > * {
     flex: 1 1 140px;
+  }
+
+  .audit-card header {
+    display: grid;
   }
 
   .bundle-job-card {

@@ -62,6 +62,17 @@ const fabricationProcessSteps = [
 const qualityRejectReasons = ["None", "Missed bend", "Wrong size", "Wrong quantity", "Bad steel quality", "Damaged", "Other"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
+const safetyFormTypes = ["JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
+const fieldAuditChecks = [
+  ["ppe", "PPE in use", "EPP en uso"],
+  ["jha", "JHA available", "JHA disponible"],
+  ["permits", "Required permits on hand", "Permisos requeridos disponibles"],
+  ["housekeeping", "Housekeeping acceptable", "Orden y limpieza aceptable"],
+  ["equipment", "Equipment inspected", "Equipo inspeccionado"],
+  ["fire", "Fire extinguishers checked", "Extintores revisados"],
+  ["rigging", "Rigging inspected", "Rigging inspeccionado"],
+  ["client", "Client requirements met", "Requisitos del cliente cumplidos"]
+];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
 const fabricationJobTypes = [...installationJobTypes, "Commercial"];
 const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
@@ -82,6 +93,9 @@ const areaArtwork = {
   rebarInstall: asset("./assets/crewforge-thumbnail.png"),
   bundleLab: asset("./assets/crewforge-bundle-tracking.svg")
 };
+function visibleAreaEntries() {
+  return Object.entries(areas).filter(([id]) => id !== "bundleLab");
+}
 const mockTrialCrews = [
   {
     foreman: "Gregorio Izaguirre",
@@ -183,7 +197,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
@@ -553,6 +567,9 @@ const defaultState = {
   deliverableFromDate: "2026-06-29",
   deliverableToDate: "2026-07-03",
   jobDraftType: "",
+  selectedSafetyJob: "",
+  selectedSafetyFormType: "JHA",
+  selectedAuditJob: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -570,6 +587,8 @@ const defaultState = {
     { id: "solar-demo", name: "Solar Piles Demo Job", number: "SP-100", customer: "Solar", area: "solarPiles", status: "Active" }
   ],
   sheets: {},
+  safetyForms: [],
+  fieldAudits: [],
   production: [
     ...bakersfieldControlCodes,
     { id: "p3", area: "rebarFab", foreman: "Rebar Fabrication Day Foreman", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
@@ -719,8 +738,13 @@ function upgradeState(next) {
   next.deliverableFromDate = next.deliverableFromDate || defaultRange.start;
   next.deliverableToDate = next.deliverableToDate || defaultRange.end;
   next.selectedDocumentJob = next.selectedDocumentJob || "";
+  next.selectedSafetyJob = next.selectedSafetyJob || "";
+  next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
+  next.selectedAuditJob = next.selectedAuditJob || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
+  next.safetyForms = next.safetyForms || [];
+  next.fieldAudits = next.fieldAudits || [];
   next.bundlePlanner = {
     ...defaultBundlePlanner(),
     ...(next.bundlePlanner || {})
@@ -1210,7 +1234,9 @@ function availableTabs() {
   }
   if (state.selectedRole === "Quality") {
     return [
-      ["production", "Bundle Tracking", "Rastreo de paquetes"],
+      ["production", "Production", "Produccion"],
+      ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"]
     ];
   }
@@ -1218,6 +1244,8 @@ function availableTabs() {
     return [
       ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
       ["production", "Production Update", "Produccion"],
+      ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"]
     ];
   }
@@ -1226,6 +1254,8 @@ function availableTabs() {
     ["timesheet", "Timesheet Review", "Revision de horas"],
     ["production", "Production", "Produccion"],
     ["jobs", "Jobs", "Trabajos"],
+    ["safety", "Safety Forms", "Documentos de seguridad"],
+    ["audits", "Field Audits", "Auditorias de campo"],
     ["documents", "Documents", "Documentos"],
     ["employeeReports", "Employee Reports", "Reportes de empleados"],
     ["deliverables", "Deliverables", "Entregables"],
@@ -1966,7 +1996,7 @@ function renderGate() {
         <button class="text-button gate-logout" id="gateLogout" type="button">Change company<span class="es">Cambiar compania</span></button>
       </section>
       <section class="area-grid">
-        ${Object.entries(areas)
+        ${visibleAreaEntries()
           .map(
             ([id, info]) => `
             <button class="area-card" type="button" data-area="${id}">
@@ -1975,7 +2005,7 @@ function renderGate() {
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>
               </span>
-              <span class="sub">${id === "bundleLab" ? "Bundle status tracking" : info.adminOnly ? "Admin test area" : info.mode === "crew" ? "Crew timesheets" : "Day/Night shift timesheets"}</span>
+              <span class="sub">${info.mode === "crew" ? "Crew timesheets, production, safety, and audits" : "Shift timesheets, production, safety, and audits"}</span>
             </button>
           `
           )
@@ -2093,6 +2123,8 @@ function renderActiveTab() {
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
+  if (state.activeTab === "safety") return renderSafetyForms();
+  if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
   if (state.activeTab === "employeeReports") return renderEmployeeReports();
   if (state.activeTab === "deliverables") return renderDeliverables();
@@ -2755,6 +2787,8 @@ function renderDashboard() {
   const sheet = currentSheet();
   const totals = productionTotals();
   const pct = totals.planned ? Math.round((totals.completed / totals.planned) * 100) : 0;
+  const weeklySafety = state.safetyForms.filter((form) => form.area === state.selectedArea && form.date >= selectedWeekStart() && form.date <= state.selectedWeek).length;
+  const weeklyAudits = state.fieldAudits.filter((audit) => audit.area === state.selectedArea && audit.date >= selectedWeekStart() && audit.date <= state.selectedWeek).length;
   return `
     <section class="printable-report dashboard-report">
       ${reportHeader("Dashboard", state.selectedWeek)}
@@ -2763,6 +2797,8 @@ function renderDashboard() {
       <article class="metric"><span>Timesheet status</span><strong>${sheet.status}</strong><small>${sheet.foreman || "No foreman selected"}</small></article>
       <article class="metric"><span>Production</span><strong>${pct}%</strong><small>${number(totals.completed)} of ${number(totals.planned)}</small></article>
       <article class="metric"><span>Delays</span><strong>${totals.delayed}</strong><small>Reported production delays</small></article>
+      <article class="metric"><span>Safety</span><strong>${weeklySafety}</strong><small>Records this week</small></article>
+      <article class="metric"><span>Audits</span><strong>${weeklyAudits}</strong><small>Field checks this week</small></article>
       </div>
     <section class="panel report-panel">
       <div class="split">
@@ -3500,7 +3536,7 @@ function renderProduction() {
     <section class="panel printable-report production-report">
       ${reportHeader(isFieldEntryMode() ? "Production Update" : "Production", state.selectedProductionJob ? `${state.selectedWeek} · ${jobName(state.selectedProductionJob)}` : state.selectedWeek)}
       <div class="split">
-        <div><h2>${t(isFieldEntryMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track jobs, control codes, bundles, status, and delays.</p></div>
+        <div><h2>${t(isFieldEntryMode() ? "Production Update" : "Production", "Produccion")}</h2><p class="sub">Track job progress, control codes, completed work, status, and delays.</p></div>
         <div class="button-pair">
           ${visibleProduction.length ? `<button class="primary-action" data-submit-production type="button">${t("Submit Production", "Enviar produccion")}</button>` : ""}
           <button class="secondary-action" data-print="production">${t("Export PDF", "Exportar PDF")}</button>
@@ -3739,7 +3775,7 @@ function renderFoundationProductionCard(item) {
 
 function renderJobs() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
-  const areaOptions = Object.entries(areas).map(([id, info]) => ({ id, name: info.label }));
+  const areaOptions = visibleAreaEntries().map(([id, info]) => ({ id, name: info.label }));
   const isSolar = state.selectedArea === "solarPiles";
   const jobTypes = jobTypeOptionsForArea();
   const selectedJobType = isSolar ? "" : state.jobDraftType || jobTypes[0] || "";
@@ -3862,7 +3898,7 @@ function renderSolarListsSetup() {
 }
 
 function renderDocuments() {
-  const canManage = ["Admin", "Payroll"].includes(state.selectedRole);
+  const canManage = ["Admin", "Management", "Quality"].includes(state.selectedRole);
   const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete" || job.documents?.length);
   const selectedJob = jobs.find((job) => job.id === state.selectedDocumentJob) || jobs[0];
   const docs = selectedJob?.documents || [];
@@ -3898,6 +3934,116 @@ function renderDocuments() {
         </div>
       `}
     </section>
+  `;
+}
+
+function selectedAreaJobsWithFallback(selectedId) {
+  const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete");
+  const selectedJob = jobs.find((job) => job.id === selectedId) || jobs[0];
+  return { jobs, selectedJob };
+}
+
+function renderSafetyForms() {
+  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedSafetyJob);
+  const forms = state.safetyForms.filter((form) => form.area === state.selectedArea && (!selectedJob || form.jobId === selectedJob.id));
+  const selectedType = state.selectedSafetyFormType || "JHA";
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Safety Forms", "Documentos de seguridad")}</h2>
+          <p class="sub">Fill out daily safety records by job, attach evidence, and keep the packet available for print or review.</p>
+        </div>
+        <span class="tag sync-tag">Offline draft ready<span class="es">Borrador sin conexion</span></span>
+      </div>
+      ${!jobs.length ? `<div class="notice">Add a job first so safety records can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
+        <div class="form-grid section-gap">
+          <label>Job site<span class="es">Sitio de trabajo</span><select id="safetyJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+          <label>Form type<span class="es">Tipo de forma</span><select id="safetyTypeSelect">${setOptions(safetyFormTypes, selectedType)}</select></label>
+          <label>Date<span class="es">Fecha</span><input id="safetyDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
+          <label>Notes<span class="es">Notas</span><input id="safetyNotes" placeholder="Topic, hazard, permit number, or inspection note" /></label>
+          <label>Evidence / completed form<span class="es">Evidencia / forma completa</span><input id="safetyFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
+          <button class="primary-action form-button" id="addSafetyForm" type="button" ${canSubmit ? "" : "disabled"}>${t("Save safety record", "Guardar seguridad")}</button>
+        </div>
+        <div class="offline-note section-gap">
+          <strong>Offline use:</strong> records can be filled out in the browser and will stay on the device until sync is available.
+          <span class="es">Uso sin conexion: se guarda en el equipo hasta sincronizar.</span>
+        </div>
+        <div class="document-grid section-gap">
+          ${forms.length ? forms.map(safetyFormCard).join("") : `<div class="empty-state">No safety records for this job yet.<span class="es">Todavia no hay registros de seguridad.</span></div>`}
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function safetyFormCard(form) {
+  return `
+    <article class="document-card">
+      <div>
+        <span class="tag">${escapeHtml(form.type)}</span>
+        <h3>${escapeHtml(jobName(form.jobId))}</h3>
+        <p class="sub">${escapeHtml(form.date)} · ${escapeHtml(form.createdBy || "")}${form.notes ? ` · ${escapeHtml(form.notes)}` : ""}</p>
+        ${form.files?.length ? `<p class="sub">${form.files.length} attachment${form.files.length === 1 ? "" : "s"}</p>` : ""}
+      </div>
+      <div class="document-actions">
+        ${form.files?.map((file) => `<button class="secondary-action table-action" data-safety-file="${form.id}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>`).join("") || ""}
+        <button class="primary-action table-action" data-print-safety="${form.id}" type="button">Print<span class="es">Imprimir</span></button>
+      </div>
+    </article>
+  `;
+}
+
+function renderFieldAudits() {
+  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
+  const audits = state.fieldAudits.filter((audit) => audit.area === state.selectedArea && (!selectedJob || audit.jobId === selectedJob.id));
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Field Audits", "Auditorias de campo")}</h2>
+          <p class="sub">Checklist and evidence upload by job site for client inspections, safety checks, and field accountability.</p>
+        </div>
+        <span class="tag sync-tag">Evidence by job<span class="es">Evidencia por trabajo</span></span>
+      </div>
+      ${!jobs.length ? `<div class="notice">Add a job first so audits can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
+        <div class="form-grid section-gap">
+          <label>Job site<span class="es">Sitio de trabajo</span><select id="auditJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+          <label>Date<span class="es">Fecha</span><input id="auditDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
+          <label>Inspector / user<span class="es">Inspector / usuario</span><input id="auditUser" value="${escapeHtml(actorName())}" /></label>
+          <label>Evidence photos/files<span class="es">Fotos / evidencia</span><input id="auditFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
+        </div>
+        <div class="audit-check-grid section-gap">
+          ${fieldAuditChecks.map(([key, en, es]) => `<label class="check-label audit-check"><input data-audit-check="${key}" type="checkbox" /> ${en}<span class="es">${es}</span></label>`).join("")}
+        </div>
+        <label class="section-gap">Notes / corrective action<span class="es">Notas / accion correctiva</span><textarea id="auditNotes" placeholder="What was found, what was corrected, who was notified"></textarea></label>
+        <div class="action-row section-gap">
+          <button class="primary-action" id="saveFieldAudit" type="button" ${canSubmit ? "" : "disabled"}>${t("Save audit", "Guardar auditoria")}</button>
+        </div>
+        <div class="audit-list section-gap">
+          ${audits.length ? audits.map(fieldAuditCard).join("") : `<div class="empty-state">No audits for this job yet.<span class="es">Todavia no hay auditorias.</span></div>`}
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function fieldAuditCard(audit) {
+  const checkedCount = Object.values(audit.checks || {}).filter(Boolean).length;
+  return `
+    <article class="audit-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(jobName(audit.jobId))}</strong>
+          <span>${escapeHtml(audit.date)} · ${escapeHtml(audit.createdBy || "")}</span>
+        </div>
+        <span class="tag">${checkedCount}/${fieldAuditChecks.length} checked</span>
+      </header>
+      <p>${escapeHtml(audit.notes || "No notes")}</p>
+      ${audit.files?.length ? `<div class="document-actions">${audit.files.map((file) => `<button class="secondary-action table-action" data-audit-file="${audit.id}" data-file-id="${file.id}" type="button">${escapeHtml(file.name)}<span class="es">Abrir</span></button>`).join("")}</div>` : ""}
+    </article>
   `;
 }
 
@@ -3945,7 +4091,7 @@ function renderEmployeeReports() {
       </div>
       <div class="form-grid section-gap no-print">
         <label>Employee<span class="es">Trabajador</span><select id="employeeReportSelect">${setOptions(employees, selectedEmployee)}</select></label>
-        <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${Object.entries(areas).map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
+        <label>Operating area<span class="es">Area de trabajo</span><select id="employeeReportArea"><option value="all" ${employeeArea === "all" ? "selected" : ""}>All areas</option>${visibleAreaEntries().map(([id, details]) => `<option value="${id}" ${employeeArea === id ? "selected" : ""}>${details.label}</option>`).join("")}</select></label>
         <label>From day<span class="es">Desde dia</span><input id="employeeReportFromDate" type="date" value="${fromDate}" /></label>
         <label>To day<span class="es">Hasta dia</span><input id="employeeReportToDate" type="date" value="${toDate}" /></label>
         ${dateShiftControls("employeeReports", "Back range", "Forward range")}
@@ -4552,6 +4698,37 @@ function bindTabEvents() {
     updateOtherDocumentTypeVisibility();
   }
   if ($("jobDocumentFile")) $("jobDocumentFile").addEventListener("change", uploadJobDocuments);
+  if ($("safetyJobSelect")) {
+    $("safetyJobSelect").addEventListener("change", (event) => {
+      state.selectedSafetyJob = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("safetyTypeSelect")) {
+    $("safetyTypeSelect").addEventListener("change", (event) => {
+      state.selectedSafetyFormType = event.target.value;
+      saveState();
+    });
+  }
+  if ($("addSafetyForm")) $("addSafetyForm").addEventListener("click", addSafetyFormRecord);
+  document.querySelectorAll("[data-safety-file]").forEach((button) => {
+    button.addEventListener("click", () => openRecordFile("safetyForms", button.dataset.safetyFile, button.dataset.fileId));
+  });
+  document.querySelectorAll("[data-print-safety]").forEach((button) => {
+    button.addEventListener("click", () => printSafetyRecord(button.dataset.printSafety));
+  });
+  if ($("auditJobSelect")) {
+    $("auditJobSelect").addEventListener("change", (event) => {
+      state.selectedAuditJob = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("saveFieldAudit")) $("saveFieldAudit").addEventListener("click", saveFieldAuditRecord);
+  document.querySelectorAll("[data-audit-file]").forEach((button) => {
+    button.addEventListener("click", () => openRecordFile("fieldAudits", button.dataset.auditFile, button.dataset.fileId));
+  });
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
   if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
   if ($("exportEmployeeCsv")) $("exportEmployeeCsv").addEventListener("click", exportEmployeeCsv);
@@ -5671,6 +5848,126 @@ async function uploadJobDocuments(event) {
   saveState();
   render();
   showToast(`${files.length} document${files.length === 1 ? "" : "s"} uploaded`);
+}
+
+async function filesToStoredAttachments(files) {
+  const incoming = Array.from(files || []);
+  const oversized = incoming.find((file) => file.size > MAX_DEMO_DOCUMENT_BYTES);
+  if (oversized) {
+    showToast(`${oversized.name} is over the 5 MB demo limit`);
+    return null;
+  }
+  const attachments = [];
+  for (const file of incoming) {
+    attachments.push({
+      id: `file-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: file.name,
+      mime: file.type || "application/octet-stream",
+      size: file.size,
+      dataUrl: await readFileAsDataUrl(file)
+    });
+  }
+  return attachments;
+}
+
+async function addSafetyFormRecord() {
+  const jobId = $("safetyJobSelect")?.value;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return showToast("Choose a job first");
+  const files = await filesToStoredAttachments($("safetyFiles")?.files);
+  if (!files) return;
+  const record = {
+    id: `safety-${Date.now()}`,
+    area: state.selectedArea,
+    jobId,
+    type: $("safetyTypeSelect")?.value || "JHA",
+    date: $("safetyDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
+    notes: $("safetyNotes")?.value.trim() || "",
+    files,
+    createdAt: timestamp(),
+    createdBy: actorName(),
+    status: "Saved"
+  };
+  state.safetyForms.unshift(record);
+  state.selectedSafetyJob = jobId;
+  state.selectedSafetyFormType = record.type;
+  logActivity("Safety record saved", { area: state.selectedArea, job: job.name, field: record.type });
+  saveState();
+  render();
+  showToast("Safety record saved");
+}
+
+async function saveFieldAuditRecord() {
+  const jobId = $("auditJobSelect")?.value;
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return showToast("Choose a job first");
+  const files = await filesToStoredAttachments($("auditFiles")?.files);
+  if (!files) return;
+  const checks = {};
+  document.querySelectorAll("[data-audit-check]").forEach((input) => {
+    checks[input.dataset.auditCheck] = input.checked;
+  });
+  const record = {
+    id: `audit-${Date.now()}`,
+    area: state.selectedArea,
+    jobId,
+    date: $("auditDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
+    createdBy: $("auditUser")?.value.trim() || actorName(),
+    checks,
+    notes: $("auditNotes")?.value.trim() || "",
+    files,
+    createdAt: timestamp(),
+    status: "Saved"
+  };
+  state.fieldAudits.unshift(record);
+  state.selectedAuditJob = jobId;
+  logActivity("Field audit saved", { area: state.selectedArea, job: job.name, field: `${Object.values(checks).filter(Boolean).length}/${fieldAuditChecks.length} checks` });
+  saveState();
+  render();
+  showToast("Field audit saved");
+}
+
+function openRecordFile(collectionName, recordId, fileId) {
+  const record = state[collectionName]?.find((entry) => entry.id === recordId);
+  const file = record?.files?.find((entry) => entry.id === fileId);
+  if (!file) return;
+  const win = window.open(file.dataUrl, "_blank");
+  if (!win) showToast("Allow popups to open this file");
+}
+
+function printSafetyRecord(recordId) {
+  const record = state.safetyForms.find((entry) => entry.id === recordId);
+  if (!record) return;
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print this record");
+  const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(record.type)} - ${escapeHtml(jobName(record.jobId))}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 28px; color: #0b1828; }
+          header { border-bottom: 2px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
+          h1 { margin: 0; font-size: 28px; }
+          p, li { font-size: 14px; line-height: 1.45; }
+          .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+          .box { border: 1px solid #b8c1c8; padding: 12px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <header><h1>${escapeHtml(record.type)}</h1><p>${escapeHtml(jobName(record.jobId))}</p></header>
+        <div class="meta">
+          <div class="box"><strong>Date</strong><br>${escapeHtml(record.date)}</div>
+          <div class="box"><strong>Saved by</strong><br>${escapeHtml(record.createdBy || "")}</div>
+        </div>
+        <section class="box"><strong>Notes</strong><p>${escapeHtml(record.notes || "No notes")}</p></section>
+        <section><h2>Attachments</h2><ul>${files}</ul></section>
+        <script>window.onload = () => window.print();<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 function findJobDocument(jobId, docId) {
