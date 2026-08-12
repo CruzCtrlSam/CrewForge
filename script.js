@@ -184,6 +184,7 @@ const trialWeekHourPatterns = [
   { mon: 10, tue: 10, wed: 9, thu: 9, fri: 9, sat: 0, sun: 0 }
 ];
 const trialPerDiems = [175, 225, 275, 325, 350, 400, 450, 500, 525, 575];
+const trialSeedWeek = "2026-07-03";
 const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
@@ -916,6 +917,7 @@ function upgradeState(next) {
 function seedCurrentWeekInstallationTrialData(next) {
   const week = next.selectedWeek || defaultState.selectedWeek;
   const weekStart = weekRangeDates(week).start;
+  const shouldSeedHours = week === trialSeedWeek;
   if (!next.weeks.includes(week)) {
     next.weeks.push(week);
     next.weeks.sort();
@@ -940,7 +942,7 @@ function seedCurrentWeekInstallationTrialData(next) {
         foreman,
         group: crewName,
         status: "Draft",
-        rows: expectedPeople.map((person, rowIndex) => trialTimesheetRow(person, foremanIndex, rowIndex))
+        rows: expectedPeople.map((person, rowIndex) => trialTimesheetRow(person, foremanIndex, rowIndex, shouldSeedHours))
       };
       return;
     }
@@ -956,12 +958,13 @@ function seedCurrentWeekInstallationTrialData(next) {
     const existingNames = new Set(sheet.rows.map((row) => row.employee));
     expectedPeople.forEach((person, rowIndex) => {
       if (!existingNames.has(person.name)) {
-        sheet.rows.push(trialTimesheetRow(person, foremanIndex, rowIndex));
+        sheet.rows.push(trialTimesheetRow(person, foremanIndex, rowIndex, shouldSeedHours));
       }
     });
     sheet.rows.forEach((row, rowIndex) => {
-      if (!Number(row.perDiem)) row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
-      if (!rowHasManualTimeData(row)) applyTrialHours(row, foremanIndex, rowIndex);
+      const shouldFillTrial = shouldSeedHours && !rowHasManualTimeData(row);
+      if (shouldFillTrial && !Number(row.perDiem)) row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
+      if (shouldFillTrial) applyTrialHours(row, foremanIndex, rowIndex);
     });
   });
 }
@@ -981,6 +984,8 @@ function trialHoursForRow(foremanIndex, rowIndex) {
 
 function rowHasManualTimeData(row) {
   return (
+    row.manualTimesheetEntry ||
+    row.clearedTimesheetEntry ||
     days.some((day) => Number(row[day])) ||
     Number(row.pto) ||
     Number(row.sick) ||
@@ -1001,6 +1006,8 @@ function clearTimesheetRowEntries(row) {
   row.reimbursementNote = "";
   row.notes = "";
   row.lightDuty = {};
+  row.clearedTimesheetEntry = true;
+  row.manualTimesheetEntry = true;
 }
 
 function applyTrialHours(row, foremanIndex, rowIndex) {
@@ -1008,9 +1015,11 @@ function applyTrialHours(row, foremanIndex, rowIndex) {
   days.forEach((day) => {
     row[day] = pattern[day] || 0;
   });
+  row.manualTimesheetEntry = false;
+  row.clearedTimesheetEntry = false;
 }
 
-function trialTimesheetRow(person, foremanIndex, rowIndex) {
+function trialTimesheetRow(person, foremanIndex, rowIndex, seedHours = true) {
   const row = {
     employee: person.name,
     roleOverride: "",
@@ -1030,8 +1039,13 @@ function trialTimesheetRow(person, foremanIndex, rowIndex) {
     borrowed: false,
     notes: ""
   };
-  row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
-  applyTrialHours(row, foremanIndex, rowIndex);
+  if (seedHours) {
+    row.perDiem = trialPerDiemForRow(foremanIndex, rowIndex);
+    applyTrialHours(row, foremanIndex, rowIndex);
+  } else {
+    row.manualTimesheetEntry = true;
+    row.clearedTimesheetEntry = true;
+  }
   return row;
 }
 
@@ -3085,12 +3099,14 @@ function setSelectedWeekStart(value) {
   const fallbackStart = selectedWeekStart();
   const start = dateInputValue(value, fallbackStart);
   const weekEnding = addDays(start, 4);
+  const targetForeman = currentSheet().foreman || state.currentForeman;
   state.selectedWeek = weekEnding;
+  state.currentForeman = targetForeman;
   if (!state.weeks.includes(weekEnding)) {
     state.weeks.push(weekEnding);
     state.weeks.sort();
   }
-  const key = sheetKey(weekEnding, state.selectedArea, state.currentForeman);
+  const key = sheetKey(weekEnding, state.selectedArea, targetForeman);
   if (!state.sheets[key]) state.sheets[key] = seedSheet();
   state.sheets[key].week = weekEnding;
   state.sheets[key].weekStart = start;
@@ -4625,6 +4641,10 @@ function bindTabEvents() {
         row.lightDuty[day] = event.target.checked;
       } else {
         row[field] = textFields.includes(field) ? event.target.value : Number(event.target.value);
+      }
+      if (field.startsWith("lightDuty.") || days.includes(field) || ["pto", "sick", "perDiem", "reimbursement", "reimbursementNote", "notes", "employee", "roleOverride"].includes(field)) {
+        row.manualTimesheetEntry = true;
+        row.clearedTimesheetEntry = false;
       }
       if (field === "employee") {
         row.employee = event.target.value;
