@@ -1087,6 +1087,17 @@ textarea {
   margin-top: 12px;
 }
 
+.qc-bend-panel {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.qc-bend-table input {
+  width: 100%;
+}
+
 .list-chip-row {
   display: flex;
   flex-wrap: wrap;

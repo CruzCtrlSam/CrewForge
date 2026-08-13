@@ -63,6 +63,15 @@ const qualityRejectReasons = ["None", "Missed bend", "Wrong size", "Wrong quanti
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const safetyFormTypes = ["JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
+const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
+const qcBendLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "K"];
+const rebarShapeOptions = [
+  "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27",
+  "33", "34", "35", "36", "37", "51", "52", "53", "54", "55", "56", "57",
+  "58", "59", "510", "511", "61", "71", "72", "73", "74", "75", "76", "77",
+  "78", "79", "710", "711", "712", "5A", "6A", "7A", "41", "42", "43", "44",
+  "45", "46", "37A", "47", "99 SP", "48", "Other"
+];
 const fieldAuditChecks = [
   ["ppe", "PPE in use", "EPP en uso"],
   ["jha", "JHA available", "JHA disponible"],
@@ -198,7 +207,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 const defaultPeople = [
@@ -571,6 +580,8 @@ const defaultState = {
   selectedSafetyJob: "",
   selectedSafetyFormType: "JHA",
   selectedAuditJob: "",
+  selectedQualityJob: "",
+  selectedQualityArea: "rebarFab",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -590,6 +601,7 @@ const defaultState = {
   sheets: {},
   safetyForms: [],
   fieldAudits: [],
+  qualityChecks: [],
   production: [
     ...bakersfieldControlCodes,
     { id: "p3", area: "rebarFab", foreman: "Rebar Fabrication Day Foreman", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
@@ -742,10 +754,13 @@ function upgradeState(next) {
   next.selectedSafetyJob = next.selectedSafetyJob || "";
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedAuditJob = next.selectedAuditJob || "";
+  next.selectedQualityJob = next.selectedQualityJob || "";
+  next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.safetyForms = next.safetyForms || [];
   next.fieldAudits = next.fieldAudits || [];
+  next.qualityChecks = next.qualityChecks || [];
   next.bundlePlanner = {
     ...defaultBundlePlanner(),
     ...(next.bundlePlanner || {})
@@ -1228,6 +1243,10 @@ function canUpdateBundleProductionStatus() {
   return ["Admin", "Quality", "Foreman"].includes(state.selectedRole);
 }
 
+function canUseQualityControl() {
+  return ["Admin", "Management", "Quality"].includes(state.selectedRole) && ["rebarFab", "rebarInstall"].includes(state.selectedArea);
+}
+
 function isApproverMode() {
   return state.selectedRole === "Approver";
 }
@@ -1248,6 +1267,7 @@ function availableTabs() {
   }
   if (state.selectedRole === "Quality") {
     return [
+      ["qualityControl", "Quality Control", "Control de calidad"],
       ["production", "Production", "Produccion"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
       ["audits", "Field Audits", "Auditorias de campo"],
@@ -1268,6 +1288,7 @@ function availableTabs() {
     ["timesheet", "Timesheet Review", "Revision de horas"],
     ["production", "Production", "Produccion"],
     ["jobs", "Jobs", "Trabajos"],
+    ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
     ["safety", "Safety Forms", "Documentos de seguridad"],
     ["audits", "Field Audits", "Auditorias de campo"],
     ["documents", "Documents", "Documentos"],
@@ -1697,6 +1718,7 @@ function setArea(areaId) {
   state.selectedArea = areaId;
   state.showIntro = false;
   state.activeTab = state.auth ? (isFieldEntryMode() ? "timesheet" : "dashboard") : "dashboard";
+  if (state.auth?.role === "Quality" && ["rebarFab", "rebarInstall"].includes(areaId)) state.activeTab = "qualityControl";
   state.selectedProductionJob = "";
   state.selectedDocumentJob = "";
   if (state.auth) ensureAreaForeman();
@@ -1944,7 +1966,7 @@ function loginWithCode() {
   state.showIntro = false;
   state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
   if (state.selectedArea === "bundleLab") state.activeTab = "bundlePlanner";
-  if (state.selectedRole === "Quality") state.activeTab = "production";
+  if (state.selectedRole === "Quality") state.activeTab = ["rebarFab", "rebarInstall"].includes(state.selectedArea) ? "qualityControl" : "production";
   saveState();
   render();
   syncHistory();
@@ -2137,6 +2159,7 @@ function renderActiveTab() {
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
+  if (state.activeTab === "qualityControl") return renderQualityControl();
   if (state.activeTab === "safety") return renderSafetyForms();
   if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
@@ -3953,6 +3976,103 @@ function renderDocuments() {
   `;
 }
 
+function qualityControlRows(defaultCount = 5) {
+  return Array.from({ length: defaultCount }, (_, index) => {
+    const letter = qcBendLetters[index] || `Bend ${index + 1}`;
+    return `
+      <tr>
+        <td><input data-qc-bend="label" value="${letter}" /></td>
+        <td><input data-qc-bend="card" placeholder="Size on card" /></td>
+        <td><input data-qc-bend="actual" placeholder="Actual size" /></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function qualityAreaOptions() {
+  return [
+    { id: "rebarFab", name: areas.rebarFab.label },
+    { id: "rebarInstall", name: areas.rebarInstall.label }
+  ];
+}
+
+function qualityJobsForArea(areaId = state.selectedQualityArea || state.selectedArea) {
+  return state.jobs.filter((job) => job.area === areaId && (job.status || "Active") !== "Complete");
+}
+
+function renderQualityControl() {
+  const canSubmit = canUseQualityControl();
+  const qualityArea = ["rebarFab", "rebarInstall"].includes(state.selectedQualityArea) ? state.selectedQualityArea : state.selectedArea;
+  const jobs = qualityJobsForArea(qualityArea);
+  const selectedJob = jobs.find((job) => job.id === state.selectedQualityJob) || jobs[0];
+  const records = state.qualityChecks
+    .filter((record) => record.area === qualityArea && (!selectedJob || record.jobId === selectedJob.id))
+    .slice(0, 20);
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Quality Control", "Control de calidad")}</h2>
+          <p class="sub">Check card dimensions against actual measurements for rebar fabrication and installation work.</p>
+        </div>
+        <span class="tag sync-tag">QUALITY<span class="es">Calidad</span></span>
+      </div>
+      ${!canSubmit ? `<div class="notice">Quality Control is available to QUALITY, Admin, and Management for the two rebar departments.</div>` : ""}
+      <div class="form-grid section-gap">
+        <label>Rebar department<span class="es">Departamento de varilla</span><select id="qcAreaSelect">${setOptions(qualityAreaOptions(), qualityArea, (item) => item.name, (item) => item.id)}</select></label>
+        <label>Job name<span class="es">Trabajo</span><select id="qcJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+        <label>Card code<span class="es">Codigo de tarjeta</span><input id="qcCardCode" placeholder="Example: Q369, AAFR, 11E138" /></label>
+        <label>Shape<span class="es">Forma</span><select id="qcShape">${setOptions(rebarShapeOptions, "")}</select></label>
+        <label>Operator name<span class="es">Operador</span><input id="qcOperator" placeholder="Operator name" /></label>
+        <label>Machine type<span class="es">Tipo de maquina</span><select id="qcMachine">${setOptions(qcMachineTypes, qcMachineTypes[0])}</select></label>
+      </div>
+      <div class="qc-bend-panel section-gap">
+        <div class="split">
+          <div>
+            <h3>Bend measurements<span class="es">Medidas por doblez</span></h3>
+            <p class="sub">Start with five bends; add more when the shape card needs them.</p>
+          </div>
+          <button class="secondary-action table-action" id="addQcBend" type="button">Add bend<span class="es">Agregar doblez</span></button>
+        </div>
+        <div class="table-wrap">
+          <table class="entry-table qc-bend-table">
+            <thead><tr><th>Bend<span class="es">Doblez</span></th><th>Card size<span class="es">Medida en tarjeta</span></th><th>Actual size<span class="es">Medida real</span></th></tr></thead>
+            <tbody id="qcBendRows">${qualityControlRows()}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="form-grid section-gap">
+        <label>QC result<span class="es">Resultado</span><select id="qcResult">${setOptions(["Pass", "Needs Review", "Reject"], "Pass")}</select></label>
+        <label>Reason / notes<span class="es">Razon / notas</span><input id="qcNotes" placeholder="Missed bend, wrong length, bad steel, etc." /></label>
+        <button class="primary-action form-button" id="saveQualityCheck" type="button" ${canSubmit && selectedJob ? "" : "disabled"}>${t("Save QC check", "Guardar revision")}</button>
+      </div>
+      <div class="section-gap">
+        <h3>Recent QC records<span class="es">Revisiones recientes</span></h3>
+        <div class="table-wrap">
+          <table class="entry-table">
+            <thead><tr><th>Date</th><th>Job</th><th>Card</th><th>Shape</th><th>Machine</th><th>Operator</th><th>Result</th><th>Bends</th><th>Notes</th></tr></thead>
+            <tbody>
+              ${records.length ? records.map((record) => `
+                <tr>
+                  <td>${escapeHtml(record.createdAt || "")}</td>
+                  <td>${escapeHtml(jobName(record.jobId))}</td>
+                  <td><strong>${escapeHtml(record.cardCode || "")}</strong></td>
+                  <td>${escapeHtml(record.shape || "")}</td>
+                  <td>${escapeHtml(record.machineType || "")}</td>
+                  <td>${escapeHtml(record.operator || "")}</td>
+                  <td><span class="tag">${escapeHtml(record.result || "")}</span></td>
+                  <td>${record.bends?.length || 0}</td>
+                  <td>${escapeHtml(record.notes || "")}</td>
+                </tr>
+              `).join("") : `<tr><td colspan="9">No QC records for this job yet.<span class="es">Todavia no hay revisiones.</span></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function selectedAreaJobsWithFallback(selectedId) {
   const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete");
   const selectedJob = jobs.find((job) => job.id === selectedId) || jobs[0];
@@ -4718,6 +4838,23 @@ function bindTabEvents() {
     updateOtherDocumentTypeVisibility();
   }
   if ($("jobDocumentFile")) $("jobDocumentFile").addEventListener("change", uploadJobDocuments);
+  if ($("qcAreaSelect")) {
+    $("qcAreaSelect").addEventListener("change", (event) => {
+      state.selectedQualityArea = event.target.value;
+      state.selectedQualityJob = "";
+      saveState();
+      render();
+    });
+  }
+  if ($("qcJobSelect")) {
+    $("qcJobSelect").addEventListener("change", (event) => {
+      state.selectedQualityJob = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("addQcBend")) $("addQcBend").addEventListener("click", addQualityBendRow);
+  if ($("saveQualityCheck")) $("saveQualityCheck").addEventListener("click", saveQualityCheck);
   if ($("safetyJobSelect")) {
     $("safetyJobSelect").addEventListener("change", (event) => {
       state.selectedSafetyJob = event.target.value;
@@ -5888,6 +6025,62 @@ async function filesToStoredAttachments(files) {
     });
   }
   return attachments;
+}
+
+function addQualityBendRow() {
+  const tbody = $("qcBendRows");
+  if (!tbody) return;
+  const index = tbody.querySelectorAll("tr").length;
+  const letter = qcBendLetters[index] || `Bend ${index + 1}`;
+  tbody.insertAdjacentHTML("beforeend", `
+    <tr>
+      <td><input data-qc-bend="label" value="${letter}" /></td>
+      <td><input data-qc-bend="card" placeholder="Size on card" /></td>
+      <td><input data-qc-bend="actual" placeholder="Actual size" /></td>
+    </tr>
+  `);
+}
+
+function collectQualityBends() {
+  return Array.from(document.querySelectorAll("#qcBendRows tr"))
+    .map((row) => {
+      const label = row.querySelector('[data-qc-bend="label"]')?.value.trim() || "";
+      const cardSize = row.querySelector('[data-qc-bend="card"]')?.value.trim() || "";
+      const actualSize = row.querySelector('[data-qc-bend="actual"]')?.value.trim() || "";
+      return { label, cardSize, actualSize };
+    })
+    .filter((bend) => bend.label || bend.cardSize || bend.actualSize);
+}
+
+function saveQualityCheck() {
+  if (!canUseQualityControl()) return showToast("QUALITY, Admin, or Management access required");
+  const areaId = $("qcAreaSelect")?.value || state.selectedQualityArea || state.selectedArea;
+  const jobId = $("qcJobSelect")?.value || "";
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return showToast("Choose a job first");
+  const cardCode = $("qcCardCode")?.value.trim() || "";
+  if (!cardCode) return showToast("Enter the card code");
+  const record = {
+    id: `qc-${Date.now()}`,
+    area: areaId,
+    jobId,
+    cardCode,
+    shape: $("qcShape")?.value || "",
+    operator: $("qcOperator")?.value.trim() || "",
+    machineType: $("qcMachine")?.value || "",
+    bends: collectQualityBends(),
+    result: $("qcResult")?.value || "Pass",
+    notes: $("qcNotes")?.value.trim() || "",
+    createdAt: timestamp(),
+    createdBy: actorName()
+  };
+  state.qualityChecks.unshift(record);
+  state.selectedQualityArea = areaId;
+  state.selectedQualityJob = jobId;
+  logActivity("Quality control check saved", { area: areaId, job: job.name, field: cardCode, to: record.result });
+  saveState();
+  render();
+  showToast("QC check saved");
 }
 
 async function addSafetyFormRecord() {
