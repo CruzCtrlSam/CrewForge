@@ -1404,15 +1404,15 @@ function latestTimesheetWeek(areaId = state.selectedArea) {
 
 function sheetIsInFieldEntryEditWindow(sheet) {
   if (!isFieldEntryMode()) return true;
-  const latestWeek = latestTimesheetWeek(sheet?.area || state.selectedArea);
-  const oldestEditableWeek = addDays(latestWeek, -7);
+  const today = localDateInputValue();
+  const oldestEditableWeek = addDays(today, -7);
   return dateInputValue(sheet?.week || state.selectedWeek, state.selectedWeek) >= oldestEditableWeek;
 }
 
 function sheetReadOnlyReason(sheet) {
   if (state.selectedRole === "Management") return "Management can review but not edit timesheets.";
   if (isFieldEntryMode() && !sheetIsInFieldEntryEditWindow(sheet)) {
-    return "This week is locked for field entry. Payroll/Admin can edit older records.";
+    return "This older week is locked for field entry. Payroll/Admin can edit older records.";
   }
   if (sheet.status === "Approved") return "Approved timesheets are locked unless Payroll/Admin reopens them.";
   return "Read only for this login. Payroll/Admin can edit all records.";
@@ -3189,6 +3189,11 @@ function uniqueEmployees() {
 function dateInputValue(value, fallback = state.selectedWeek) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return fallback;
+}
+
+function localDateInputValue(date = new Date()) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
 }
 
 function addDays(dateValue, amount) {
