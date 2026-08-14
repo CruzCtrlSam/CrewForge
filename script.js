@@ -208,7 +208,7 @@ const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
 const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "foremanAliases", "hiddenForemen", "activityLog"];
-const MAX_DEMO_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const MAX_DEMO_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
@@ -5978,7 +5978,7 @@ async function uploadJobDocuments(event) {
 
   const oversized = files.find((file) => file.size > MAX_DEMO_DOCUMENT_BYTES);
   if (oversized) {
-    showToast(`${oversized.name} is over the 5 MB demo limit`);
+    showToast(`${oversized.name} is over the 20 MB demo limit`);
     event.target.value = "";
     return;
   }
@@ -6011,7 +6011,7 @@ async function filesToStoredAttachments(files) {
   const incoming = Array.from(files || []);
   const oversized = incoming.find((file) => file.size > MAX_DEMO_DOCUMENT_BYTES);
   if (oversized) {
-    showToast(`${oversized.name} is over the 5 MB demo limit`);
+    showToast(`${oversized.name} is over the 20 MB demo limit`);
     return null;
   }
   const attachments = [];
