@@ -116,8 +116,8 @@ function trialWindFarmJobRecord(job) {
 }
 const companyAccessCode = "VALOR";
 const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
-const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman"];
-const trialForemanNames = [...foremanNames, ...rebarFabForemen, ...solarPilesForemen];
+const solarPilesForemen = ["Daniel Medrano", "Hipolito Pereda"];
+const trialForemanNames = [...new Set([...foremanNames, ...rebarFabForemen, ...solarPilesForemen])];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
 const assetVersion = "65";
@@ -133,79 +133,155 @@ function visibleAreaEntries() {
 }
 const mockTrialCrews = [
   {
-    foreman: "Gregorio Izaguirre",
-    perDiem: 175,
+    foreman: "Lidio Barron",
+    perDiem: 500,
     workers: [
-      ["Miguel Sandoval", "Rodbuster", 28],
-      ["Rafael Campos", "Rodbuster", 29],
-      ["Oscar Medina", "Ironworker", 30],
-      ["Julian Ortega", "Rodbuster", 31],
-      ["Hector Salinas", "Rodbuster", 32],
-      ["Noe Paredes", "Ironworker", 33],
-      ["Marco Villarreal", "Rodbuster", 34],
-      ["Andres Prieto", "Rodbuster", 35]
+      ["Cruz Orozco", "Rodbuster", 29],
+      ["Otilio Juarez", "Rodbuster", 30],
+      ["Yahir Juarez", "Rodbuster", 31],
+      ["Simon Garcia", "Rodbuster", 31],
+      ["Mauricio Frias", "Rodbuster", 32],
+      ["Filiberto Frias", "Rodbuster", 33],
+      ["Abelardo Esperanza", "Rodbuster", 35],
+      ["Israel Macias", "Rodbuster", 34],
+      ["Leobardo Reina", "Rodbuster", 35],
+      ["Eduardo Romero", "Rodbuster", 30],
+      ["Miguel A. Segura", "Rodbuster", 33],
+      ["Adelfo Vargas", "Rodbuster", 34],
+      ["Daniel Marquez", "Rodbuster", 35],
+      ["Luis Perez Leon", "Rodbuster", 30],
+      ["Felipe Jimenez", "Rodbuster", 31],
+      ["Juan A. Sanchez", "Rodbuster", 32],
+      ["Isaias Vargas", "Rodbuster", 33]
     ]
   },
   {
     foreman: "Hugo Martinez",
     perDiem: 250,
     workers: [
-      ["Ramiro Lopez", "Rodbuster", 28],
-      ["Esteban Rivas", "Ironworker", 29],
-      ["Alonso Carrillo", "Rodbuster", 30],
-      ["Javier Nunez", "Rodbuster", 31],
-      ["Emilio Santos", "Ironworker", 32],
-      ["Tomas Aguilar", "Rodbuster", 33],
-      ["Ruben Montoya", "Rodbuster", 34],
-      ["Cristian Pena", "Ironworker", 35],
-      ["Manuel Flores", "Rodbuster", 30]
+      ["Victor Najera", "Rodbuster", 28],
+      ["Samuel Najera", "Rodbuster", 29],
+      ["Jonathan Vasquez", "Rodbuster", 30],
+      ["Delmar Rivera", "Rodbuster", 31],
+      ["David Contreras", "Rodbuster", 32],
+      ["Luis A. Hernandez", "Rodbuster", 33],
+      ["Carlos F. Tapia", "Rodbuster", 34],
+      ["Selvin Funes", "Rodbuster", 35],
+      ["Geovany Vanegas", "Rodbuster", 30],
+      ["Manuel Chavez", "Rodbuster", 31],
+      ["Servando Rivera", "Rodbuster", 32],
+      ["Juan M. Cano", "Rodbuster", 33]
     ]
   },
   {
     foreman: "Paco",
     perDiem: 350,
     workers: [
-      ["Diego Ramirez", "Rodbuster", 28],
-      ["Sergio Navarro", "Rodbuster", 29],
-      ["Arturo Vega", "Ironworker", 30],
-      ["Felix Robles", "Rodbuster", 31],
-      ["Pablo Moreno", "Rodbuster", 32],
-      ["Raul Cardenas", "Ironworker", 33],
-      ["Gerardo Silva", "Rodbuster", 34],
-      ["Ivan Escobar", "Rodbuster", 35]
+      ["Hugo Rodriguez", "Rodbuster", 28],
+      ["Jose Manuel Perez", "Rodbuster", 29],
+      ["Jesus Martinez", "Rodbuster", 30],
+      ["Ismael Martinez", "Rodbuster", 31],
+      ["Jason Lopez", "Rodbuster", 32],
+      ["Fortino Martinez", "Rodbuster", 33],
+      ["Francisco Vargas", "Rodbuster", 34],
+      ["Arturo Perez", "Rodbuster", 35],
+      ["Pedro Martinez", "Rodbuster", 30],
+      ["Alex Sosa", "Rodbuster", 31],
+      ["Luis Soria", "Rodbuster", 32]
     ]
   },
   {
-    foreman: "Erik",
+    foreman: "Huguer Vazquez",
     perDiem: 450,
     workers: [
-      ["Samuel Torres", "Rodbuster", 28],
-      ["Victor Molina", "Ironworker", 29],
-      ["Nicolas Duarte", "Rodbuster", 30],
-      ["Adrian Solis", "Rodbuster", 31],
-      ["Mario Cantu", "Ironworker", 32],
-      ["Joel Figueroa", "Rodbuster", 33],
-      ["Cesar Benitez", "Rodbuster", 34],
-      ["Edgar Ibarra", "Ironworker", 35],
-      ["Luis Galvan", "Rodbuster", 31],
-      ["Rene Zamora", "Rodbuster", 32]
+      ["Adelfo Vargas", "Rodbuster", 28],
+      ["Maribel Gutierrez", "Rodbuster", 29],
+      ["Eduardo Gomez", "Rodbuster", 30],
+      ["Dario Estrada", "Rodbuster", 31],
+      ["Johan Quintero", "Rodbuster", 32],
+      ["Julian Pedraza", "Rodbuster", 33],
+      ["Daniel Marquez", "Rodbuster", 34],
+      ["Leobardo Reina", "Rodbuster", 35],
+      ["Luis Perez Leon", "Rodbuster", 30],
+      ["Felipe Jimenez", "Rodbuster", 31],
+      ["Eliseo Castro", "Rodbuster", 32],
+      ["Gustavo Martinez", "Rodbuster", 33],
+      ["Adolfo Rios", "Rodbuster", 34],
+      ["Jorge Azua", "Rodbuster", 35],
+      ["Eduardo Hernandez", "Rodbuster", 30],
+      ["Randall Black", "Rodbuster", 31]
     ]
   },
   {
-    foreman: "Paul Featherhat",
-    perDiem: 575,
+    foreman: "Wilfredo Vargas",
+    perDiem: 450,
     workers: [
-      ["Tony Baker", "Ironworker", 28],
-      ["Chris Wilson", "Rodbuster", 29],
-      ["Aaron Miller", "Rodbuster", 30],
-      ["James Carter", "Ironworker", 31],
-      ["Ryan Cooper", "Rodbuster", 32],
-      ["Brandon Hayes", "Rodbuster", 33],
-      ["Kevin Price", "Ironworker", 34],
-      ["Matthew Reed", "Rodbuster", 35]
+      ["Jose Vargas", "Rodbuster", 29],
+      ["Melquiel Gardozo", "Rodbuster", 30],
+      ["Martin Andrade", "Rodbuster", 31],
+      ["Calixto Ramos", "Rodbuster", 32],
+      ["Alberto Ortiz", "Rodbuster", 33],
+      ["Francisco Ibarra", "Rodbuster", 34],
+      ["Juan Cano", "Rodbuster", 35],
+      ["Julio Lugo", "Rodbuster", 30]
     ]
   }
 ];
+const fictitiousEmployeeNames = new Set([
+  "Miguel Sandoval",
+  "Rafael Campos",
+  "Oscar Medina",
+  "Julian Ortega",
+  "Hector Salinas",
+  "Noe Paredes",
+  "Marco Villarreal",
+  "Andres Prieto",
+  "Ramiro Lopez",
+  "Esteban Rivas",
+  "Alonso Carrillo",
+  "Javier Nunez",
+  "Emilio Santos",
+  "Tomas Aguilar",
+  "Ruben Montoya",
+  "Cristian Pena",
+  "Manuel Flores",
+  "Diego Ramirez",
+  "Sergio Navarro",
+  "Arturo Vega",
+  "Felix Robles",
+  "Pablo Moreno",
+  "Raul Cardenas",
+  "Gerardo Silva",
+  "Ivan Escobar",
+  "Samuel Torres",
+  "Victor Molina",
+  "Nicolas Duarte",
+  "Adrian Solis",
+  "Mario Cantu",
+  "Joel Figueroa",
+  "Cesar Benitez",
+  "Edgar Ibarra",
+  "Luis Galvan",
+  "Rene Zamora",
+  "Tony Baker",
+  "Chris Wilson",
+  "Aaron Miller",
+  "James Carter",
+  "Ryan Cooper",
+  "Brandon Hayes",
+  "Kevin Price",
+  "Matthew Reed",
+  "Jose Machine Operator",
+  "Carlos Helper",
+  "Rebar QC",
+  "Rebar Cleaning",
+  "Solar Operator",
+  "Solar Helper",
+  "Solar QC",
+  "Solar Cleaning",
+  "Solar Piles Day Foreman",
+  "Solar Piles Night Foreman"
+]);
 const trialWeekHourPatterns = [
   { mon: 8, tue: 8, wed: 8, thu: 8, fri: 8, sat: 0, sun: 0 },
   { mon: 10, tue: 9, wed: 8, thu: 8, fri: 7, sat: 0, sun: 0 },
@@ -240,39 +316,7 @@ const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
   ...rebarFabForemen.map((name, index) => [name, "Foreman", "rebarFab", shifts[index] || shifts[0], false]),
   ...solarPilesForemen.map((name, index) => [name, "Foreman", "solarPiles", shifts[index] || shifts[0], false]),
-  ["Cruz Orosco", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Otilio Juarez", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Ubaldo Juarez", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Simon Garcia", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Mauricio Frias", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Filiberto Frias", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Abelardo Esperanza", "Rodbuster", "rebarInstall", "Lidio Barron Crew", false],
-  ["Adelfo Vargas", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Maribel Gutierrez", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Eduardo Gomez", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Dario Estrada", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Johan Quintero", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Daniel Marquez", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Leobardo Reina", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Luis Perez Leon", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Felipe Jimenez", "Rodbuster", "rebarInstall", "Huguer Vazquez Crew", false],
-  ["Jose Vargas", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Melquiel Gardozo", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Martin Andrade", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Calixto Ramos", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Alberto Ortiz", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Francisco Ibarra", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Juan Cano", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ["Julio Lugo", "Rodbuster", "rebarInstall", "Wilfredo Vargas Crew", false],
-  ...mockTrialCrews.flatMap((crew) => crew.workers.map(([name, role, hourlyRate]) => [name, role, "rebarInstall", `${crew.foreman} Crew`, false, hourlyRate])),
-  ["Jose Machine Operator", "Machine Operator", "rebarFab", "Day Shift", false],
-  ["Carlos Helper", "Helper", "rebarFab", "Day Shift", false],
-  ["Rebar QC", "Quality Control", "rebarFab", "Day Shift", false],
-  ["Rebar Cleaning", "Cleaning", "rebarFab", "Night Shift", false],
-  ["Solar Operator", "Machine Operator", "solarPiles", "Day Shift", false],
-  ["Solar Helper", "Helper", "solarPiles", "Night Shift", false],
-  ["Solar QC", "Quality Control", "solarPiles", "Day Shift", false],
-  ["Solar Cleaning", "Cleaning", "solarPiles", "Night Shift", false]
+  ...mockTrialCrews.flatMap((crew) => crew.workers.map(([name, role, hourlyRate]) => [name, role, "rebarInstall", `${crew.foreman} Crew`, false, hourlyRate]))
 ].map(([name, role, area, group, dol, hourlyRate = 0]) => ({ name, role, area, group, dol, hourlyRate }));
 
 const bakersfieldControlCodes = [
@@ -631,9 +675,9 @@ const defaultState = {
   qualityChecks: [],
   production: [
     ...bakersfieldControlCodes,
-    { id: "p3", area: "rebarFab", foreman: "Rebar Fabrication Day Foreman", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
-    { id: "p4", area: "rebarFab", foreman: "Rebar Fabrication Night Foreman", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
-    { id: "p5", area: "solarPiles", foreman: "Solar Piles Day Foreman", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
+    { id: "p3", area: "rebarFab", foreman: "Daniel Medrano", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
+    { id: "p4", area: "rebarFab", foreman: "Hipolito Pereda", jobId: "laurel", code: "DYK", description: "Pier type bundle", planned: 6406, completed: 6406, weekly: 1200, bundle: "B-216", bundleStatus: "Shipped", delay: "No delay", delayNote: "", status: "Complete" },
+    { id: "p5", area: "solarPiles", foreman: "Daniel Medrano", jobId: "solar-demo", code: "ORCA-1001", description: "Solar pile batch", planned: 400, completed: 265, weekly: 80, delay: "No delay", delayNote: "", status: "In Progress" }
   ],
   bundlePlanner: defaultBundlePlanner()
 };
@@ -904,6 +948,7 @@ function upgradeState(next) {
     group: aliasCrew(person.group),
     hourlyRate: Number(person.hourlyRate) || 0
   }));
+  next.people = next.people.filter((person) => !isFictitiousEmployeeName(person.name));
   next.people = next.people.filter((person) => {
     const isFabricationArea = ["rebarFab", "solarPiles"].includes(person.area);
     const isInstallationForeman = foremanNames.includes(person.name) && person.role === "Foreman";
@@ -932,7 +977,7 @@ function upgradeState(next) {
       reimbursement: Number(row.reimbursement) || 0,
       reimbursementNote: row.reimbursementNote || "",
       lightDuty: row.lightDuty || {}
-    }));
+    })).filter((row) => !isFictitiousEmployeeName(row.employee));
   });
   seedCurrentWeekInstallationTrialData(next);
   bakersfieldControlCodes.forEach((seedItem) => {
@@ -1221,7 +1266,14 @@ function completedWeight(item) {
 function normalizeForemanName(name) {
   if (name === "Rebar Fabrication Day Foreman") return "Daniel Medrano";
   if (name === "Rebar Fabrication Night Foreman") return "Hipolito Pereda";
+  if (name === "Solar Piles Day Foreman") return "Daniel Medrano";
+  if (name === "Solar Piles Night Foreman") return "Hipolito Pereda";
+  if (name === "Cruz Orosco") return "Cruz Orozco";
   return name === "Willie Vargas" ? "Wilfredo Vargas" : name;
+}
+
+function isFictitiousEmployeeName(name) {
+  return fictitiousEmployeeNames.has(normalizeForemanName(name));
 }
 
 function normalizeCrewName(group) {
