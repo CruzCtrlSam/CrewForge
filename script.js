@@ -2599,11 +2599,11 @@ function renderBundlePlanner() {
         </div>
         <div class="table-wrap compact-table-wrap section-gap">
           <table>
-            <thead><tr><th>File</th><th>Size</th><th>Status</th><th>Added</th></tr></thead>
+            <thead><tr><th>File</th><th>Size</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
             <tbody>
               ${(job?.imports || []).length
-                ? job.imports.map((file) => `<tr><td><strong>${file.name}</strong></td><td>${fileSize(file.size)}</td><td>${file.status}</td><td>${file.addedAt}</td></tr>`).join("")
-                : `<tr><td colspan="4"><strong>No uploaded package recorded yet.</strong><span class="es">Aun no hay paquete registrado.</span></td></tr>`}
+                ? job.imports.map((file) => `<tr><td><strong>${file.name}</strong></td><td>${fileSize(file.size)}</td><td>${file.status}</td><td>${file.addedAt}</td><td><button class="danger-action table-action" data-delete-package-import="${file.id}" type="button" ${setupDisabled}>Delete<span class="es">Borrar</span></button></td></tr>`).join("")
+                : `<tr><td colspan="5"><strong>No uploaded package recorded yet.</strong><span class="es">Aun no hay paquete registrado.</span></td></tr>`}
             </tbody>
           </table>
         </div>
@@ -4115,18 +4115,19 @@ function renderSafetyForms() {
 }
 
 function safetyFormCard(form) {
+  const files = form.files || [];
   return `
     <article class="document-card">
       <div>
         <span class="tag">${escapeHtml(form.type)}</span>
         <h3>${escapeHtml(jobName(form.jobId))}</h3>
         <p class="sub">${escapeHtml(form.date)} · ${escapeHtml(form.createdBy || "")}${form.notes ? ` · ${escapeHtml(form.notes)}` : ""}</p>
-        ${form.files?.length ? `<p class="sub">${form.files.length} attachment${form.files.length === 1 ? "" : "s"}</p>` : ""}
+        ${files.length ? `<p class="sub">${files.length} attachment${files.length === 1 ? "" : "s"}</p>` : ""}
       </div>
       <div class="document-actions">
-        ${form.files?.map((file) => `<button class="secondary-action table-action" data-safety-file="${form.id}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>`).join("") || ""}
         <button class="primary-action table-action" data-print-safety="${form.id}" type="button">Print<span class="es">Imprimir</span></button>
       </div>
+      ${files.length ? `<div class="attachment-list">${files.map((file) => attachmentRow("safety", form.id, file)).join("")}</div>` : ""}
     </article>
   `;
 }
@@ -4152,7 +4153,14 @@ function renderFieldAudits() {
           <label>Evidence photos/files<span class="es">Fotos / evidencia</span><input id="auditFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
         </div>
         <div class="audit-check-grid section-gap">
-          ${fieldAuditChecks.map(([key, en, es]) => `<label class="check-label audit-check"><input data-audit-check="${key}" type="checkbox" /> ${en}<span class="es">${es}</span></label>`).join("")}
+          ${fieldAuditChecks.map(([key, en, es]) => `
+            <label class="audit-choice">
+              <span>${en}<span class="es">${es}</span></span>
+              <select data-audit-check="${key}">
+                ${setOptions(["Yes", "No", "N/A"], "N/A")}
+              </select>
+            </label>
+          `).join("")}
         </div>
         <label class="section-gap">Notes / corrective action<span class="es">Notas / accion correctiva</span><textarea id="auditNotes" placeholder="What was found, what was corrected, who was notified"></textarea></label>
         <div class="action-row section-gap">
@@ -4167,7 +4175,8 @@ function renderFieldAudits() {
 }
 
 function fieldAuditCard(audit) {
-  const checkedCount = Object.values(audit.checks || {}).filter(Boolean).length;
+  const summary = auditStatusSummary(audit.checks);
+  const files = audit.files || [];
   return `
     <article class="audit-card">
       <header>
@@ -4175,11 +4184,45 @@ function fieldAuditCard(audit) {
           <strong>${escapeHtml(jobName(audit.jobId))}</strong>
           <span>${escapeHtml(audit.date)} · ${escapeHtml(audit.createdBy || "")}</span>
         </div>
-        <span class="tag">${checkedCount}/${fieldAuditChecks.length} checked</span>
+        <span class="tag">${summary.yes} Yes · ${summary.no} No · ${summary.na} N/A</span>
       </header>
       <p>${escapeHtml(audit.notes || "No notes")}</p>
-      ${audit.files?.length ? `<div class="document-actions">${audit.files.map((file) => `<button class="secondary-action table-action" data-audit-file="${audit.id}" data-file-id="${file.id}" type="button">${escapeHtml(file.name)}<span class="es">Abrir</span></button>`).join("")}</div>` : ""}
+      <ul class="audit-result-list">
+        ${fieldAuditChecks.map(([key, en, es]) => `<li><strong>${escapeHtml(auditCheckValue(audit.checks?.[key]))}</strong> · ${en}<span class="es">${es}</span></li>`).join("")}
+      </ul>
+      ${files.length ? `<div class="attachment-list">${files.map((file) => attachmentRow("audit", audit.id, file)).join("")}</div>` : ""}
     </article>
+  `;
+}
+
+function auditCheckValue(value) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
+  if (value === "Yes" || value === "No" || value === "N/A") return value;
+  return "N/A";
+}
+
+function auditStatusSummary(checks = {}) {
+  return fieldAuditChecks.reduce((totals, [key]) => {
+    const value = auditCheckValue(checks?.[key]);
+    if (value === "Yes") totals.yes += 1;
+    else if (value === "No") totals.no += 1;
+    else totals.na += 1;
+    return totals;
+  }, { yes: 0, no: 0, na: 0 });
+}
+
+function attachmentRow(type, recordId, file) {
+  const openAttr = type === "safety" ? "data-safety-file" : "data-audit-file";
+  const deleteAttr = type === "safety" ? "data-delete-safety-file" : "data-delete-audit-file";
+  return `
+    <div class="attachment-row">
+      <span><strong>${escapeHtml(file.name)}</strong> · ${fileSize(file.size)}</span>
+      <span class="attachment-actions">
+        <button class="secondary-action table-action" ${openAttr}="${recordId}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>
+        <button class="danger-action table-action" ${deleteAttr}="${recordId}" data-file-id="${file.id}" type="button">Delete<span class="es">Borrar</span></button>
+      </span>
+    </div>
   `;
 }
 
@@ -4646,6 +4689,9 @@ function bindTabEvents() {
   if ($("addTrailer")) $("addTrailer").addEventListener("click", addTrailerToPlanner);
   if ($("addTrailerFromCode")) $("addTrailerFromCode").addEventListener("click", addTrailerToPlanner);
   if ($("autoAssignTrailers")) $("autoAssignTrailers").addEventListener("click", autoAssignTrailers);
+  document.querySelectorAll("[data-delete-package-import]").forEach((button) => {
+    button.addEventListener("click", () => deletePackageImport(button.dataset.deletePackageImport));
+  });
   document.querySelectorAll("[data-bundle-job]").forEach((button) => {
     button.addEventListener("click", () => selectBundleJob(button.dataset.bundleJob));
   });
@@ -4872,6 +4918,9 @@ function bindTabEvents() {
   document.querySelectorAll("[data-safety-file]").forEach((button) => {
     button.addEventListener("click", () => openRecordFile("safetyForms", button.dataset.safetyFile, button.dataset.fileId));
   });
+  document.querySelectorAll("[data-delete-safety-file]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecordFile("safetyForms", button.dataset.deleteSafetyFile, button.dataset.fileId));
+  });
   document.querySelectorAll("[data-print-safety]").forEach((button) => {
     button.addEventListener("click", () => printSafetyRecord(button.dataset.printSafety));
   });
@@ -4885,6 +4934,9 @@ function bindTabEvents() {
   if ($("saveFieldAudit")) $("saveFieldAudit").addEventListener("click", saveFieldAuditRecord);
   document.querySelectorAll("[data-audit-file]").forEach((button) => {
     button.addEventListener("click", () => openRecordFile("fieldAudits", button.dataset.auditFile, button.dataset.fileId));
+  });
+  document.querySelectorAll("[data-delete-audit-file]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecordFile("fieldAudits", button.dataset.deleteAuditFile, button.dataset.fileId));
   });
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
   if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
@@ -5096,6 +5148,20 @@ function recordPackageUpload(event) {
   saveState();
   render();
   showToast(`${incoming.length} file(s) recorded`);
+}
+
+function deletePackageImport(fileId) {
+  if (!canManageBundlePlanner()) return;
+  const job = currentBundleJob();
+  const file = job?.imports?.find((entry) => entry.id === fileId);
+  if (!job || !file) return;
+  if (!confirm(`Delete ${file.name} from this upload list?`)) return;
+  job.imports = (job.imports || []).filter((entry) => entry.id !== fileId);
+  logActivity("Detailer package removed", { job: job.jobName, field: file.name });
+  syncBundlePlannerFromJob(job);
+  saveState();
+  render();
+  showToast("Upload removed");
 }
 
 function uploadedPackageNames() {
@@ -6118,8 +6184,9 @@ async function saveFieldAuditRecord() {
   if (!files) return;
   const checks = {};
   document.querySelectorAll("[data-audit-check]").forEach((input) => {
-    checks[input.dataset.auditCheck] = input.checked;
+    checks[input.dataset.auditCheck] = input.value || "N/A";
   });
+  const summary = auditStatusSummary(checks);
   const record = {
     id: `audit-${Date.now()}`,
     area: state.selectedArea,
@@ -6134,7 +6201,7 @@ async function saveFieldAuditRecord() {
   };
   state.fieldAudits.unshift(record);
   state.selectedAuditJob = jobId;
-  logActivity("Field audit saved", { area: state.selectedArea, job: job.name, field: `${Object.values(checks).filter(Boolean).length}/${fieldAuditChecks.length} checks` });
+  logActivity("Field audit saved", { area: state.selectedArea, job: job.name, field: `${summary.yes} Yes / ${summary.no} No / ${summary.na} N/A` });
   saveState();
   render();
   showToast("Field audit saved");
@@ -6146,6 +6213,22 @@ function openRecordFile(collectionName, recordId, fileId) {
   if (!file) return;
   const win = window.open(file.dataUrl, "_blank");
   if (!win) showToast("Allow popups to open this file");
+}
+
+function deleteRecordFile(collectionName, recordId, fileId) {
+  const record = state[collectionName]?.find((entry) => entry.id === recordId);
+  const file = record?.files?.find((entry) => entry.id === fileId);
+  if (!record || !file) return;
+  if (!confirm(`Delete ${file.name}?`)) return;
+  record.files = (record.files || []).filter((entry) => entry.id !== fileId);
+  logActivity("Attachment deleted", {
+    area: record.area || state.selectedArea,
+    job: jobName(record.jobId),
+    field: file.name
+  });
+  saveState();
+  render();
+  showToast("Attachment deleted");
 }
 
 function printSafetyRecord(recordId) {

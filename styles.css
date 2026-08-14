@@ -1050,8 +1050,57 @@ textarea {
   gap: 10px;
 }
 
-.audit-check {
-  min-height: 54px;
+.audit-choice {
+  display: grid;
+  gap: 8px;
+  min-height: 82px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+  font-weight: 900;
+}
+
+.audit-choice select {
+  width: 100%;
+}
+
+.audit-result-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.attachment-row > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.attachment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .audit-list {
@@ -2179,8 +2228,13 @@ tr:last-child td {
 
   .topbar,
   .split,
-  .button-pair {
+  .button-pair,
+  .attachment-row {
     display: grid;
+  }
+
+  .audit-result-list {
+    grid-template-columns: 1fr;
   }
 
   .production-controls {
