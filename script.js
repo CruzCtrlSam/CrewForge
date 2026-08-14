@@ -88,6 +88,32 @@ const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
 const shifts = ["Day Shift", "Night Shift"];
 const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
+const trialWindFarmJobs = [
+  { id: "wind-buffalo-gap-ira", name: "Buffalo Gap - IRA", number: "BG-IRA", customer: "Blattner", start: "2025-01-08", finish: "2026-05-01", wtgs: 117, tons: 5950, state: "TX", town: "Merkel", foreman: "Wilfredo Vargas", rrFolder: "Wilfredo Vargas", supply: "Rhome" },
+  { id: "wind-throckmorton-ira", name: "Throckmorton - IRA", number: "THR-IRA", customer: "Blattner", start: "2026-03-23", finish: "2026-06-07", wtgs: 80, tons: 2600, state: "TX", town: "Throckmorton", foreman: "Paco", rrFolder: "Huguer Vazquez", supply: "Rhome" },
+  { id: "wind-four-horizons-ira", name: "Four Horizons - IRA", number: "FH-IRA", customer: "Mortenson", start: "2026-04-15", finish: "2026-09-15", wtgs: 210, tons: 10500, state: "TX", town: "Seymour", foreman: "Lidio Barron", rrFolder: "Huguer Vazquez", supply: "Rhome" },
+  { id: "wind-goat-mountain", name: "Goat Mountain", number: "GOAT-MTN", customer: "Blattner", start: "2026-05-18", finish: "2026-07-24", wtgs: 68, tons: 3350, state: "TX", town: "Sterling City", foreman: "Hugo Martinez", rrFolder: "Hugo Martinez", supply: "Rhome" },
+  { id: "wind-laurel", name: "Laurel", number: "LAU-WIND", customer: "Blattner", start: "2026-06-15", finish: "2026-08-28", wtgs: 82, tons: 3030, state: "TX", town: "San Angelo", foreman: "Gregorio Izaguirre", rrFolder: "Huguer Vazquez", supply: "Rhome" },
+  { id: "wind-monarch-creek-ira", name: "Monarch Creek - IRA", number: "MON-IRA", customer: "Blattner", start: "2026-06-15", finish: "2026-09-11", wtgs: 102, tons: 3350, state: "TX", town: "Throckmorton", foreman: "Paco", rrFolder: "Huguer Vazquez", supply: "Rhome" },
+  { id: "wind-longspur", name: "Longspur", number: "LONGSPUR", customer: "Mortenson", start: "2026-08-01", finish: "2026-09-25", wtgs: 45, tons: 2600, state: "ND", town: "Glen Ullin", foreman: "Gregorio Izaguirre", rrFolder: "Huguer Vazquez", supply: "Rhome" },
+  { id: "wind-phillip-wind", name: "Phillip Wind", number: "PHILIP-WIND", customer: "Blattner", start: "2026-08-17", finish: "2026-09-25", wtgs: 55, tons: 3260, state: "SD", town: "Philip", foreman: "Hugo Martinez", rrFolder: "Hugo Martinez", supply: "Rhome" },
+  { id: "wind-crossroads", name: "Crossroads", number: "CROSSROADS", customer: "Blattner", start: "2026-11-23", finish: "2027-03-25", wtgs: 74, tons: 4700, state: "TX", town: "Port Lavaca", foreman: "Lidio Barron", rrFolder: "Hugo Martinez", supply: "Rhome" },
+  { id: "wind-prairie-phoenix", name: "Prairie Phoenix", number: "PRAIRIE-PHOENIX", customer: "", start: "", finish: "", wtgs: 0, tons: 0, state: "", town: "", foreman: "", rrFolder: "", supply: "" },
+  { id: "wind-pioneer-creek", name: "Pioneer Creek (Takkion)", number: "PIONEER-CREEK", customer: "", start: "", finish: "", wtgs: 0, tons: 0, state: "", town: "", foreman: "", rrFolder: "", supply: "" },
+  { id: "wind-big-bend", name: "Big Bend", number: "BIG-BEND", customer: "", start: "", finish: "", wtgs: 0, tons: 0, state: "", town: "", foreman: "", rrFolder: "", supply: "" }
+];
+function trialWindFarmJobRecord(job) {
+  return {
+    ...job,
+    area: "rebarInstall",
+    jobType: "Wind Farm",
+    status: "Active",
+    foundationIds: [],
+    customTracking: [],
+    documents: [],
+    trialSchedule: true
+  };
+}
 const companyAccessCode = "VALOR";
 const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const solarPilesForemen = ["Solar Piles Day Foreman", "Solar Piles Night Foreman"];
@@ -594,6 +620,7 @@ const defaultState = {
   jobs: [
     { id: "concho", name: "Concho Field Install", number: "CON-2026", customer: "Concho", area: "rebarInstall", jobType: "Wind Farm", status: "Active" },
     { id: "bakersfield", name: "VS26-BRSFL - Bakersfield Sub Station", number: "VS26-BRSFL", customer: "Bakersfield", area: "rebarInstall", jobType: "T-line Substation", status: "Active" },
+    ...trialWindFarmJobs.map(trialWindFarmJobRecord),
     { id: "buffalo-gap", name: "Buffalo Gap - IRA", number: "BG-IRA", customer: "Buffalo Gap", area: "rebarFab", jobType: "Wind Farm", status: "Active" },
     { id: "laurel", name: "Laurel", number: "LAU-2026", customer: "Laurel", area: "rebarFab", jobType: "Commercial", status: "Active" },
     { id: "solar-demo", name: "Solar Piles Demo Job", number: "SP-100", customer: "Solar", area: "solarPiles", status: "Active" }
@@ -870,6 +897,7 @@ function upgradeState(next) {
     customTracking: job.customTracking || [],
     documents: job.documents || []
   }));
+  seedTrialWindFarmJobs(next);
   next.people = (next.people || []).map((person) => ({
     ...person,
     name: aliasName(person.name),
@@ -927,6 +955,14 @@ function upgradeState(next) {
     item.completed = completedWeight(item);
   });
   return next;
+}
+
+function seedTrialWindFarmJobs(next) {
+  next.jobs = next.jobs || [];
+  trialWindFarmJobs.forEach((job) => {
+    const exists = next.jobs.some((entry) => entry.area === "rebarInstall" && (entry.id === job.id || entry.name === job.name));
+    if (!exists) next.jobs.push(trialWindFarmJobRecord(job));
+  });
 }
 
 function seedCurrentWeekInstallationTrialData(next) {
@@ -3955,7 +3991,7 @@ function renderDocuments() {
           ${canManage ? `
             <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
             <label id="otherDocumentTypeField" class="hidden">Other type<span class="es">Otro tipo</span><input id="otherDocumentType" placeholder="Safety orientation, site map, etc." /></label>
-            <label>Upload document<span class="es">Subir documento</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
+            <label>Upload document (20 MB max)<span class="es">Subir documento (20 MB max)</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
           ` : `<div class="notice compact-notice">Only Admin/Payroll can upload or delete job documents. <span class="es">Solo Admin/Payroll puede subir o borrar documentos.</span></div>`}
         </div>
         <div class="document-job-summary section-gap">
