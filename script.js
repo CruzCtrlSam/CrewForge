@@ -64,6 +64,10 @@ const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const safetyFormTypes = ["JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
+const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
+const employeeMachineOptions = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender", "Shear", "Forklift", "Loader", "Telehandler"];
+const reimbursementCategories = ["Fuel", "Hotel", "Meals", "Supplies", "Tools", "Parking/Tolls", "Mileage", "Other"];
+const reimbursementStatuses = ["Pending", "Approved", "Denied", "Paid"];
 const qcBendLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "K"];
 const rebarShapeOptions = [
   "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27",
@@ -300,6 +304,7 @@ const trialAccounts = [
   { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
   { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
   { code: "QUALITY", name: "Quality", role: "Quality", area: "rebarFab", foreman: "Daniel Medrano" },
+  { code: "SAFETY", name: "Safety", role: "Safety", area: "rebarInstall", foreman: "Lidio Barron" },
   { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
   { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
   { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
@@ -309,7 +314,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
 const defaultPeople = [
@@ -317,7 +322,7 @@ const defaultPeople = [
   ...rebarFabForemen.map((name, index) => [name, "Foreman", "rebarFab", shifts[index] || shifts[0], false]),
   ...solarPilesForemen.map((name, index) => [name, "Foreman", "solarPiles", shifts[index] || shifts[0], false]),
   ...mockTrialCrews.flatMap((crew) => crew.workers.map(([name, role, hourlyRate]) => [name, role, "rebarInstall", `${crew.foreman} Crew`, false, hourlyRate]))
-].map(([name, role, area, group, dol, hourlyRate = 0]) => ({ name, role, area, group, dol, hourlyRate }));
+].map(([name, role, area, group, dol, hourlyRate = 0]) => ({ name, role, area, group, dol, hourlyRate, certs: [], machines: [] }));
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -652,6 +657,7 @@ const defaultState = {
   selectedAuditJob: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
+  selectedEmployeeProfile: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -673,6 +679,7 @@ const defaultState = {
   safetyForms: [],
   fieldAudits: [],
   qualityChecks: [],
+  reimbursementRequests: [],
   production: [
     ...bakersfieldControlCodes,
     { id: "p3", area: "rebarFab", foreman: "Daniel Medrano", jobId: "buffalo-gap", code: "ACA", description: "Operator pads bundle", planned: 3595, completed: 1800, weekly: 900, bundle: "B-104", bundleStatus: "In production", delay: "No delay", delayNote: "", status: "In Progress" },
@@ -827,11 +834,30 @@ function upgradeState(next) {
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
+  next.selectedEmployeeProfile = next.selectedEmployeeProfile || "";
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.safetyForms = next.safetyForms || [];
   next.fieldAudits = next.fieldAudits || [];
   next.qualityChecks = next.qualityChecks || [];
+  next.reimbursementRequests = (next.reimbursementRequests || []).map((request) => ({
+    ...request,
+    id: request.id || `r${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    area: request.area || "rebarInstall",
+    foreman: aliasName(request.foreman || ""),
+    jobId: request.jobId || "",
+    employee: aliasName(request.employee || request.foreman || ""),
+    date: request.date || localDateInputValue(),
+    category: request.category || "Other",
+    amount: Number(request.amount) || 0,
+    note: request.note || "",
+    status: request.status || "Pending",
+    payrollNote: request.payrollNote || "",
+    createdBy: request.createdBy || "",
+    createdAt: request.createdAt || "",
+    reviewedBy: request.reviewedBy || "",
+    reviewedAt: request.reviewedAt || ""
+  }));
   next.bundlePlanner = {
     ...defaultBundlePlanner(),
     ...(next.bundlePlanner || {})
@@ -946,7 +972,9 @@ function upgradeState(next) {
     ...person,
     name: aliasName(person.name),
     group: aliasCrew(person.group),
-    hourlyRate: Number(person.hourlyRate) || 0
+    hourlyRate: Number(person.hourlyRate) || 0,
+    certs: Array.isArray(person.certs) ? person.certs : [],
+    machines: Array.isArray(person.machines) ? person.machines : []
   }));
   next.people = next.people.filter((person) => !isFictitiousEmployeeName(person.name));
   next.people = next.people.filter((person) => {
@@ -1304,6 +1332,10 @@ function canEditPayRates() {
   return ["Admin", "Payroll"].includes(state.selectedRole);
 }
 
+function canEditEmployeeProfiles() {
+  return ["Admin", "Payroll", "Quality", "Safety"].includes(state.selectedRole);
+}
+
 function canManagePayrollAdjustments() {
   return ["Admin", "Payroll"].includes(state.selectedRole);
 }
@@ -1315,7 +1347,7 @@ function roleIsProductionVisible() {
 function canAccessSelectedArea(account) {
   if (!account) return false;
   if (state.selectedArea === "bundleLab") {
-    return ["Admin", "Management", "Quality", "Foreman"].includes(account.role);
+    return ["Admin", "Management", "Quality", "Foreman", "Safety"].includes(account.role);
   }
   if (!state.selectedArea) return ["Payroll", "Management", "Admin"].includes(account.role);
   if (account.area && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) return false;
@@ -1362,10 +1394,19 @@ function availableTabs() {
       ["documents", "Documents", "Documentos"]
     ];
   }
+  if (state.selectedRole === "Safety") {
+    return [
+      ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["audits", "Field Audits", "Auditorias de campo"],
+      ["documents", "Documents", "Documentos"],
+      ["setup", "People / Crews", "Personas / Cuadrillas"]
+    ];
+  }
   if (isFieldEntryMode()) {
     return [
       ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
       ["production", "Production Update", "Produccion"],
+      ["reimbursements", "Reimbursements", "Reembolsos"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"]
@@ -1375,6 +1416,7 @@ function availableTabs() {
     ["dashboard", "Dashboard", "Tablero"],
     ["timesheet", "Timesheet Review", "Revision de horas"],
     ["production", "Production", "Produccion"],
+    ["reimbursements", "Reimbursements", "Reembolsos"],
     ["jobs", "Jobs", "Trabajos"],
     ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
     ["safety", "Safety Forms", "Documentos de seguridad"],
@@ -1468,6 +1510,18 @@ function ensureAreaForeman() {
 
 function peopleForArea(areaId = state.selectedArea) {
   return state.people.filter((person) => person.area === areaId);
+}
+
+function personForCurrentArea(name) {
+  return peopleForArea().find((person) => person.name === name) || null;
+}
+
+function selectedEmployeeProfile() {
+  const people = peopleForArea();
+  if (!people.some((person) => person.name === state.selectedEmployeeProfile)) {
+    state.selectedEmployeeProfile = people[0]?.name || "";
+  }
+  return personForCurrentArea(state.selectedEmployeeProfile) || people[0] || null;
 }
 
 function foremenForArea(areaId = state.selectedArea) {
@@ -1944,13 +1998,14 @@ function renderLogin() {
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
           <p class="sub">Use your trial code for this department. Office users can still change areas after signing in.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="FOREMAN, MAYORDOMO, QUALITY, PAYROLL, MANAGER, ADMIN" /></label>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="FOREMAN, MAYORDOMO, QUALITY, SAFETY, PAYROLL, MANAGER, ADMIN" /></label>
         <label id="foremanLoginField" class="login-select-field ${showForemen ? "" : "hidden"}">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, selectedLoginForeman)}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
           <span>Foremen: FOREMAN, then choose a name</span>
           <span>Quality: QUALITY</span>
+          <span>Safety: SAFETY</span>
           <span>Approver: MAYORDOMO</span>
           <span>Office: PAYROLL, MANAGER, or ADMIN</span>
           <span class="es">Codigos de prueba para esta demo.</span>
@@ -2248,6 +2303,7 @@ function renderActiveTab() {
   if (state.activeTab === "production") return renderProduction();
   if (state.activeTab === "jobs") return renderJobs();
   if (state.activeTab === "qualityControl") return renderQualityControl();
+  if (state.activeTab === "reimbursements") return renderReimbursements();
   if (state.activeTab === "safety") return renderSafetyForms();
   if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
@@ -4029,6 +4085,74 @@ function renderSolarListsSetup() {
   `;
 }
 
+function reimbursementJobOptions() {
+  const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete");
+  return jobs.length ? jobs : allJobsForArea();
+}
+
+function reimbursementEmployeeOptions() {
+  if (isFieldEntryMode()) {
+    const sheet = currentSheet();
+    const names = sheet.rows?.map((row) => row.employee).filter(Boolean) || [];
+    return [...new Set([sheet.foreman, ...names].filter(Boolean))];
+  }
+  return peopleForArea().map((person) => person.name).sort((a, b) => a.localeCompare(b));
+}
+
+function visibleReimbursementRequests() {
+  return (state.reimbursementRequests || [])
+    .filter((request) => request.area === state.selectedArea)
+    .filter((request) => roleIsOffice() || state.selectedRole === "Quality" || request.foreman === state.currentForeman || request.createdBy === actorName())
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+}
+
+function renderReimbursements() {
+  const canReview = canManagePayrollAdjustments();
+  const jobs = reimbursementJobOptions();
+  const defaultJobId = currentSheet()?.jobId || jobs[0]?.id || "";
+  const employees = reimbursementEmployeeOptions();
+  const requests = visibleReimbursementRequests();
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Reimbursements", "Reembolsos")}</h2>
+          <p class="sub">Foremen can request weekly expense reimbursement here. Payroll/Admin can approve, deny, or mark paid.</p>
+        </div>
+      </div>
+      <div class="reimbursement-form section-gap">
+        <label>Date<span class="es">Fecha</span><input id="reimbursementDate" type="date" value="${localDateInputValue()}" /></label>
+        <label>Job<span class="es">Trabajo</span><select id="reimbursementJob">${setOptions(jobs, defaultJobId, (job) => job.name, (job) => job.id)}</select></label>
+        <label>Employee / payee<span class="es">Trabajador / pago a</span><select id="reimbursementEmployee">${setOptions(employees, state.currentForeman)}</select></label>
+        <label>Category<span class="es">Categoria</span><select id="reimbursementCategory">${setOptions(reimbursementCategories, "Fuel")}</select></label>
+        <label>Amount<span class="es">Cantidad</span><div class="money-input"><span>$</span><input id="reimbursementAmount" type="number" min="0" step="0.01" placeholder="0.00" /></div></label>
+        <label class="wide-field">Reason / notes<span class="es">Razon / notas</span><input id="reimbursementNote" placeholder="Receipt, fuel, hotel, supplies, etc." /></label>
+        <button class="primary-action compact-add" id="submitReimbursement" type="button">${t("Submit request", "Enviar solicitud")}</button>
+      </div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Date</th><th>Employee</th><th>Job</th><th>Category</th><th>Amount</th><th>Status</th><th>Notes</th><th>Payroll note</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${requests.length ? requests.map((request) => `
+              <tr>
+                <td><strong>${escapeHtml(request.date || "")}</strong><span class="sub">${escapeHtml(request.createdBy || "")}</span></td>
+                <td>${escapeHtml(request.employee || "")}<span class="sub">${escapeHtml(request.foreman || "")}</span></td>
+                <td>${escapeHtml(jobName(request.jobId))}</td>
+                <td>${escapeHtml(request.category || "")}</td>
+                <td>${money(request.amount)}</td>
+                <td><select class="table-select" data-reimbursement-status="${request.id}" ${!canReview ? "disabled" : ""}>${setOptions(reimbursementStatuses, request.status || "Pending")}</select></td>
+                <td>${escapeHtml(request.note || "")}</td>
+                <td><input class="compact-note" data-reimbursement-note="${request.id}" value="${escapeHtml(request.payrollNote || "")}" placeholder="Payroll note" ${!canReview ? "disabled" : ""} /></td>
+                <td><button class="danger-action table-action" data-delete-reimbursement="${request.id}" type="button" ${!canReview ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+              </tr>
+            `).join("") : `<tr><td colspan="9"><strong>No reimbursement requests yet.</strong><span class="es">Todavia no hay solicitudes de reembolso.</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function renderDocuments() {
   const canManage = ["Admin", "Management", "Quality"].includes(state.selectedRole);
   const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete" || job.documents?.length);
@@ -4049,7 +4173,7 @@ function renderDocuments() {
             <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
             <label id="otherDocumentTypeField" class="hidden">Other type<span class="es">Otro tipo</span><input id="otherDocumentType" placeholder="Safety orientation, site map, etc." /></label>
             <label>Upload document (20 MB max)<span class="es">Subir documento (20 MB max)</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
-          ` : `<div class="notice compact-notice">Only Admin/Payroll can upload or delete job documents. <span class="es">Solo Admin/Payroll puede subir o borrar documentos.</span></div>`}
+          ` : `<div class="notice compact-notice">Only Admin, Management, or Quality can upload or delete job documents. <span class="es">Solo Admin, gerencia o calidad puede subir o borrar documentos.</span></div>`}
         </div>
         <div class="document-job-summary section-gap">
           <strong>${selectedJob.name}</strong>
@@ -4173,7 +4297,7 @@ function selectedAreaJobsWithFallback(selectedId) {
 }
 
 function renderSafetyForms() {
-  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedSafetyJob);
   const forms = state.safetyForms.filter((form) => form.area === state.selectedArea && (!selectedJob || form.jobId === selectedJob.id));
   const selectedType = state.selectedSafetyFormType || "JHA";
@@ -4226,7 +4350,7 @@ function safetyFormCard(form) {
 }
 
 function renderFieldAudits() {
-  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
   const audits = state.fieldAudits.filter((audit) => audit.area === state.selectedArea && (!selectedJob || audit.jobId === selectedJob.id));
   return `
@@ -4503,7 +4627,60 @@ function renderForemanCrewAdminTool(foreman, crewMembers) {
   `;
 }
 
+function renderEmployeeProfilePanel(canEditProfiles) {
+  const person = selectedEmployeeProfile();
+  const people = peopleForArea().slice().sort((a, b) => a.name.localeCompare(b.name));
+  if (!person) {
+    return `
+      <div class="employee-profile-panel section-gap">
+        <h3>${t("Employee profile", "Perfil del trabajador")}</h3>
+        <div class="empty-state">Add employees first, then certifications and machine training can be tracked here.<span class="es">Agregue empleados primero para registrar certificaciones y entrenamiento.</span></div>
+      </div>
+    `;
+  }
+  const disabled = !canEditProfiles ? "disabled" : "";
+  const certs = new Set(person.certs || []);
+  const machines = new Set(person.machines || []);
+  const checkboxTiles = (values, field, selectedSet) => values
+    .map((value) => `
+      <label class="checkbox-tile">
+        <input data-profile-${field}="${escapeHtml(value)}" type="checkbox" ${selectedSet.has(value) ? "checked" : ""} ${disabled} />
+        <span>${escapeHtml(value)}</span>
+      </label>
+    `)
+    .join("");
+
+  return `
+    <div class="employee-profile-panel section-gap">
+      <div class="split">
+        <div>
+          <h3>${t("Employee profile", "Perfil del trabajador")}</h3>
+          <p class="sub">Track equipment certifications and machines this employee is trained to operate.</p>
+        </div>
+        ${!canEditProfiles ? `<span class="tag">View only</span>` : ""}
+      </div>
+      <div class="form-grid compact-form-grid">
+        <label>Employee<span class="es">Trabajador</span><select id="employeeProfileSelect">${setOptions(people, person.name, (entry) => `${entry.name} - ${entry.role}`, (entry) => entry.name)}</select></label>
+        <label>Normal crew / shift<span class="es">Cuadrilla / turno</span><input value="${escapeHtml(person.group || "")}" disabled /></label>
+        <label>Role<span class="es">Puesto</span><input value="${escapeHtml(person.role || "")}" disabled /></label>
+        <label>Hourly rate<span class="es">Pago por hora</span><input value="${money(person.hourlyRate || 0)}" disabled /></label>
+      </div>
+      <div class="profile-check-sections">
+        <div>
+          <h4>${t("Equipment certs", "Certificaciones de equipo")}</h4>
+          <div class="profile-check-grid">${checkboxTiles(employeeCertOptions, "cert", certs)}</div>
+        </div>
+        <div>
+          <h4>${t("Machine training", "Maquinas entrenadas")}</h4>
+          <div class="profile-check-grid">${checkboxTiles(employeeMachineOptions, "machine", machines)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderCrewSetup(canManage, canEditRates) {
+  const canEditProfiles = canEditEmployeeProfiles();
   const foreman = setupForemanName();
   const crew = foreman ? crewNameForForeman(foreman) : "";
   const crewMembers = peopleForArea().filter((person) => person.group === crew);
@@ -4513,7 +4690,7 @@ function renderCrewSetup(canManage, canEditRates) {
       <div class="split">
         <div><h2>${t("People / Crews", "Personas / Cuadrillas")}</h2><p class="sub">Select a foreman to manage the default crew assigned to that foreman.</p></div>
       </div>
-      ${!canManage ? `<div class="notice">Only Admin can permanently change people or crews. Payroll can update hourly rates. <span class="es">Solo Admin puede cambiar personas o cuadrillas. Payroll puede actualizar pagos por hora.</span></div>` : ""}
+      ${!canManage ? `<div class="notice">Only Admin can permanently change people or crews. Payroll can update hourly rates. Safety and Quality can update certifications and training. <span class="es">Solo Admin puede cambiar personas o cuadrillas. Payroll puede actualizar pagos por hora. Seguridad y calidad pueden actualizar certificaciones y entrenamientos.</span></div>` : ""}
       <div class="form-grid section-gap">
         <label>Foreman<span class="es">Capataz</span><select id="setupForemanSelect">${foreman ? setOptions(foremenForArea().map((person) => person.name), foreman) : '<option value="">No foremen set up</option>'}</select></label>
         <label>Crew<span class="es">Cuadrilla</span><input value="${crew || "No crew selected"}" disabled /></label>
@@ -4521,6 +4698,7 @@ function renderCrewSetup(canManage, canEditRates) {
       </div>
       ${canManage ? renderForemanCrewAdminTool(foreman, crewMembers) : ""}
       ${canManage && foreman ? renderForemanRenameTool(foreman) : ""}
+      ${renderEmployeeProfilePanel(canEditProfiles)}
       <div class="crew-add-grid section-gap">
         <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!canManage ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
         <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!canManage ? "disabled" : ""} /></label>
@@ -4551,14 +4729,16 @@ function renderCrewSetup(canManage, canEditRates) {
 }
 
 function renderShiftSetup(canManage, canEditRates) {
+  const canEditProfiles = canEditEmployeeProfiles();
   const selectedForeman = setupForemanName();
   return `
     <section class="panel">
       <div class="split">
         <div><h2>${t("People / Shifts", "Personas / Turnos")}</h2><p class="sub">Admin keeps default day or night shift assignments here.</p></div>
       </div>
-      ${!canManage ? `<div class="notice">Only Admin can permanently change people or shifts. Payroll can update hourly rates. <span class="es">Solo Admin puede cambiar personas o turnos. Payroll puede actualizar pagos por hora.</span></div>` : ""}
+      ${!canManage ? `<div class="notice">Only Admin can permanently change people or shifts. Payroll can update hourly rates. Safety and Quality can update certifications and training. <span class="es">Solo Admin puede cambiar personas o turnos. Payroll puede actualizar pagos por hora. Seguridad y calidad pueden actualizar certificaciones y entrenamientos.</span></div>` : ""}
       ${canManage && selectedForeman ? renderForemanRenameTool(selectedForeman) : ""}
+      ${renderEmployeeProfilePanel(canEditProfiles)}
       <div class="people-form section-gap">
         <label>Name<span class="es">Nombre</span><input id="personName" ${!canManage ? "disabled" : ""} /></label>
         <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
@@ -5032,6 +5212,7 @@ function bindTabEvents() {
     button.addEventListener("click", () => deleteRecordFile("fieldAudits", button.dataset.deleteAuditFile, button.dataset.fileId));
   });
   if ($("addProduction")) $("addProduction").addEventListener("click", addProduction);
+  if ($("submitReimbursement")) $("submitReimbursement").addEventListener("click", submitReimbursementRequest);
   if ($("exportPayrollCsv")) $("exportPayrollCsv").addEventListener("click", exportPayrollCsv);
   if ($("exportEmployeeCsv")) $("exportEmployeeCsv").addEventListener("click", exportEmployeeCsv);
   if ($("employeeReportSelect")) {
@@ -5091,6 +5272,13 @@ function bindTabEvents() {
       render();
     });
   }
+  if ($("employeeProfileSelect")) {
+    $("employeeProfileSelect").addEventListener("change", (event) => {
+      state.selectedEmployeeProfile = event.target.value;
+      saveState();
+      render();
+    });
+  }
   if ($("renameForemanButton")) $("renameForemanButton").addEventListener("click", renameSelectedForeman);
   if ($("addForemanButton")) $("addForemanButton").addEventListener("click", addForemanCrew);
   if ($("deleteForemanButton")) $("deleteForemanButton").addEventListener("click", deleteSelectedForemanCrew);
@@ -5144,6 +5332,14 @@ function bindTabEvents() {
     input.addEventListener("change", updatePersonField);
   });
 
+  document.querySelectorAll("[data-profile-cert]").forEach((input) => {
+    input.addEventListener("change", () => updateEmployeeProfileList("certs", input.dataset.profileCert, input.checked));
+  });
+
+  document.querySelectorAll("[data-profile-machine]").forEach((input) => {
+    input.addEventListener("change", () => updateEmployeeProfileList("machines", input.dataset.profileMachine, input.checked));
+  });
+
   document.querySelectorAll("[data-remove-person]").forEach((button) => {
     button.addEventListener("click", () => removePerson(button.dataset.removePerson));
   });
@@ -5162,6 +5358,18 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-document-action]").forEach((button) => {
     button.addEventListener("click", () => handleDocumentAction(button.dataset.documentAction, button.dataset.jobId, button.dataset.docId));
+  });
+
+  document.querySelectorAll("[data-reimbursement-status]").forEach((select) => {
+    select.addEventListener("change", () => updateReimbursementStatus(select.dataset.reimbursementStatus, select.value));
+  });
+
+  document.querySelectorAll("[data-reimbursement-note]").forEach((input) => {
+    input.addEventListener("change", () => updateReimbursementNote(input.dataset.reimbursementNote, input.value));
+  });
+
+  document.querySelectorAll("[data-delete-reimbursement]").forEach((button) => {
+    button.addEventListener("click", () => deleteReimbursementRequest(button.dataset.deleteReimbursement));
   });
 
   document.querySelectorAll("[data-prod]").forEach((input) => {
@@ -6112,6 +6320,118 @@ function savePerson() {
   saveState();
   render();
   showToast(`${name} saved`);
+}
+
+function updateEmployeeProfileList(field, value, checked) {
+  if (!canEditEmployeeProfiles()) return;
+  const person = selectedEmployeeProfile();
+  if (!person || !value || !["certs", "machines"].includes(field)) return;
+  const list = new Set(person[field] || []);
+  if (checked) list.add(value);
+  else list.delete(value);
+  person[field] = [...list].sort((a, b) => a.localeCompare(b));
+  logActivity("Employee profile updated", {
+    employee: person.name,
+    field: field === "certs" ? "Equipment certs" : "Machine training",
+    value
+  });
+  saveState();
+  showToast(`${person.name} profile updated`);
+}
+
+function submitReimbursementRequest() {
+  const amount = Number($("reimbursementAmount")?.value) || 0;
+  if (!amount) {
+    showToast("Enter a reimbursement amount");
+    return;
+  }
+  const jobs = reimbursementJobOptions();
+  const jobId = $("reimbursementJob")?.value || jobs[0]?.id || "";
+  const request = {
+    id: `r${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    area: state.selectedArea,
+    foreman: isFieldEntryMode() ? state.currentForeman : productionForemanName() || state.currentForeman,
+    jobId,
+    employee: $("reimbursementEmployee")?.value || state.currentForeman || actorName(),
+    date: $("reimbursementDate")?.value || localDateInputValue(),
+    category: $("reimbursementCategory")?.value || "Other",
+    amount,
+    note: $("reimbursementNote")?.value.trim() || "",
+    status: "Pending",
+    payrollNote: "",
+    createdBy: actorName(),
+    createdAt: timestamp(),
+    reviewedBy: "",
+    reviewedAt: ""
+  };
+  state.reimbursementRequests = state.reimbursementRequests || [];
+  state.reimbursementRequests.unshift(request);
+  logActivity("Reimbursement requested", {
+    foreman: request.foreman,
+    employee: request.employee,
+    job: jobName(request.jobId),
+    field: request.category,
+    value: money(request.amount)
+  });
+  saveState();
+  render();
+  showToast("Reimbursement request submitted");
+}
+
+function updateReimbursementStatus(id, status) {
+  if (!canManagePayrollAdjustments()) return;
+  const request = state.reimbursementRequests?.find((entry) => entry.id === id);
+  if (!request) return;
+  const previous = request.status || "Pending";
+  request.status = status;
+  request.reviewedBy = actorName();
+  request.reviewedAt = timestamp();
+  logActivity("Reimbursement status changed", {
+    foreman: request.foreman,
+    employee: request.employee,
+    job: jobName(request.jobId),
+    field: request.category,
+    from: previous,
+    to: status
+  });
+  saveState();
+  render();
+  showToast("Reimbursement status updated");
+}
+
+function updateReimbursementNote(id, note) {
+  if (!canManagePayrollAdjustments()) return;
+  const request = state.reimbursementRequests?.find((entry) => entry.id === id);
+  if (!request) return;
+  request.payrollNote = note.trim();
+  request.reviewedBy = actorName();
+  request.reviewedAt = timestamp();
+  logActivity("Reimbursement note updated", {
+    foreman: request.foreman,
+    employee: request.employee,
+    job: jobName(request.jobId),
+    field: request.category
+  });
+  saveState();
+  showToast("Payroll note saved");
+}
+
+function deleteReimbursementRequest(id) {
+  if (!canManagePayrollAdjustments()) return;
+  const request = state.reimbursementRequests?.find((entry) => entry.id === id);
+  if (!request) return;
+  if (!confirm(`Delete reimbursement request for ${request.employee}?`)) return;
+  state.reimbursementRequests = state.reimbursementRequests.filter((entry) => entry.id !== id);
+  logActivity("Reimbursement request deleted", {
+    foreman: request.foreman,
+    employee: request.employee,
+    job: jobName(request.jobId),
+    field: request.category,
+    value: money(request.amount)
+  });
+  saveState();
+  render();
+  showToast("Reimbursement request deleted");
 }
 
 function readFileAsDataUrl(file) {

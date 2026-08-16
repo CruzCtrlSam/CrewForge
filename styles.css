@@ -916,6 +916,49 @@ textarea {
   font-size: 1rem;
 }
 
+.employee-profile-panel {
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #f6f8f9;
+}
+
+.employee-profile-panel h3,
+.employee-profile-panel h4 {
+  margin: 0 0 8px;
+}
+
+.profile-check-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.profile-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 10px;
+}
+
+.checkbox-tile {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 2px solid #c1c8cc;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 12px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.checkbox-tile input {
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+}
+
 .foreman-rename-grid {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) auto;
@@ -966,6 +1009,17 @@ textarea {
   gap: 12px;
   align-items: end;
   margin-top: 12px;
+}
+
+.reimbursement-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.reimbursement-form .wide-field {
+  grid-column: span 2;
 }
 
 .document-toolbar {
@@ -2220,10 +2274,20 @@ tr:last-child td {
   .crew-add-grid,
   .production-add-grid,
   .people-form,
+  .profile-check-sections,
   .mini-grid,
   .day-grid,
   .audit-check-grid {
     grid-template-columns: 1fr;
+  }
+
+  .reimbursement-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reimbursement-form .wide-field,
+  .reimbursement-form .primary-action {
+    grid-column: 1 / -1;
   }
 
   .topbar,
@@ -2366,6 +2430,11 @@ tr:last-child td {
 
   .production-submit-row .primary-action {
     width: 100%;
+  }
+
+  .profile-check-grid,
+  .reimbursement-form {
+    grid-template-columns: 1fr;
   }
 
   .tracker-summary-toggle {
