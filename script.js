@@ -1340,6 +1340,10 @@ function canManagePayrollAdjustments() {
   return ["Admin", "Payroll"].includes(state.selectedRole);
 }
 
+function canManageJobDocuments() {
+  return ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
+}
+
 function roleIsProductionVisible() {
   return ["Management", "Admin", "Quality"].includes(state.selectedRole);
 }
@@ -4154,7 +4158,7 @@ function renderReimbursements() {
 }
 
 function renderDocuments() {
-  const canManage = ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
+  const canManage = canManageJobDocuments();
   const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete" || job.documents?.length);
   const selectedJob = jobs.find((job) => job.id === state.selectedDocumentJob) || jobs[0];
   const docs = selectedJob?.documents || [];
@@ -6449,7 +6453,7 @@ function updateOtherDocumentTypeVisibility() {
 }
 
 async function uploadJobDocuments(event) {
-  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  if (!canManageJobDocuments()) return;
   const jobId = $("documentJobSelect")?.value || state.selectedDocumentJob;
   const job = state.jobs.find((entry) => entry.id === jobId);
   const files = Array.from(event.target.files || []);
@@ -6750,7 +6754,7 @@ function printJobDocument(job, doc) {
 }
 
 function deleteJobDocument(job, doc) {
-  if (!["Admin", "Payroll"].includes(state.selectedRole)) return;
+  if (!canManageJobDocuments()) return;
   if (!confirm(`Delete ${doc.name} from ${job.name}?`)) return;
   job.documents = (job.documents || []).filter((entry) => entry.id !== doc.id);
   logActivity("Document deleted", { area: job.area, job: job.name, field: doc.type, from: doc.name });
