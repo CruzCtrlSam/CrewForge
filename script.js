@@ -4154,7 +4154,7 @@ function renderReimbursements() {
 }
 
 function renderDocuments() {
-  const canManage = ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  const canManage = ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
   const jobs = allJobsForArea().filter((job) => (job.status || "Active") !== "Complete" || job.documents?.length);
   const selectedJob = jobs.find((job) => job.id === state.selectedDocumentJob) || jobs[0];
   const docs = selectedJob?.documents || [];
@@ -4173,7 +4173,7 @@ function renderDocuments() {
             <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
             <label id="otherDocumentTypeField" class="hidden">Other type<span class="es">Otro tipo</span><input id="otherDocumentType" placeholder="Safety orientation, site map, etc." /></label>
             <label>Upload document (20 MB max)<span class="es">Subir documento (20 MB max)</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
-          ` : `<div class="notice compact-notice">Only Admin, Management, or Quality can upload or delete job documents. <span class="es">Solo Admin, gerencia o calidad puede subir o borrar documentos.</span></div>`}
+          ` : `<div class="notice compact-notice">Only Admin, Management, Quality, or Safety can upload or delete job documents. <span class="es">Solo Admin, gerencia, calidad o seguridad puede subir o borrar documentos.</span></div>`}
         </div>
         <div class="document-job-summary section-gap">
           <strong>${selectedJob.name}</strong>
