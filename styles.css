@@ -1104,6 +1104,31 @@ textarea {
   gap: 10px;
 }
 
+.accident-report-form {
+  display: grid;
+  gap: 16px;
+  border: 2px solid rgba(167, 123, 34, 0.45);
+  border-radius: 8px;
+  background: #fff8e5;
+  padding: 16px;
+}
+
+.accident-report-form h3,
+.accident-report-form h4 {
+  margin: 0 0 4px;
+}
+
+.accident-report-form textarea {
+  min-height: 96px;
+}
+
+.accident-choice-grid,
+.injury-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
 .audit-choice {
   display: grid;
   gap: 8px;

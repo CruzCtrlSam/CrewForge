@@ -62,7 +62,37 @@ const fabricationProcessSteps = [
 const qualityRejectReasons = ["None", "Missed bend", "Wrong size", "Wrong quantity", "Bad steel quality", "Damaged", "Other"];
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
-const safetyFormTypes = ["JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
+const safetyFormTypes = ["JHA", "Accident Report", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
+const accidentYesNoFields = [
+  ["fatality", "Fatality", "Fatalidad"],
+  ["called911", "911 called", "Se llamo al 911"],
+  ["continuedWork", "Employee able to continue work", "Empleado pudo seguir trabajando"],
+  ["otherInjured", "Other people injured", "Otras personas lesionadas"],
+  ["treatedEr", "Treated in ER", "Atendido en emergencia"],
+  ["hospitalized", "Hospitalized overnight", "Hospitalizado durante la noche"],
+  ["otherPersonInvolved", "Another person involved", "Otra persona involucrada"]
+];
+const accidentInjuryTypes = [
+  "Heat/cold burn",
+  "Cut/laceration",
+  "Chemical burn",
+  "Fracture",
+  "Slip",
+  "Electrical shock",
+  "Foreign body",
+  "Strain",
+  "Puncture",
+  "Trip",
+  "Physical exhaustion",
+  "Heat/cold stress",
+  "Contusion/bruise",
+  "Struck by",
+  "Fall",
+  "Chemical inhalation",
+  "Chemical irritation",
+  "Sprain",
+  "Other"
+];
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
 const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
 const employeeMachineOptions = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender", "Shear", "Forklift", "Loader", "Telehandler"];
@@ -4323,6 +4353,7 @@ function renderSafetyForms() {
           <label>Evidence / completed form<span class="es">Evidencia / forma completa</span><input id="safetyFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
           <button class="primary-action form-button" id="addSafetyForm" type="button" ${canSubmit ? "" : "disabled"}>${t("Save safety record", "Guardar seguridad")}</button>
         </div>
+        ${selectedType === "Accident Report" ? renderAccidentReportFields(selectedJob) : ""}
         <div class="offline-note section-gap">
           <strong>Offline use:</strong> records can be filled out in the browser and will stay on the device until sync is available.
           <span class="es">Uso sin conexion: se guarda en el equipo hasta sincronizar.</span>
@@ -4335,14 +4366,67 @@ function renderSafetyForms() {
   `;
 }
 
+function renderAccidentReportFields(selectedJob) {
+  const workerOptions = peopleForArea(selectedJob?.area || state.selectedArea).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const department = areas[selectedJob?.area || state.selectedArea]?.label || "";
+  return `
+    <div class="accident-report-form section-gap">
+      <div>
+        <h3>Accident Report<span class="es">Reporte de accidente</span></h3>
+        <p class="sub">Structured from the company injury report template. Safety/Admin can review and print the finished report.</p>
+      </div>
+      <div class="form-grid">
+        <label>Employee name<span class="es">Nombre del empleado</span><select id="accidentEmployee"><option value="">Select employee</option>${setOptions(workerOptions, "", (person) => person.name, (person) => person.name)}</select></label>
+        <label>Manual employee name<span class="es">Nombre manual</span><input id="accidentManualEmployee" placeholder="If employee is not in the list" /></label>
+        <label>Sex<span class="es">Sexo</span><select id="accidentSex">${setOptions(["", "Male", "Female"], "")}</select></label>
+        <label>Time<span class="es">Hora</span><input id="accidentTime" type="time" /></label>
+        <label>Department<span class="es">Departamento</span><input id="accidentDepartment" value="${escapeHtml(department)}" /></label>
+        <label>Location where injury took place<span class="es">Lugar de la lesion</span><input id="accidentLocation" placeholder="Exact site/location" /></label>
+        <label>Other people injured / involved details<span class="es">Detalles de otros lesionados / involucrados</span><input id="accidentOtherPeople" placeholder="Names and involvement, if any" /></label>
+        <label>Report status<span class="es">Estado del reporte</span><select id="accidentStatus">${setOptions(["Draft", "Submitted", "Reviewed"], "Draft")}</select></label>
+      </div>
+      <div class="accident-choice-grid">
+        ${accidentYesNoFields.map(([key, en, es]) => `
+          <label class="audit-choice">
+            <span>${en}<span class="es">${es}</span></span>
+            <select data-accident-yn="${key}">
+              ${setOptions(["N/A", "Yes", "No"], "N/A")}
+            </select>
+          </label>
+        `).join("")}
+      </div>
+      <div>
+        <h4>Type of injury / illness<span class="es">Tipo de lesion / enfermedad</span></h4>
+        <div class="injury-type-grid">
+          ${accidentInjuryTypes.map((type) => `
+            <label class="checkbox-tile"><input type="checkbox" data-accident-injury="${escapeHtml(type)}" /> ${escapeHtml(type)}</label>
+          `).join("")}
+        </div>
+      </div>
+      <div class="form-grid">
+        <label class="wide-field">Affected body part(s)<span class="es">Partes del cuerpo afectadas</span><input id="accidentBodyParts" placeholder="Back, hand, knee, shoulder..." /></label>
+        <label class="wide-field">Treatment / doctor / hospital<span class="es">Tratamiento / doctor / hospital</span><input id="accidentTreatment" placeholder="First aid, clinic, ER, doctor name..." /></label>
+      </div>
+      <div class="form-grid">
+        <label class="wide-field">What happened<span class="es">Que paso</span><textarea id="accidentWhatHappened" placeholder="Describe the accident clearly"></textarea></label>
+        <label class="wide-field">What directly caused the accident<span class="es">Que causo directamente el accidente</span><textarea id="accidentCause" placeholder="Direct cause / root cause"></textarea></label>
+        <label class="wide-field">Corrective action<span class="es">Accion correctiva</span><textarea id="accidentCorrectiveAction" placeholder="What was corrected or needs follow-up"></textarea></label>
+        <label class="wide-field">Witnesses<span class="es">Testigos</span><textarea id="accidentWitnesses" placeholder="Names and contact details"></textarea></label>
+      </div>
+    </div>
+  `;
+}
+
 function safetyFormCard(form) {
   const files = form.files || [];
+  const accident = form.accident || null;
   return `
     <article class="document-card">
       <div>
         <span class="tag">${escapeHtml(form.type)}</span>
         <h3>${escapeHtml(jobName(form.jobId))}</h3>
         <p class="sub">${escapeHtml(form.date)} · ${escapeHtml(form.createdBy || "")}${form.notes ? ` · ${escapeHtml(form.notes)}` : ""}</p>
+        ${accident ? `<p class="sub"><strong>${escapeHtml(accident.employee || "No employee")}</strong> · ${escapeHtml(accident.status || "Draft")} · ${escapeHtml(accident.location || "No location")}</p>` : ""}
         ${files.length ? `<p class="sub">${files.length} attachment${files.length === 1 ? "" : "s"}</p>` : ""}
       </div>
       <div class="document-actions">
@@ -5189,6 +5273,7 @@ function bindTabEvents() {
     $("safetyTypeSelect").addEventListener("change", (event) => {
       state.selectedSafetyFormType = event.target.value;
       saveState();
+      render();
     });
   }
   if ($("addSafetyForm")) $("addSafetyForm").addEventListener("click", addSafetyFormRecord);
@@ -6570,27 +6655,62 @@ async function addSafetyFormRecord() {
   const jobId = $("safetyJobSelect")?.value;
   const job = state.jobs.find((entry) => entry.id === jobId);
   if (!job) return showToast("Choose a job first");
+  const type = $("safetyTypeSelect")?.value || "JHA";
+  const accident = type === "Accident Report" ? collectAccidentReportData() : null;
+  if (type === "Accident Report" && !accident.employee) return showToast("Choose or type the injured employee");
   const files = await filesToStoredAttachments($("safetyFiles")?.files);
   if (!files) return;
   const record = {
     id: `safety-${Date.now()}`,
     area: state.selectedArea,
     jobId,
-    type: $("safetyTypeSelect")?.value || "JHA",
+    type,
     date: $("safetyDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
     notes: $("safetyNotes")?.value.trim() || "",
+    accident,
     files,
     createdAt: timestamp(),
     createdBy: actorName(),
-    status: "Saved"
+    status: accident?.status || "Saved"
   };
   state.safetyForms.unshift(record);
   state.selectedSafetyJob = jobId;
   state.selectedSafetyFormType = record.type;
-  logActivity("Safety record saved", { area: state.selectedArea, job: job.name, field: record.type });
+  logActivity(record.type === "Accident Report" ? "Accident report saved" : "Safety record saved", {
+    area: state.selectedArea,
+    job: job.name,
+    field: record.type,
+    employee: accident?.employee || ""
+  });
   saveState();
   render();
-  showToast("Safety record saved");
+  showToast(record.type === "Accident Report" ? "Accident report saved" : "Safety record saved");
+}
+
+function collectAccidentReportData() {
+  const yesNo = {};
+  document.querySelectorAll("[data-accident-yn]").forEach((input) => {
+    yesNo[input.dataset.accidentYn] = input.value || "N/A";
+  });
+  const injuryTypes = [...document.querySelectorAll("[data-accident-injury]:checked")].map((input) => input.dataset.accidentInjury);
+  const employee = $("accidentManualEmployee")?.value.trim() || $("accidentEmployee")?.value || "";
+  return {
+    employee,
+    sex: $("accidentSex")?.value || "",
+    time: $("accidentTime")?.value || "",
+    department: $("accidentDepartment")?.value.trim() || "",
+    location: $("accidentLocation")?.value.trim() || "",
+    otherPeople: $("accidentOtherPeople")?.value.trim() || "",
+    status: $("accidentStatus")?.value || "Draft",
+    yesNo,
+    injuryTypes,
+    bodyParts: $("accidentBodyParts")?.value.trim() || "",
+    treatment: $("accidentTreatment")?.value.trim() || "",
+    whatHappened: $("accidentWhatHappened")?.value.trim() || "",
+    cause: $("accidentCause")?.value.trim() || "",
+    correctiveAction: $("accidentCorrectiveAction")?.value.trim() || "",
+    witnesses: $("accidentWitnesses")?.value.trim() || ""
+  };
 }
 
 async function saveFieldAuditRecord() {
@@ -6651,6 +6771,7 @@ function deleteRecordFile(collectionName, recordId, fileId) {
 function printSafetyRecord(recordId) {
   const record = state.safetyForms.find((entry) => entry.id === recordId);
   if (!record) return;
+  if (record.type === "Accident Report") return printAccidentReport(record);
   const win = window.open("", "_blank");
   if (!win) return showToast("Allow popups to print this record");
   const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
@@ -6676,6 +6797,70 @@ function printSafetyRecord(recordId) {
         </div>
         <section class="box"><strong>Notes</strong><p>${escapeHtml(record.notes || "No notes")}</p></section>
         <section><h2>Attachments</h2><ul>${files}</ul></section>
+        <script>window.onload = () => window.print();<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function printAccidentReport(record) {
+  const accident = record.accident || {};
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print this accident report");
+  const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
+  const ynRows = accidentYesNoFields.map(([key, en]) => `
+    <tr><th>${escapeHtml(en)}</th><td>${escapeHtml(accident.yesNo?.[key] || "N/A")}</td></tr>
+  `).join("");
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Accident Report - ${escapeHtml(accident.employee || jobName(record.jobId))}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 28px; color: #0b1828; }
+          header { border-bottom: 3px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
+          h1 { margin: 0; font-size: 28px; }
+          h2 { margin: 20px 0 8px; font-size: 16px; text-transform: uppercase; }
+          p, li, td, th { font-size: 13px; line-height: 1.42; }
+          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+          th, td { border: 1px solid #9aa5ad; padding: 8px; text-align: left; vertical-align: top; }
+          th { background: #e9eef2; width: 28%; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .box { border: 1px solid #9aa5ad; padding: 10px; min-height: 52px; }
+          .line-box { border: 1px solid #9aa5ad; padding: 10px; min-height: 90px; white-space: pre-wrap; }
+          .muted { color: #53606a; font-weight: 700; }
+          @media print { button { display: none; } body { margin: 18px; } }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Injury / Accident Report</h1>
+          <p class="muted">${escapeHtml(jobName(record.jobId))} · ${escapeHtml(record.date)} · ${escapeHtml(accident.status || "Draft")}</p>
+        </header>
+        <h2>Worker Information</h2>
+        <div class="grid">
+          <div class="box"><strong>Name</strong><br>${escapeHtml(accident.employee || "")}</div>
+          <div class="box"><strong>Sex</strong><br>${escapeHtml(accident.sex || "")}</div>
+          <div class="box"><strong>Date / Time</strong><br>${escapeHtml(record.date)} ${escapeHtml(accident.time || "")}</div>
+          <div class="box"><strong>Department</strong><br>${escapeHtml(accident.department || "")}</div>
+          <div class="box"><strong>Location</strong><br>${escapeHtml(accident.location || "")}</div>
+          <div class="box"><strong>Treatment / doctor / hospital</strong><br>${escapeHtml(accident.treatment || "")}</div>
+        </div>
+        <table>${ynRows}</table>
+        <h2>Injury Information</h2>
+        <div class="box"><strong>Type of injury / illness</strong><br>${(accident.injuryTypes || []).map(escapeHtml).join(", ") || "None selected"}</div>
+        <div class="box"><strong>Affected body part(s)</strong><br>${escapeHtml(accident.bodyParts || "")}</div>
+        <h2>Incident Details</h2>
+        <div class="line-box"><strong>What happened</strong><br>${escapeHtml(accident.whatHappened || "")}</div>
+        <div class="line-box"><strong>What directly caused the accident</strong><br>${escapeHtml(accident.cause || "")}</div>
+        <div class="line-box"><strong>Other people injured / involved</strong><br>${escapeHtml(accident.otherPeople || "")}</div>
+        <div class="line-box"><strong>Witnesses</strong><br>${escapeHtml(accident.witnesses || "")}</div>
+        <div class="line-box"><strong>Corrective action</strong><br>${escapeHtml(accident.correctiveAction || "")}</div>
+        <div class="line-box"><strong>Notes</strong><br>${escapeHtml(record.notes || "")}</div>
+        <h2>Attachments</h2>
+        <ul>${files}</ul>
+        <p class="muted">Created by ${escapeHtml(record.createdBy || "")} on ${escapeHtml(record.createdAt || "")}</p>
         <script>window.onload = () => window.print();<\/script>
       </body>
     </html>
