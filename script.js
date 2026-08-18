@@ -4229,7 +4229,7 @@ function renderDocuments() {
 
 function qualityControlRows(defaultCount = 4) {
   return Array.from({ length: defaultCount }, (_, index) => {
-    const letter = qcBendLetters[index] || `Shape ${index + 1}`;
+    const letter = qcBendLetters[index] || `Size ${index + 1}`;
     return `
       <tr>
         <td><input data-qc-bend="label" value="${letter}" /></td>
@@ -4281,14 +4281,14 @@ function renderQualityControl() {
       <div class="qc-bend-panel section-gap">
         <div class="split">
           <div>
-            <h3>Shape measurements<span class="es">Medidas de forma</span></h3>
-            <p class="sub">Start with four card measurements and four actual measurements; add more when the shape card needs them.</p>
+            <h3>Size measurements for this shape<span class="es">Medidas para esta forma</span></h3>
+            <p class="sub">Each selected shape starts with at least four size points. Add more when the shape card has more measurements.</p>
           </div>
-          <button class="secondary-action table-action" id="addQcBend" type="button">Add shape<span class="es">Agregar forma</span></button>
+          <button class="secondary-action table-action" id="addQcBend" type="button">Add size<span class="es">Agregar medida</span></button>
         </div>
         <div class="table-wrap">
           <table class="entry-table qc-bend-table">
-            <thead><tr><th>Shape<span class="es">Forma</span></th><th>Card size<span class="es">Medida en tarjeta</span></th><th>Actual size<span class="es">Medida real</span></th></tr></thead>
+            <thead><tr><th>Size point<span class="es">Punto de medida</span></th><th>Card size<span class="es">Medida en tarjeta</span></th><th>Actual size<span class="es">Medida real</span></th></tr></thead>
             <tbody id="qcBendRows">${qualityControlRows()}</tbody>
           </table>
         </div>
@@ -6601,7 +6601,7 @@ function addQualityBendRow() {
   const tbody = $("qcBendRows");
   if (!tbody) return;
   const index = tbody.querySelectorAll("tr").length;
-  const letter = qcBendLetters[index] || `Shape ${index + 1}`;
+  const letter = qcBendLetters[index] || `Size ${index + 1}`;
   tbody.insertAdjacentHTML("beforeend", `
     <tr>
       <td><input data-qc-bend="label" value="${letter}" /></td>
