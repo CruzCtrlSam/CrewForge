@@ -4227,9 +4227,9 @@ function renderDocuments() {
   `;
 }
 
-function qualityControlRows(defaultCount = 5) {
+function qualityControlRows(defaultCount = 4) {
   return Array.from({ length: defaultCount }, (_, index) => {
-    const letter = qcBendLetters[index] || `Bend ${index + 1}`;
+    const letter = qcBendLetters[index] || `Shape ${index + 1}`;
     return `
       <tr>
         <td><input data-qc-bend="label" value="${letter}" /></td>
@@ -4272,6 +4272,7 @@ function renderQualityControl() {
       <div class="form-grid section-gap">
         <label>Rebar department<span class="es">Departamento de varilla</span><select id="qcAreaSelect">${setOptions(qualityAreaOptions(), qualityArea, (item) => item.name, (item) => item.id)}</select></label>
         <label>Job name<span class="es">Trabajo</span><select id="qcJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
+        <label>Job code<span class="es">Codigo de trabajo</span><input id="qcJobCode" placeholder="Example: VS26-LAURW, CON-2026" /></label>
         <label>Card code<span class="es">Codigo de tarjeta</span><input id="qcCardCode" placeholder="Example: Q369, AAFR, 11E138" /></label>
         <label>Shape<span class="es">Forma</span><select id="qcShape">${setOptions(rebarShapeOptions, "")}</select></label>
         <label>Operator name<span class="es">Operador</span><input id="qcOperator" placeholder="Operator name" /></label>
@@ -4280,14 +4281,14 @@ function renderQualityControl() {
       <div class="qc-bend-panel section-gap">
         <div class="split">
           <div>
-            <h3>Bend measurements<span class="es">Medidas por doblez</span></h3>
-            <p class="sub">Start with five bends; add more when the shape card needs them.</p>
+            <h3>Shape measurements<span class="es">Medidas de forma</span></h3>
+            <p class="sub">Start with four card measurements and four actual measurements; add more when the shape card needs them.</p>
           </div>
-          <button class="secondary-action table-action" id="addQcBend" type="button">Add bend<span class="es">Agregar doblez</span></button>
+          <button class="secondary-action table-action" id="addQcBend" type="button">Add shape<span class="es">Agregar forma</span></button>
         </div>
         <div class="table-wrap">
           <table class="entry-table qc-bend-table">
-            <thead><tr><th>Bend<span class="es">Doblez</span></th><th>Card size<span class="es">Medida en tarjeta</span></th><th>Actual size<span class="es">Medida real</span></th></tr></thead>
+            <thead><tr><th>Shape<span class="es">Forma</span></th><th>Card size<span class="es">Medida en tarjeta</span></th><th>Actual size<span class="es">Medida real</span></th></tr></thead>
             <tbody id="qcBendRows">${qualityControlRows()}</tbody>
           </table>
         </div>
@@ -4301,12 +4302,13 @@ function renderQualityControl() {
         <h3>Recent QC records<span class="es">Revisiones recientes</span></h3>
         <div class="table-wrap">
           <table class="entry-table">
-            <thead><tr><th>Date</th><th>Job</th><th>Card</th><th>Shape</th><th>Machine</th><th>Operator</th><th>Result</th><th>Bends</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Date</th><th>Job</th><th>Job code</th><th>Card</th><th>Shape</th><th>Machine</th><th>Operator</th><th>Result</th><th>Measurements</th><th>Notes</th></tr></thead>
             <tbody>
               ${records.length ? records.map((record) => `
                 <tr>
                   <td>${escapeHtml(record.createdAt || "")}</td>
                   <td>${escapeHtml(jobName(record.jobId))}</td>
+                  <td>${escapeHtml(record.jobCode || "")}</td>
                   <td><strong>${escapeHtml(record.cardCode || "")}</strong></td>
                   <td>${escapeHtml(record.shape || "")}</td>
                   <td>${escapeHtml(record.machineType || "")}</td>
@@ -4315,7 +4317,7 @@ function renderQualityControl() {
                   <td>${record.bends?.length || 0}</td>
                   <td>${escapeHtml(record.notes || "")}</td>
                 </tr>
-              `).join("") : `<tr><td colspan="9">No QC records for this job yet.<span class="es">Todavia no hay revisiones.</span></td></tr>`}
+              `).join("") : `<tr><td colspan="10">No QC records for this job yet.<span class="es">Todavia no hay revisiones.</span></td></tr>`}
             </tbody>
           </table>
         </div>
@@ -6599,7 +6601,7 @@ function addQualityBendRow() {
   const tbody = $("qcBendRows");
   if (!tbody) return;
   const index = tbody.querySelectorAll("tr").length;
-  const letter = qcBendLetters[index] || `Bend ${index + 1}`;
+  const letter = qcBendLetters[index] || `Shape ${index + 1}`;
   tbody.insertAdjacentHTML("beforeend", `
     <tr>
       <td><input data-qc-bend="label" value="${letter}" /></td>
@@ -6632,6 +6634,7 @@ function saveQualityCheck() {
     id: `qc-${Date.now()}`,
     area: areaId,
     jobId,
+    jobCode: $("qcJobCode")?.value.trim() || "",
     cardCode,
     shape: $("qcShape")?.value || "",
     operator: $("qcOperator")?.value.trim() || "",
