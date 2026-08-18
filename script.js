@@ -4254,10 +4254,8 @@ function qualityJobsForArea(areaId = state.selectedQualityArea || state.selected
 function renderQualityControl() {
   const canSubmit = canUseQualityControl();
   const qualityArea = ["rebarFab", "rebarInstall"].includes(state.selectedQualityArea) ? state.selectedQualityArea : state.selectedArea;
-  const jobs = qualityJobsForArea(qualityArea);
-  const selectedJob = jobs.find((job) => job.id === state.selectedQualityJob) || jobs[0];
   const records = state.qualityChecks
-    .filter((record) => record.area === qualityArea && (!selectedJob || record.jobId === selectedJob.id))
+    .filter((record) => record.area === qualityArea)
     .slice(0, 20);
   return `
     <section class="panel">
@@ -4271,18 +4269,16 @@ function renderQualityControl() {
       ${!canSubmit ? `<div class="notice">Quality Control is available to QUALITY, Admin, and Management for the two rebar departments.</div>` : ""}
       <div class="form-grid section-gap">
         <label>Rebar department<span class="es">Departamento de varilla</span><select id="qcAreaSelect">${setOptions(qualityAreaOptions(), qualityArea, (item) => item.name, (item) => item.id)}</select></label>
-        <label>Job name<span class="es">Trabajo</span><select id="qcJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
-        <label>Job code<span class="es">Codigo de trabajo</span><input id="qcJobCode" placeholder="Example: VS26-LAURW, CON-2026" /></label>
-        <label>Card code<span class="es">Codigo de tarjeta</span><input id="qcCardCode" placeholder="Example: Q369, AAFR, 11E138" /></label>
-        <label>Shape<span class="es">Forma</span><select id="qcShape">${setOptions(rebarShapeOptions, "")}</select></label>
+        <label>Job control code<span class="es">Codigo de control del trabajo</span><input id="qcJobCode" placeholder="Example: VS26-LAURW, Q369, AAFR" /></label>
+        <label>Card number<span class="es">Numero de tarjeta</span><input id="qcCardCode" placeholder="Example: 11E138, Q369, T058" /></label>
         <label>Operator name<span class="es">Operador</span><input id="qcOperator" placeholder="Operator name" /></label>
         <label>Machine type<span class="es">Tipo de maquina</span><select id="qcMachine">${setOptions(qcMachineTypes, qcMachineTypes[0])}</select></label>
       </div>
       <div class="qc-bend-panel section-gap">
         <div class="split">
           <div>
-            <h3>Size measurements for this shape<span class="es">Medidas para esta forma</span></h3>
-            <p class="sub">Each selected shape starts with at least four size points. Add more when the shape card has more measurements.</p>
+            <h3>Card size measurements<span class="es">Medidas de la tarjeta</span></h3>
+            <p class="sub">Each card starts with at least four size points. Add more when the card has more measurements.</p>
           </div>
           <button class="secondary-action table-action" id="addQcBend" type="button">Add size<span class="es">Agregar medida</span></button>
         </div>
@@ -4296,28 +4292,27 @@ function renderQualityControl() {
       <div class="form-grid section-gap">
         <label>QC result<span class="es">Resultado</span><select id="qcResult">${setOptions(["Pass", "Needs Review", "Reject"], "Pass")}</select></label>
         <label>Reason / notes<span class="es">Razon / notas</span><input id="qcNotes" placeholder="Missed bend, wrong length, bad steel, etc." /></label>
-        <button class="primary-action form-button" id="saveQualityCheck" type="button" ${canSubmit && selectedJob ? "" : "disabled"}>${t("Save QC check", "Guardar revision")}</button>
+        <button class="primary-action form-button" id="saveQualityCheck" type="button" ${canSubmit ? "" : "disabled"}>${t("Save QC check", "Guardar revision")}</button>
       </div>
       <div class="section-gap">
         <h3>Recent QC records<span class="es">Revisiones recientes</span></h3>
         <div class="table-wrap">
           <table class="entry-table">
-            <thead><tr><th>Date</th><th>Job</th><th>Job code</th><th>Card</th><th>Shape</th><th>Machine</th><th>Operator</th><th>Result</th><th>Measurements</th><th>Notes</th></tr></thead>
+            <thead><tr><th>Date</th><th>Department</th><th>Job control code</th><th>Card number</th><th>Machine</th><th>Operator</th><th>Result</th><th>Measurements</th><th>Notes</th></tr></thead>
             <tbody>
               ${records.length ? records.map((record) => `
                 <tr>
                   <td>${escapeHtml(record.createdAt || "")}</td>
-                  <td>${escapeHtml(jobName(record.jobId))}</td>
+                  <td>${escapeHtml(areas[record.area]?.label || record.area || "")}</td>
                   <td>${escapeHtml(record.jobCode || "")}</td>
                   <td><strong>${escapeHtml(record.cardCode || "")}</strong></td>
-                  <td>${escapeHtml(record.shape || "")}</td>
                   <td>${escapeHtml(record.machineType || "")}</td>
                   <td>${escapeHtml(record.operator || "")}</td>
                   <td><span class="tag">${escapeHtml(record.result || "")}</span></td>
                   <td>${record.bends?.length || 0}</td>
                   <td>${escapeHtml(record.notes || "")}</td>
                 </tr>
-              `).join("") : `<tr><td colspan="10">No QC records for this job yet.<span class="es">Todavia no hay revisiones.</span></td></tr>`}
+              `).join("") : `<tr><td colspan="9">No QC records for this department yet.<span class="es">Todavia no hay revisiones.</span></td></tr>`}
             </tbody>
           </table>
         </div>
@@ -5251,13 +5246,6 @@ function bindTabEvents() {
     $("qcAreaSelect").addEventListener("change", (event) => {
       state.selectedQualityArea = event.target.value;
       state.selectedQualityJob = "";
-      saveState();
-      render();
-    });
-  }
-  if ($("qcJobSelect")) {
-    $("qcJobSelect").addEventListener("change", (event) => {
-      state.selectedQualityJob = event.target.value;
       saveState();
       render();
     });
@@ -6625,18 +6613,16 @@ function collectQualityBends() {
 function saveQualityCheck() {
   if (!canUseQualityControl()) return showToast("QUALITY, Admin, or Management access required");
   const areaId = $("qcAreaSelect")?.value || state.selectedQualityArea || state.selectedArea;
-  const jobId = $("qcJobSelect")?.value || "";
-  const job = state.jobs.find((entry) => entry.id === jobId);
-  if (!job) return showToast("Choose a job first");
+  const jobCode = $("qcJobCode")?.value.trim() || "";
+  if (!jobCode) return showToast("Enter the job control code");
   const cardCode = $("qcCardCode")?.value.trim() || "";
-  if (!cardCode) return showToast("Enter the card code");
+  if (!cardCode) return showToast("Enter the card number");
   const record = {
     id: `qc-${Date.now()}`,
     area: areaId,
-    jobId,
-    jobCode: $("qcJobCode")?.value.trim() || "",
+    jobId: "",
+    jobCode,
     cardCode,
-    shape: $("qcShape")?.value || "",
     operator: $("qcOperator")?.value.trim() || "",
     machineType: $("qcMachine")?.value || "",
     bends: collectQualityBends(),
@@ -6647,8 +6633,8 @@ function saveQualityCheck() {
   };
   state.qualityChecks.unshift(record);
   state.selectedQualityArea = areaId;
-  state.selectedQualityJob = jobId;
-  logActivity("Quality control check saved", { area: areaId, job: job.name, field: cardCode, to: record.result });
+  state.selectedQualityJob = "";
+  logActivity("Quality control check saved", { area: areaId, field: `${jobCode} · ${cardCode}`, to: record.result });
   saveState();
   render();
   showToast("QC check saved");
