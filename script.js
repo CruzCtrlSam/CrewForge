@@ -913,7 +913,12 @@ function upgradeState(next) {
     passingScore: Number(course.passingScore) || 80,
     area: course.area || next.selectedArea || "rebarInstall"
   }));
-  next.trainingResults = next.trainingResults || [];
+  next.trainingResults = (next.trainingResults || []).map((result) => ({
+    ...result,
+    accredited: result.accredited || false,
+    accreditedBy: result.accreditedBy || "",
+    accreditedAt: result.accreditedAt || ""
+  }));
   next.qualityChecks = next.qualityChecks || [];
   next.reimbursementRequests = (next.reimbursementRequests || []).map((request) => ({
     ...request,
@@ -1420,7 +1425,19 @@ function canManageJobDocuments() {
 }
 
 function canManageTraining() {
+  return canManageTrainingResources();
+}
+
+function canManageTrainingResources() {
+  return state.selectedRole === "Safety";
+}
+
+function canReviewTrainingResults() {
   return ["Admin", "Management", "Safety"].includes(state.selectedRole);
+}
+
+function canAccreditTraining() {
+  return state.selectedRole === "Safety";
 }
 
 function roleIsProductionVisible() {
@@ -2419,7 +2436,8 @@ function renderTraining() {
   const courses = trainingCoursesForArea();
   const selectedCourse = courses.find((course) => course.id === state.selectedTrainingCourse) || courses[0];
   const jobs = allJobsForArea();
-  const manage = canManageTraining();
+  const manageResources = canManageTrainingResources();
+  const reviewResults = canReviewTrainingResults();
   return `
     <section class="panel training-panel">
       <div class="split">
@@ -2429,7 +2447,7 @@ function renderTraining() {
         </div>
         <span class="tag sync-tag">Offline capable<span class="es">Funciona sin conexion</span></span>
       </div>
-      ${manage ? `
+      ${manageResources ? `
         <div class="training-builder section-gap">
           <h3>Create training<span class="es">Crear capacitacion</span></h3>
           <div class="form-grid">
@@ -2450,10 +2468,11 @@ function renderTraining() {
       ` : ""}
       <div class="training-library section-gap">
         <h3>Training library<span class="es">Biblioteca de capacitacion</span></h3>
+        ${!manageResources ? `<p class="sub">Only Safety can upload or delete training resources.<span class="es">Solo Seguridad puede subir o borrar recursos de capacitacion.</span></p>` : ""}
         ${courses.length ? courses.map(trainingCourseCard).join("") : `<div class="empty-state">No training courses yet.<span class="es">Todavia no hay capacitaciones.</span></div>`}
       </div>
       ${selectedCourse ? renderTrainingRunner(selectedCourse, false) : ""}
-      ${manage ? renderTrainingResults() : ""}
+      ${reviewResults ? renderTrainingResults() : ""}
     </section>
   `;
 }
@@ -2481,7 +2500,7 @@ function trainingCourseCard(course) {
       <div class="document-actions">
         <button class="secondary-action table-action" data-copy-training="${course.id}" type="button">Copy link<span class="es">Copiar enlace</span></button>
         <button class="primary-action table-action" data-select-training="${course.id}" type="button">Open<span class="es">Abrir</span></button>
-        ${canManageTraining() ? `<button class="danger-action table-action" data-delete-training="${course.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
+        ${canManageTrainingResources() ? `<button class="danger-action table-action" data-delete-training="${course.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
       </div>
       ${course.files?.length ? `<div class="attachment-list">${course.files.map((file) => trainingAttachmentRow(course.id, file)).join("")}</div>` : ""}
     </article>
@@ -2494,7 +2513,7 @@ function trainingAttachmentRow(courseId, file) {
       <span><strong>${escapeHtml(file.name)}</strong> · ${fileSize(file.size)}</span>
       <span class="attachment-actions">
         <button class="secondary-action table-action" data-training-file="${courseId}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>
-        ${canManageTraining() ? `<button class="danger-action table-action" data-delete-training-file="${courseId}" data-file-id="${file.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
+        ${canManageTrainingResources() ? `<button class="danger-action table-action" data-delete-training-file="${courseId}" data-file-id="${file.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
       </span>
     </div>
   `;
@@ -2538,7 +2557,7 @@ function renderTrainingResults() {
       <h3>Training results<span class="es">Resultados de capacitacion</span></h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Employee</th><th>Course</th><th>Score</th><th>Status</th><th>Completed</th></tr></thead>
+          <thead><tr><th>Employee</th><th>Course</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
           <tbody>
             ${results.length ? results.slice(0, 50).map((result) => `
               <tr>
@@ -2546,14 +2565,28 @@ function renderTrainingResults() {
                 <td>${escapeHtml(result.courseTitle)}</td>
                 <td>${result.score}%</td>
                 <td>${result.passed ? "Passed" : "Needs review"}</td>
+                <td>${result.accredited ? `Accredited by ${escapeHtml(result.accreditedBy || "Safety")}<span class="es">Acreditado</span>` : `Pending<span class="es">Pendiente</span>`}</td>
                 <td>${escapeHtml(result.completedAt)}</td>
+                <td>${canAccreditTraining() && !result.accredited ? `<button class="primary-action table-action" data-accredit-training="${result.id}" type="button">Accredit<span class="es">Acreditar</span></button>` : ""}</td>
               </tr>
-            `).join("") : `<tr><td colspan="5">No training results yet.</td></tr>`}
+            `).join("") : `<tr><td colspan="7">No training results yet.</td></tr>`}
           </tbody>
         </table>
       </div>
     </div>
   `;
+}
+
+function accreditedTrainingBadges(employeeName) {
+  return (state.trainingResults || [])
+    .filter((result) => result.employeeName === employeeName && result.accredited)
+    .sort((a, b) => (b.accreditedAt || b.completedAt || "").localeCompare(a.accreditedAt || a.completedAt || ""))
+    .map((result) => ({
+      id: result.id,
+      title: result.courseTitle,
+      accreditedAt: result.accreditedAt,
+      accreditedBy: result.accreditedBy
+    }));
 }
 
 function trainingShareUrl(courseId) {
@@ -2581,7 +2614,10 @@ function addTrainingQuestionRow() {
 }
 
 async function saveTrainingCourse() {
-  if (!canManageTraining()) return;
+  if (!canManageTrainingResources()) {
+    showToast("Only Safety can upload training resources");
+    return;
+  }
   const title = $("trainingTitle")?.value.trim() || "";
   if (!title) {
     showToast("Training title required");
@@ -2632,7 +2668,10 @@ async function copyTrainingLink(courseId) {
 }
 
 function deleteTrainingCourse(courseId) {
-  if (!canManageTraining()) return;
+  if (!canManageTrainingResources()) {
+    showToast("Only Safety can delete training resources");
+    return;
+  }
   const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
   if (!course) return;
   if (!confirm(`Delete training "${course.title}" and its results?`)) return;
@@ -2678,6 +2717,9 @@ function submitTrainingResult() {
     signature,
     score,
     passed,
+    accredited: false,
+    accreditedBy: "",
+    accreditedAt: "",
     answers,
     completedAt: timestamp(),
     createdBy: button?.dataset.publicTraining === "true" ? employeeName : actorName()
@@ -2707,9 +2749,36 @@ function bindTrainingEvents(publicMode = false) {
     button.addEventListener("click", () => openRecordFile("trainingCourses", button.dataset.trainingFile, button.dataset.fileId));
   });
   document.querySelectorAll("[data-delete-training-file]").forEach((button) => {
-    button.addEventListener("click", () => deleteRecordFile("trainingCourses", button.dataset.deleteTrainingFile, button.dataset.fileId));
+    button.addEventListener("click", () => deleteTrainingFile(button.dataset.deleteTrainingFile, button.dataset.fileId));
+  });
+  document.querySelectorAll("[data-accredit-training]").forEach((button) => {
+    button.addEventListener("click", () => accreditTrainingResult(button.dataset.accreditTraining));
   });
   if (publicMode) return;
+}
+
+function deleteTrainingFile(courseId, fileId) {
+  if (!canManageTrainingResources()) {
+    showToast("Only Safety can delete training resources");
+    return;
+  }
+  deleteRecordFile("trainingCourses", courseId, fileId);
+}
+
+function accreditTrainingResult(resultId) {
+  if (!canAccreditTraining()) {
+    showToast("Only Safety can accredit training");
+    return;
+  }
+  const result = (state.trainingResults || []).find((entry) => entry.id === resultId);
+  if (!result) return;
+  result.accredited = true;
+  result.accreditedBy = actorName();
+  result.accreditedAt = timestamp();
+  logActivity("Training accredited", { course: result.courseTitle, employee: result.employeeName });
+  saveState();
+  render();
+  showToast(`${result.employeeName} training accredited`);
 }
 
 function renderPublicTraining() {
@@ -4940,6 +5009,7 @@ function renderEmployeeReports() {
   const normalCrew = person.group || employeeRecords.find((record) => record.group)?.group || "Not assigned";
   const normalRole = person.role || employeeRecords.find((record) => record.role)?.role || "Not set";
   const areaLabel = person.area ? areas[person.area]?.label : "All areas";
+  const trainingBadges = accreditedTrainingBadges(selectedEmployee);
   return `
     <section class="panel printable-report employee-report-page">
       ${reportHeader("Employee Reports", dateRangeLabel(fromDate, toDate))}
@@ -4972,6 +5042,12 @@ function renderEmployeeReports() {
         <article class="metric"><span>PTO / Sick</span><strong>${preciseNumber(employeeTotals.pto)} / ${preciseNumber(employeeTotals.sick)}</strong><small>Paid leave hours</small></article>
         <article class="metric"><span>Per diem</span><strong>${money(employeeTotals.perDiem)}</strong><small>Field install only</small></article>
         <article class="metric"><span>Reimbursements</span><strong>${money(employeeTotals.reimbursement)}</strong><small>Payroll/admin entered</small></article>
+      </div>
+      <div class="section-gap">
+        <h3>Training badges<span class="es">Insignias de capacitacion</span></h3>
+        <div class="badge-row">
+          ${trainingBadges.length ? trainingBadges.map((badge) => `<span class="training-badge">${escapeHtml(badge.title)}<small>${escapeHtml(badge.accreditedAt || "")}</small></span>`).join("") : `<span class="empty-state">No accredited training yet.<span class="es">Todavia no hay capacitacion acreditada.</span></span>`}
+        </div>
       </div>
       <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
     </section>
@@ -5109,6 +5185,7 @@ function renderEmployeeProfilePanel(canEditProfiles) {
   const disabled = !canEditProfiles ? "disabled" : "";
   const certs = new Set(person.certs || []);
   const machines = new Set(person.machines || []);
+  const trainingBadges = accreditedTrainingBadges(person.name);
   const checkboxTiles = (values, field, selectedSet) => values
     .map((value) => `
       <label class="checkbox-tile">
@@ -5141,6 +5218,12 @@ function renderEmployeeProfilePanel(canEditProfiles) {
         <div>
           <h4>${t("Machine training", "Maquinas entrenadas")}</h4>
           <div class="profile-check-grid">${checkboxTiles(employeeMachineOptions, "machine", machines)}</div>
+        </div>
+      </div>
+      <div class="section-gap">
+        <h4>${t("Training badges", "Insignias de capacitacion")}</h4>
+        <div class="badge-row">
+          ${trainingBadges.length ? trainingBadges.map((badge) => `<span class="training-badge">${escapeHtml(badge.title)}<small>${escapeHtml(badge.accreditedAt || "")}</small></span>`).join("") : `<span class="empty-state">No accredited training yet.<span class="es">Todavia no hay capacitacion acreditada.</span></span>`}
         </div>
       </div>
     </div>

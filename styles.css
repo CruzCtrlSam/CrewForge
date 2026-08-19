@@ -1128,6 +1128,31 @@ textarea {
   padding: 3px 6px;
 }
 
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.training-badge {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  background: #fff6d8;
+  color: var(--ink);
+  padding: 8px 10px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.training-badge small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .public-training-screen {
   align-items: start;
   padding-top: 36px;
