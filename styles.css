@@ -1118,6 +1118,17 @@ textarea {
   align-items: end;
 }
 
+.training-question-row .wide-field {
+  grid-column: 1 / -1;
+}
+
+.training-answer-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .training-card code {
   display: inline-block;
   max-width: 100%;
@@ -2433,6 +2444,10 @@ tr:last-child td {
   .document-grid,
   .document-card,
   .training-question-row {
+    grid-template-columns: 1fr;
+  }
+
+  .training-answer-grid {
     grid-template-columns: 1fr;
   }
 

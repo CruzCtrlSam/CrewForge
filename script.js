@@ -2422,10 +2422,27 @@ function renderActiveTab() {
 
 function defaultTrainingQuestions() {
   return [
-    { id: "q1", text: "", answer: "Yes" },
-    { id: "q2", text: "", answer: "Yes" },
-    { id: "q3", text: "", answer: "Yes" }
+    { id: "q1", text: "", options: ["", "", "", ""], answer: "A" },
+    { id: "q2", text: "", options: ["", "", "", ""], answer: "A" },
+    { id: "q3", text: "", options: ["", "", "", ""], answer: "A" }
   ];
+}
+
+function normalizeTrainingQuestion(question = {}) {
+  const legacyYesNo = question.answer === "Yes" || question.answer === "No";
+  const options = question.options?.length
+    ? question.options.slice(0, 4)
+    : legacyYesNo
+      ? ["Yes", "No", "", ""]
+      : ["", "", "", ""];
+  while (options.length < 4) options.push("");
+  const answer = legacyYesNo ? (question.answer === "No" ? "B" : "A") : String(question.answer || "A").toUpperCase();
+  return {
+    id: question.id,
+    text: question.text || "",
+    options,
+    answer: ["A", "B", "C", "D"].includes(answer) ? answer : "A"
+  };
 }
 
 function trainingCoursesForArea() {
@@ -2478,10 +2495,17 @@ function renderTraining() {
 }
 
 function trainingQuestionBuilderRow(question, index) {
+  const normalized = normalizeTrainingQuestion(question);
+  const letters = ["A", "B", "C", "D"];
   return `
     <div class="training-question-row">
-      <label>Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(question.text || "")}" placeholder="Write a yes/no question" /></label>
-      <label>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(["Yes", "No"], question.answer || "Yes")}</select></label>
+      <label class="wide-field">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(normalized.text)}" placeholder="Write the question" /></label>
+      <div class="training-answer-grid">
+        ${letters.map((letter, optionIndex) => `
+          <label>${letter}<span class="es">Opcion ${letter}</span><input data-training-option="${optionIndex}" value="${escapeHtml(normalized.options[optionIndex] || "")}" placeholder="Answer ${letter}" /></label>
+        `).join("")}
+      </div>
+      <label>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(letters, normalized.answer)}</select></label>
     </div>
   `;
 }
@@ -2520,7 +2544,7 @@ function trainingAttachmentRow(courseId, file) {
 }
 
 function renderTrainingRunner(course, publicMode) {
-  const questions = (course.questions || []).filter((question) => question.text?.trim());
+  const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
   return `
     <div class="training-runner section-gap">
       <div class="split">
@@ -2539,7 +2563,12 @@ function renderTrainingRunner(course, publicMode) {
         ${questions.length ? questions.map((question, index) => `
           <label class="audit-choice">
             <span>${index + 1}. ${escapeHtml(question.text)}<span class="es">Respuesta</span></span>
-            <select data-training-answer="${question.id}">${setOptions(["Yes", "No"], "")}</select>
+            <select data-training-answer="${question.id}">
+              <option value="">Choose answer</option>
+              ${setOptions(question.options
+                .map((option, optionIndex) => ({ letter: ["A", "B", "C", "D"][optionIndex], label: option }))
+                .filter((option) => option.label?.trim()), "", (option) => `${option.letter}. ${escapeHtml(option.label)}`, (option) => option.letter)}
+            </select>
           </label>
         `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
       </div>
@@ -2607,7 +2636,10 @@ function collectTrainingQuestions() {
     .map((row, index) => ({
       id: `q${index + 1}`,
       text: row.querySelector('[data-training-question="text"]')?.value.trim() || "",
-      answer: row.querySelector('[data-training-question="answer"]')?.value || "Yes"
+      options: Array.from(row.querySelectorAll("[data-training-option]"))
+        .sort((a, b) => Number(a.dataset.trainingOption) - Number(b.dataset.trainingOption))
+        .map((input) => input.value.trim()),
+      answer: row.querySelector('[data-training-question="answer"]')?.value || "A"
     }))
     .filter((question) => question.text);
 }
@@ -2632,6 +2664,17 @@ async function saveTrainingCourse() {
   const questions = collectTrainingQuestions();
   if (!questions.length) {
     showToast("Add at least one quiz question");
+    return;
+  }
+  if (questions.some((question) => question.options.filter(Boolean).length < 2)) {
+    showToast("Each question needs at least two answer choices");
+    return;
+  }
+  if (questions.some((question) => {
+    const correctIndex = ["A", "B", "C", "D"].indexOf(question.answer);
+    return correctIndex < 0 || !question.options[correctIndex];
+  })) {
+    showToast("The correct answer must have answer text");
     return;
   }
   const job = jobById($("trainingJob")?.value || "");
@@ -2701,17 +2744,25 @@ function submitTrainingResult() {
     showToast("Employee name and signature required");
     return;
   }
-  const questions = (course.questions || []).filter((question) => question.text?.trim());
+  const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
   const answers = questions.map((question) => {
     const answer = document.querySelector(`[data-training-answer="${question.id}"]`)?.value || "";
+    const correctIndex = ["A", "B", "C", "D"].indexOf(question.answer);
+    const answerIndex = ["A", "B", "C", "D"].indexOf(answer);
     return {
       id: question.id,
       question: question.text,
       answer,
+      answerText: answerIndex >= 0 ? question.options[answerIndex] || "" : "",
       correctAnswer: question.answer,
+      correctAnswerText: correctIndex >= 0 ? question.options[correctIndex] || "" : "",
       correct: answer === question.answer
     };
   });
+  if (answers.some((answer) => !answer.answer)) {
+    showToast("Answer every question before submitting");
+    return;
+  }
   const correctCount = answers.filter((answer) => answer.correct).length;
   const score = questions.length ? Math.round((correctCount / questions.length) * 100) : 0;
   const passed = score >= (Number(course.passingScore) || 80);
