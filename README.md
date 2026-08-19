@@ -59,6 +59,8 @@ Tagline: Crew time and job progress, forged into one.
 - `index.html` - app entry point
 - `styles.css` - visual styling
 - `script.js` - app behavior and demo data
+- `service-worker.js` - PWA offline cache (holds the `crewforge-vNN` cache name)
+- `manifest.webmanifest` - PWA install metadata
 - `assets/crewforge-app-icon.png` - app/sidebar icon
 - `assets/crewforge-logo-lockup.png` - full logo lockup for the opening screen
 - `assets/crewforge-favicon.png` - browser tab icon
@@ -76,6 +78,8 @@ Tagline: Crew time and job progress, forged into one.
    - `index.html`
    - `styles.css`
    - `script.js`
+   - `service-worker.js`
+   - `manifest.webmanifest`
    - `assets/`
    - `.nojekyll`
    - `SUPABASE_SETUP.md`
@@ -88,6 +92,19 @@ Tagline: Crew time and job progress, forged into one.
    - Folder: `/root`
 6. Save.
 7. GitHub will provide a public link after it finishes publishing.
+
+## Updating After a Code Change (Important)
+
+This app is a PWA, so browsers cache `script.js` and `styles.css`. Whenever you
+change either file, you must bump the version in **three** places or users will
+keep seeing the old app:
+
+1. `index.html` - `styles.css?v=NN` and `script.js?v=NN`
+2. `service-worker.js` - `CACHE_NAME = "crewforge-vNN"`
+
+Increment `NN` by one (e.g. `109` -> `110`) in all three spots, commit, and push.
+The new URLs force browsers to fetch fresh files, and the new cache name forces
+the service worker to re-install and drop the old cache.
 
 ## Current Demo Limits
 
