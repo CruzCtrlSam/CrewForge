@@ -383,6 +383,60 @@ const bakersfieldControlCodes = [
   status: "Not Started"
 }));
 
+const fourHorizonsJob = {
+  id: "four-horizons-west",
+  name: "Four Horizons West Substation",
+  number: "VS26-FO",
+  customer: "Mortenson",
+  area: "rebarInstall",
+  jobType: "T-line Substation",
+  status: "Active"
+};
+
+const fourHorizonsControlCodes = [
+  ["AI2", "WEST - S1", 1, 33716],
+  ["AI3", "WEST - P1", 2, 8837],
+  ["AI4", "WEST - P2", 2, 5308],
+  ["AI5", "WEST - P3", 24, 15183],
+  ["AI6", "WEST - P4", 8, 6566],
+  ["AI7", "WEST - S3", 1, 1170],
+  ["AI8", "WEST - S4", 5, 2670],
+  ["AI9", "WEST - ST1", 1, 219],
+  ["AIA", "WEST - ST2", 2, 307],
+  ["AIB1", "EAST S1 - T1", 1, 33716],
+  ["AIC1", "EAST S1 - T2", 1, 33716],
+  ["AID1", "EAST S1 - T3", 1, 33716],
+  ["AIE1", "EAST P3 - 1 of 3", 72, 44958],
+  ["AIF1", "EAST P3 - 2 of 3", 72, 44958],
+  ["AIG1", "EAST P3 - 3 of 3", 29, 18107],
+  ["AIH1", "EAST P4", 18, 14772],
+  ["AII1", "EAST P5", 10, 5991],
+  ["AIJ1", "EAST S3", 5, 5849],
+  ["AIK1", "EAST S4", 18, 9843],
+  ["AIL1", "EAST ST1", 3, 659],
+  ["AIM1", "EAST ST2", 2, 307],
+  ["FHA", "FOUNDATION", 1, 31878],
+  ["FHA1", "FOUNDATION", 1, 31878],
+  ["FHA2", "FOUNDATION", 1, 31878],
+  ["FHA3", "FOUNDATION", 1, 15999],
+  ["FHA4", "FOUNDATION", 1, 15884]
+].map(([code, description, quantity, planned]) => ({
+  id: `fourhorizons-${code.toLowerCase()}`,
+  area: "rebarInstall",
+  foreman: "Wilfredo Vargas",
+  jobId: "four-horizons-west",
+  code,
+  description,
+  planned,
+  quantity,
+  completedQty: 0,
+  completed: 0,
+  weekly: 0,
+  delay: "No delay",
+  delayNote: "",
+  status: "Not Started"
+}));
+
 const drilledPierBundleRows = [
   ["UTA", "UTA PIER TYPE DP.CA.K138.301-303", 1092, "Trailer 5"],
   ["UTB", "UTB PIER TYPE PC.CA.C101.301-306", 4377, "Trailer 4"],
@@ -1089,6 +1143,14 @@ function upgradeState(next) {
   });
   seedCurrentWeekInstallationTrialData(next);
   bakersfieldControlCodes.forEach((seedItem) => {
+    const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
+    if (!exists) next.production.push(structuredClone(seedItem));
+  });
+  next.jobs = next.jobs || [];
+  if (!next.jobs.some((job) => job.id === fourHorizonsJob.id || job.number === fourHorizonsJob.number)) {
+    next.jobs.push(structuredClone(fourHorizonsJob));
+  }
+  fourHorizonsControlCodes.forEach((seedItem) => {
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
   });
