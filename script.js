@@ -2554,7 +2554,13 @@ function renderTrainingResults() {
   const results = state.trainingResults || [];
   return `
     <div class="section-gap">
-      <h3>Training results<span class="es">Resultados de capacitacion</span></h3>
+      <div class="split">
+        <h3>Training results<span class="es">Resultados de capacitacion</span></h3>
+        <div class="button-group no-print">
+          <button class="secondary-action" data-print="training-results" type="button">Export PDF<span class="es">Exportar PDF</span></button>
+          <button class="primary-action" id="exportTrainingCsv" type="button">Export CSV<span class="es">Exportar CSV</span></button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Employee</th><th>Course</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
@@ -2736,6 +2742,7 @@ function bindTrainingEvents(publicMode = false) {
   if ($("addTrainingQuestion")) $("addTrainingQuestion").addEventListener("click", addTrainingQuestionRow);
   if ($("saveTrainingCourse")) $("saveTrainingCourse").addEventListener("click", saveTrainingCourse);
   if ($("submitTrainingResult")) $("submitTrainingResult").addEventListener("click", submitTrainingResult);
+  if ($("exportTrainingCsv")) $("exportTrainingCsv").addEventListener("click", exportTrainingCsv);
   document.querySelectorAll("[data-select-training]").forEach((button) => {
     button.addEventListener("click", () => selectTrainingCourse(button.dataset.selectTraining));
   });
@@ -6463,6 +6470,45 @@ function exportEmployeeCsv() {
   const safeName = employee.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "employee";
   downloadFile(`crewforge-employee-${safeName}-${fromDate}-to-${toDate}.csv`, csv);
   showToast("Employee CSV exported");
+}
+
+function exportTrainingCsv() {
+  const headers = [
+    "Employee",
+    "Course",
+    "Score",
+    "Passed",
+    "Accredited",
+    "Accredited by",
+    "Accredited at",
+    "Completed at",
+    "Signature",
+    "Created by",
+    "Answers"
+  ];
+  const rows = (state.trainingResults || []).map((result) => {
+    const answers = (result.answers || []).map((answer) => {
+      const expected = answer.correct ? "" : ` (expected: ${answer.correctAnswer || "not set"})`;
+      return `${answer.question}: ${answer.answer}${expected}`;
+    }).join(" | ");
+    return [
+      result.employeeName,
+      result.courseTitle,
+      result.score,
+      result.passed ? "Yes" : "No",
+      result.accredited ? "Yes" : "No",
+      result.accreditedBy || "",
+      result.accreditedAt || "",
+      result.completedAt || "",
+      result.signature || "",
+      result.createdBy || "",
+      answers
+    ];
+  });
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const stamp = new Date().toISOString().slice(0, 10);
+  downloadFile(`crewforge-training-records-${state.selectedArea}-${stamp}.csv`, csv);
+  showToast("Training CSV exported");
 }
 
 function addWorkerToWeek() {
