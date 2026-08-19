@@ -4670,7 +4670,7 @@ function renderJobs() {
       ` : ""}
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Foreman</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${visibleJobs.length ? visibleJobs
               .map((job) => `<tr>
@@ -4680,10 +4680,11 @@ function renderJobs() {
                 <td>${job.foundationIds?.length || ""}</td>
                 <td>${job.number || ""}</td>
                 <td>${job.customer || ""}</td>
+                <td><select class="table-select" data-job-foreman="${job.id}" ${!admin ? "disabled" : ""}><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), jobAssignedForeman(job))}</select></td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
                 <td><button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
-              .join("") : `<tr><td colspan="8"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
+              .join("") : `<tr><td colspan="9"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -6043,6 +6044,10 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-delete-job]").forEach((button) => {
     button.addEventListener("click", () => deleteJob(button.dataset.deleteJob));
+  });
+
+  document.querySelectorAll("[data-job-foreman]").forEach((select) => {
+    select.addEventListener("change", () => reassignJobForeman(select.dataset.jobForeman, select.value));
   });
 
   document.querySelectorAll("[data-document-action]").forEach((button) => {
@@ -7699,6 +7704,32 @@ function updateJobStatus(jobId, status) {
   saveState();
   render();
   showToast(`${job.name} marked ${status}`);
+}
+
+function jobAssignedForeman(job) {
+  if (job.foreman) return job.foreman;
+  const item = state.production.find((entry) => entry.jobId === job.id && entry.foreman);
+  return item ? item.foreman : "";
+}
+
+function reassignJobForeman(jobId, foreman) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return;
+  const jobItems = state.production.filter((item) => item.jobId === jobId);
+  const movable = jobItems.filter((item) => item.status !== "Complete");
+  const completedCount = jobItems.length - movable.length;
+  const note = completedCount ? ` ${completedCount} completed code(s) stay with their current foreman.` : "";
+  if (!confirm(`Assign ${job.name} to ${foreman || "Unassigned"}? This moves ${movable.length} active control code(s).${note}`)) {
+    render();
+    return;
+  }
+  job.foreman = foreman;
+  movable.forEach((item) => { item.foreman = foreman; });
+  logActivity("Job foreman changed", { job: job.name, foreman: foreman || "Unassigned", moved: movable.length, kept: completedCount });
+  saveState();
+  render();
+  showToast(`${job.name} assigned to ${foreman || "Unassigned"}`);
 }
 
 function deleteJob(jobId) {
