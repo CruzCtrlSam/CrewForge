@@ -1089,6 +1089,54 @@ textarea {
   color: #075985;
 }
 
+.training-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.training-builder,
+.training-runner {
+  display: grid;
+  gap: 14px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  padding: 14px;
+}
+
+.training-question-list,
+.training-quiz,
+.training-library {
+  display: grid;
+  gap: 10px;
+}
+
+.training-question-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  align-items: end;
+}
+
+.training-card code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  background: var(--soft);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.public-training-screen {
+  align-items: start;
+  padding-top: 36px;
+}
+
+.public-training-card {
+  width: min(820px, 100%);
+}
+
 .offline-note {
   border: 2px dashed #8ba0ad;
   border-radius: 8px;
@@ -1567,6 +1615,28 @@ tr:last-child td {
   color: #5d3a00;
   font-weight: 800;
   margin-bottom: 14px;
+}
+
+.sync-banner {
+  padding: 12px 14px;
+  border: 2px solid var(--blue);
+  border-radius: 8px;
+  background: #eaf5fb;
+  color: var(--ink);
+  font-weight: 900;
+  margin-bottom: 14px;
+}
+
+.sync-banner.offline {
+  border-color: #d59a22;
+  background: #fff4d9;
+  color: #5d3a00;
+}
+
+.sync-banner.error {
+  border-color: var(--red);
+  background: #fff0ee;
+  color: var(--red);
 }
 
 .overlap-warning {
@@ -2336,7 +2406,8 @@ tr:last-child td {
   }
 
   .document-grid,
-  .document-card {
+  .document-card,
+  .training-question-row {
     grid-template-columns: 1fr;
   }
 

@@ -344,8 +344,10 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
+const SYNC_STATUS_KEY = "crewforge-sync-status";
+const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
 
 const defaultPeople = [
   ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
@@ -684,6 +686,7 @@ const defaultState = {
   jobDraftType: "",
   selectedSafetyJob: "",
   selectedSafetyFormType: "JHA",
+  selectedTrainingCourse: "",
   selectedAuditJob: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
@@ -708,6 +711,8 @@ const defaultState = {
   sheets: {},
   safetyForms: [],
   fieldAudits: [],
+  trainingCourses: [],
+  trainingResults: [],
   qualityChecks: [],
   reimbursementRequests: [],
   production: [
@@ -764,6 +769,10 @@ function applyRemoteState(remoteData) {
 function pushCloud(immediate = false) {
   if (!cloud) return;
   const save = async () => {
+    if (!navigator.onLine) {
+      setSyncStatus("offline", "Offline. Changes are saved on this device.");
+      return;
+    }
     const snapshot = sharedSnapshot();
     const serialized = JSON.stringify(snapshot);
     if (serialized === lastCloudPush) return;
@@ -774,13 +783,40 @@ function pushCloud(immediate = false) {
         data: snapshot,
         updated_at: new Date().toISOString()
       });
+      setSyncStatus("synced", `Synced ${timestamp()}`);
     } catch (error) {
+      setSyncStatus("pending", "Sync pending. Saved locally until connection returns.");
       console.warn("Cloud save failed; local demo data is still saved.", error);
     }
   };
   clearTimeout(cloudSaveTimer);
   if (immediate) save();
   else cloudSaveTimer = setTimeout(save, 500);
+}
+
+function setSyncStatus(status, message) {
+  localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify({ status, message, at: new Date().toISOString() }));
+  document.querySelectorAll("[data-sync-message]").forEach((element) => {
+    element.innerHTML = `${escapeHtml(message)}<span class="es">Guardado localmente hasta sincronizar.</span>`;
+    element.className = `sync-banner ${status}`;
+    element.dataset.syncState = status;
+  });
+}
+
+function currentSyncStatus() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SYNC_STATUS_KEY) || "null");
+    if (!navigator.onLine) return { status: "offline", message: "Offline. Changes are saved on this device." };
+    return saved || { status: "synced", message: "Online" };
+  } catch {
+    return { status: navigator.onLine ? "synced" : "offline", message: navigator.onLine ? "Online" : "Offline" };
+  }
+}
+
+function renderSyncBanner() {
+  const sync = currentSyncStatus();
+  if (sync.status === "synced") return "";
+  return `<div class="sync-banner ${sync.status}" data-sync-message data-sync-state="${sync.status}">${escapeHtml(sync.message)}<span class="es">Guardado localmente hasta sincronizar.</span></div>`;
 }
 
 async function initCloud() {
@@ -861,6 +897,7 @@ function upgradeState(next) {
   next.selectedDocumentJob = next.selectedDocumentJob || "";
   next.selectedSafetyJob = next.selectedSafetyJob || "";
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
+  next.selectedTrainingCourse = next.selectedTrainingCourse || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
@@ -869,6 +906,14 @@ function upgradeState(next) {
   next.production = next.production || [];
   next.safetyForms = next.safetyForms || [];
   next.fieldAudits = next.fieldAudits || [];
+  next.trainingCourses = (next.trainingCourses || []).map((course) => ({
+    ...course,
+    files: course.files || [],
+    questions: course.questions?.length ? course.questions : defaultTrainingQuestions(),
+    passingScore: Number(course.passingScore) || 80,
+    area: course.area || next.selectedArea || "rebarInstall"
+  }));
+  next.trainingResults = next.trainingResults || [];
   next.qualityChecks = next.qualityChecks || [];
   next.reimbursementRequests = (next.reimbursementRequests || []).map((request) => ({
     ...request,
@@ -1374,6 +1419,10 @@ function canManageJobDocuments() {
   return ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
 }
 
+function canManageTraining() {
+  return ["Admin", "Management", "Safety"].includes(state.selectedRole);
+}
+
 function roleIsProductionVisible() {
   return ["Management", "Admin", "Quality"].includes(state.selectedRole);
 }
@@ -1423,6 +1472,7 @@ function availableTabs() {
     return [
       ["qualityControl", "Quality Control", "Control de calidad"],
       ["production", "Production", "Produccion"],
+      ["training", "Training", "Capacitacion"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"]
@@ -1431,6 +1481,7 @@ function availableTabs() {
   if (state.selectedRole === "Safety") {
     return [
       ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["training", "Training", "Capacitacion"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"],
       ["setup", "People / Crews", "Personas / Cuadrillas"]
@@ -1441,6 +1492,7 @@ function availableTabs() {
       ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
       ["production", "Production Update", "Produccion"],
       ["reimbursements", "Reimbursements", "Reembolsos"],
+      ["training", "Training", "Capacitacion"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"]
@@ -1453,6 +1505,7 @@ function availableTabs() {
     ["reimbursements", "Reimbursements", "Reembolsos"],
     ["jobs", "Jobs", "Trabajos"],
     ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
+    ["training", "Training", "Capacitacion"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
     ["audits", "Field Audits", "Auditorias de campo"],
     ["documents", "Documents", "Documentos"],
@@ -1922,6 +1975,7 @@ function routeFromState() {
 }
 
 function syncHistory(replace = false) {
+  if (publicTrainingId) return;
   if (suppressHistorySync || !window.history?.pushState) return;
   const route = routeFromState();
   if (route === lastHistoryRoute && window.location.hash === `#${route}`) return;
@@ -2273,6 +2327,7 @@ function renderShell() {
         </div>
       </aside>
       <main class="workspace">
+        ${renderSyncBanner()}
         <header class="topbar">
           <div class="topbar-title">
             <div class="topbar-brandlockup">
@@ -2338,6 +2393,7 @@ function renderActiveTab() {
   if (state.activeTab === "jobs") return renderJobs();
   if (state.activeTab === "qualityControl") return renderQualityControl();
   if (state.activeTab === "reimbursements") return renderReimbursements();
+  if (state.activeTab === "training") return renderTraining();
   if (state.activeTab === "safety") return renderSafetyForms();
   if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
@@ -2345,6 +2401,333 @@ function renderActiveTab() {
   if (state.activeTab === "deliverables") return renderDeliverables();
   if (state.activeTab === "setup") return renderSetup();
   return renderDashboard();
+}
+
+function defaultTrainingQuestions() {
+  return [
+    { id: "q1", text: "", answer: "Yes" },
+    { id: "q2", text: "", answer: "Yes" },
+    { id: "q3", text: "", answer: "Yes" }
+  ];
+}
+
+function trainingCoursesForArea() {
+  return (state.trainingCourses || []).filter((course) => course.area === state.selectedArea || course.area === "all");
+}
+
+function renderTraining() {
+  const courses = trainingCoursesForArea();
+  const selectedCourse = courses.find((course) => course.id === state.selectedTrainingCourse) || courses[0];
+  const jobs = allJobsForArea();
+  const manage = canManageTraining();
+  return `
+    <section class="panel training-panel">
+      <div class="split">
+        <div>
+          <h2>${t("Training", "Capacitacion")}</h2>
+          <p class="sub">Upload training material, build a short quiz, and record who completed it. Courses can also be opened with a no-login training link.</p>
+        </div>
+        <span class="tag sync-tag">Offline capable<span class="es">Funciona sin conexion</span></span>
+      </div>
+      ${manage ? `
+        <div class="training-builder section-gap">
+          <h3>Create training<span class="es">Crear capacitacion</span></h3>
+          <div class="form-grid">
+            <label>Training title<span class="es">Titulo</span><input id="trainingTitle" placeholder="Fall protection, heat illness, rigging basics..." /></label>
+            <label>Job / site<span class="es">Trabajo / sitio</span><select id="trainingJob">${setOptions([{ id: "", name: "General / all jobs" }, ...jobs], "", (job) => job.name, (job) => job.id)}</select></label>
+            <label>Passing score %<span class="es">Calificacion minima %</span><input id="trainingPassingScore" type="number" min="0" max="100" value="80" /></label>
+            <label>Training files<span class="es">Archivos de capacitacion</span><input id="trainingFiles" type="file" accept=".pdf,.ppt,.pptx,.doc,.docx,.mp4,.mov,.png,.jpg,.jpeg,.webp" multiple /></label>
+            <label class="wide-field">Description / instructions<span class="es">Descripcion / instrucciones</span><textarea id="trainingDescription" placeholder="What the worker should review before answering the quiz"></textarea></label>
+          </div>
+          <div class="training-question-list">
+            ${defaultTrainingQuestions().map(trainingQuestionBuilderRow).join("")}
+          </div>
+          <div class="action-row">
+            <button class="secondary-action" id="addTrainingQuestion" type="button">${t("Add question", "Agregar pregunta")}</button>
+            <button class="primary-action" id="saveTrainingCourse" type="button">${t("Save training", "Guardar capacitacion")}</button>
+          </div>
+        </div>
+      ` : ""}
+      <div class="training-library section-gap">
+        <h3>Training library<span class="es">Biblioteca de capacitacion</span></h3>
+        ${courses.length ? courses.map(trainingCourseCard).join("") : `<div class="empty-state">No training courses yet.<span class="es">Todavia no hay capacitaciones.</span></div>`}
+      </div>
+      ${selectedCourse ? renderTrainingRunner(selectedCourse, false) : ""}
+      ${manage ? renderTrainingResults() : ""}
+    </section>
+  `;
+}
+
+function trainingQuestionBuilderRow(question, index) {
+  return `
+    <div class="training-question-row">
+      <label>Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(question.text || "")}" placeholder="Write a yes/no question" /></label>
+      <label>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(["Yes", "No"], question.answer || "Yes")}</select></label>
+    </div>
+  `;
+}
+
+function trainingCourseCard(course) {
+  const resultCount = (state.trainingResults || []).filter((result) => result.courseId === course.id).length;
+  const shareUrl = trainingShareUrl(course.id);
+  return `
+    <article class="document-card training-card">
+      <div>
+        <span class="tag">${escapeHtml(course.jobName || "General")}</span>
+        <h3>${escapeHtml(course.title)}</h3>
+        <p class="sub">${escapeHtml(course.description || "No instructions")} · ${course.files?.length || 0} file(s) · ${resultCount} result(s)</p>
+        <p class="sub">Training link: <code>${escapeHtml(shareUrl)}</code></p>
+      </div>
+      <div class="document-actions">
+        <button class="secondary-action table-action" data-copy-training="${course.id}" type="button">Copy link<span class="es">Copiar enlace</span></button>
+        <button class="primary-action table-action" data-select-training="${course.id}" type="button">Open<span class="es">Abrir</span></button>
+        ${canManageTraining() ? `<button class="danger-action table-action" data-delete-training="${course.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
+      </div>
+      ${course.files?.length ? `<div class="attachment-list">${course.files.map((file) => trainingAttachmentRow(course.id, file)).join("")}</div>` : ""}
+    </article>
+  `;
+}
+
+function trainingAttachmentRow(courseId, file) {
+  return `
+    <div class="attachment-row">
+      <span><strong>${escapeHtml(file.name)}</strong> · ${fileSize(file.size)}</span>
+      <span class="attachment-actions">
+        <button class="secondary-action table-action" data-training-file="${courseId}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>
+        ${canManageTraining() ? `<button class="danger-action table-action" data-delete-training-file="${courseId}" data-file-id="${file.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
+      </span>
+    </div>
+  `;
+}
+
+function renderTrainingRunner(course, publicMode) {
+  const questions = (course.questions || []).filter((question) => question.text?.trim());
+  return `
+    <div class="training-runner section-gap">
+      <div class="split">
+        <div>
+          <h3>${escapeHtml(course.title)}</h3>
+          <p class="sub">${escapeHtml(course.description || "Review the material, answer the quiz, and sign your completion.")}</p>
+        </div>
+        <span class="tag">${course.passingScore || 80}% pass<span class="es">minimo</span></span>
+      </div>
+      ${course.files?.length ? `<div class="attachment-list">${course.files.map((file) => trainingAttachmentRow(course.id, file)).join("")}</div>` : `<div class="notice">No files attached yet.<span class="es">No hay archivos todavia.</span></div>`}
+      <div class="form-grid section-gap">
+        <label>Employee name<span class="es">Nombre del empleado</span><input id="trainingEmployeeName" placeholder="Full name" /></label>
+        <label>Signature / initials<span class="es">Firma / iniciales</span><input id="trainingSignature" placeholder="Type name or initials" /></label>
+      </div>
+      <div class="training-quiz">
+        ${questions.length ? questions.map((question, index) => `
+          <label class="audit-choice">
+            <span>${index + 1}. ${escapeHtml(question.text)}<span class="es">Respuesta</span></span>
+            <select data-training-answer="${question.id}">${setOptions(["Yes", "No"], "")}</select>
+          </label>
+        `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
+      </div>
+      <div class="action-row section-gap">
+        <button class="primary-action" id="submitTrainingResult" data-course-id="${course.id}" data-public-training="${publicMode ? "true" : "false"}" type="button" ${questions.length ? "" : "disabled"}>${t("Submit training", "Enviar capacitacion")}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTrainingResults() {
+  const results = state.trainingResults || [];
+  return `
+    <div class="section-gap">
+      <h3>Training results<span class="es">Resultados de capacitacion</span></h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Employee</th><th>Course</th><th>Score</th><th>Status</th><th>Completed</th></tr></thead>
+          <tbody>
+            ${results.length ? results.slice(0, 50).map((result) => `
+              <tr>
+                <td>${escapeHtml(result.employeeName)}</td>
+                <td>${escapeHtml(result.courseTitle)}</td>
+                <td>${result.score}%</td>
+                <td>${result.passed ? "Passed" : "Needs review"}</td>
+                <td>${escapeHtml(result.completedAt)}</td>
+              </tr>
+            `).join("") : `<tr><td colspan="5">No training results yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function trainingShareUrl(courseId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("training", courseId);
+  url.hash = "";
+  return url.toString();
+}
+
+function collectTrainingQuestions() {
+  return Array.from(document.querySelectorAll(".training-question-row"))
+    .map((row, index) => ({
+      id: `q${index + 1}`,
+      text: row.querySelector('[data-training-question="text"]')?.value.trim() || "",
+      answer: row.querySelector('[data-training-question="answer"]')?.value || "Yes"
+    }))
+    .filter((question) => question.text);
+}
+
+function addTrainingQuestionRow() {
+  const list = document.querySelector(".training-question-list");
+  if (!list) return;
+  const count = list.querySelectorAll(".training-question-row").length;
+  list.insertAdjacentHTML("beforeend", trainingQuestionBuilderRow({ id: `q${count + 1}`, text: "", answer: "Yes" }, count));
+}
+
+async function saveTrainingCourse() {
+  if (!canManageTraining()) return;
+  const title = $("trainingTitle")?.value.trim() || "";
+  if (!title) {
+    showToast("Training title required");
+    return;
+  }
+  const questions = collectTrainingQuestions();
+  if (!questions.length) {
+    showToast("Add at least one quiz question");
+    return;
+  }
+  const job = jobById($("trainingJob")?.value || "");
+  const files = await filesToStoredAttachments(Array.from($("trainingFiles")?.files || []));
+  const course = {
+    id: `training-${Date.now()}`,
+    area: state.selectedArea || "all",
+    title,
+    description: $("trainingDescription")?.value.trim() || "",
+    jobId: job?.id || "",
+    jobName: job?.name || "General",
+    passingScore: Number($("trainingPassingScore")?.value) || 80,
+    files,
+    questions,
+    createdBy: actorName(),
+    createdAt: timestamp()
+  };
+  state.trainingCourses = [course, ...(state.trainingCourses || [])];
+  state.selectedTrainingCourse = course.id;
+  logActivity("Training course created", { title: course.title, area: area().label, files: files.length, questions: questions.length });
+  saveState();
+  render();
+  showToast("Training saved");
+}
+
+function selectTrainingCourse(courseId) {
+  state.selectedTrainingCourse = courseId;
+  saveState();
+  render();
+}
+
+async function copyTrainingLink(courseId) {
+  const link = trainingShareUrl(courseId);
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("Training link copied");
+  } catch {
+    window.prompt("Copy training link", link);
+  }
+}
+
+function deleteTrainingCourse(courseId) {
+  if (!canManageTraining()) return;
+  const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
+  if (!course) return;
+  if (!confirm(`Delete training "${course.title}" and its results?`)) return;
+  state.trainingCourses = (state.trainingCourses || []).filter((entry) => entry.id !== courseId);
+  state.trainingResults = (state.trainingResults || []).filter((entry) => entry.courseId !== courseId);
+  if (state.selectedTrainingCourse === courseId) state.selectedTrainingCourse = "";
+  logActivity("Training course deleted", { title: course.title });
+  saveState();
+  render();
+  showToast("Training deleted");
+}
+
+function submitTrainingResult() {
+  const button = $("submitTrainingResult");
+  const courseId = button?.dataset.courseId || publicTrainingId;
+  const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
+  if (!course) return;
+  const employeeName = $("trainingEmployeeName")?.value.trim() || "";
+  const signature = $("trainingSignature")?.value.trim() || "";
+  if (!employeeName || !signature) {
+    showToast("Employee name and signature required");
+    return;
+  }
+  const questions = (course.questions || []).filter((question) => question.text?.trim());
+  const answers = questions.map((question) => {
+    const answer = document.querySelector(`[data-training-answer="${question.id}"]`)?.value || "";
+    return {
+      id: question.id,
+      question: question.text,
+      answer,
+      correctAnswer: question.answer,
+      correct: answer === question.answer
+    };
+  });
+  const correctCount = answers.filter((answer) => answer.correct).length;
+  const score = questions.length ? Math.round((correctCount / questions.length) * 100) : 0;
+  const passed = score >= (Number(course.passingScore) || 80);
+  const result = {
+    id: `training-result-${Date.now()}`,
+    courseId: course.id,
+    courseTitle: course.title,
+    employeeName,
+    signature,
+    score,
+    passed,
+    answers,
+    completedAt: timestamp(),
+    createdBy: button?.dataset.publicTraining === "true" ? employeeName : actorName()
+  };
+  state.trainingResults = [result, ...(state.trainingResults || [])];
+  logActivity("Training completed", { course: course.title, employee: employeeName, score, passed });
+  saveState();
+  showToast(passed ? `Training submitted: ${score}%` : `Submitted for review: ${score}%`);
+  if (publicTrainingId) renderPublicTraining();
+  else render();
+}
+
+function bindTrainingEvents(publicMode = false) {
+  if ($("addTrainingQuestion")) $("addTrainingQuestion").addEventListener("click", addTrainingQuestionRow);
+  if ($("saveTrainingCourse")) $("saveTrainingCourse").addEventListener("click", saveTrainingCourse);
+  if ($("submitTrainingResult")) $("submitTrainingResult").addEventListener("click", submitTrainingResult);
+  document.querySelectorAll("[data-select-training]").forEach((button) => {
+    button.addEventListener("click", () => selectTrainingCourse(button.dataset.selectTraining));
+  });
+  document.querySelectorAll("[data-copy-training]").forEach((button) => {
+    button.addEventListener("click", () => copyTrainingLink(button.dataset.copyTraining));
+  });
+  document.querySelectorAll("[data-delete-training]").forEach((button) => {
+    button.addEventListener("click", () => deleteTrainingCourse(button.dataset.deleteTraining));
+  });
+  document.querySelectorAll("[data-training-file]").forEach((button) => {
+    button.addEventListener("click", () => openRecordFile("trainingCourses", button.dataset.trainingFile, button.dataset.fileId));
+  });
+  document.querySelectorAll("[data-delete-training-file]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecordFile("trainingCourses", button.dataset.deleteTrainingFile, button.dataset.fileId));
+  });
+  if (publicMode) return;
+}
+
+function renderPublicTraining() {
+  const course = (state.trainingCourses || []).find((entry) => entry.id === publicTrainingId);
+  $("app").innerHTML = `
+    <main class="login-screen public-training-screen">
+      <section class="login-card public-training-card">
+        ${renderSyncBanner()}
+        <div class="login-logo-stack">
+          <img class="login-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+          <img class="login-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
+        </div>
+        <div class="eyebrow">Public Training<span class="es">Capacitacion publica</span></div>
+        ${course ? renderTrainingRunner(course, true) : `<div class="notice">Training course not found. Ask Safety/Admin for a fresh link.<span class="es">No se encontro la capacitacion.</span></div>`}
+      </section>
+    </main>
+  `;
+  bindTrainingEvents(true);
 }
 
 function trailerTotals() {
@@ -5252,6 +5635,7 @@ function bindTabEvents() {
   }
   if ($("addQcBend")) $("addQcBend").addEventListener("click", addQualityBendRow);
   if ($("saveQualityCheck")) $("saveQualityCheck").addEventListener("click", saveQualityCheck);
+  bindTrainingEvents();
   if ($("safetyJobSelect")) {
     $("safetyJobSelect").addEventListener("change", (event) => {
       state.selectedSafetyJob = event.target.value;
@@ -7150,7 +7534,8 @@ function updateProductionItem(event) {
 }
 
 function render() {
-  if (!state.companyVerified) renderCompanyLogin();
+  if (publicTrainingId) renderPublicTraining();
+  else if (!state.companyVerified) renderCompanyLogin();
   else if (!state.auth && !state.selectedArea) renderGate();
   else if (!state.auth) renderLogin();
   else if (state.showIntro) renderIntro();
@@ -7166,3 +7551,14 @@ window.addEventListener("popstate", (event) => {
 render();
 syncHistory(true);
 initCloud();
+
+window.addEventListener("online", () => {
+  setSyncStatus("pending", "Back online. Syncing saved CrewForge changes...");
+  pushCloud(true);
+  render();
+});
+
+window.addEventListener("offline", () => {
+  setSyncStatus("offline", "Offline mode. CrewForge will keep working and sync when internet returns.");
+  render();
+});

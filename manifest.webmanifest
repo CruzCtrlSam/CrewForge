@@ -1,0 +1,18 @@
+{
+  "name": "CrewForge",
+  "short_name": "CrewForge",
+  "description": "Crew time, production, safety, quality, and training workflows.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071426",
+  "theme_color": "#071426",
+  "icons": [
+    {
+      "src": "./assets/crewforge-app-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
