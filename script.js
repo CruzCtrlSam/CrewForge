@@ -1371,6 +1371,16 @@ function completedWeight(item) {
   return Number(item.completed) || 0;
 }
 
+function itemWeightToday(item, dateKey = localDateInputValue()) {
+  return (item.advances || [])
+    .filter((entry) => entry.date === dateKey)
+    .reduce((sum, entry) => sum + (Number(entry.weight) || 0), 0);
+}
+
+function weightDoneToday(items = productionForArea(), dateKey = localDateInputValue()) {
+  return items.reduce((sum, item) => sum + itemWeightToday(item, dateKey), 0);
+}
+
 function normalizeForemanName(name) {
   if (name === "Rebar Fabrication Day Foreman") return "Daniel Medrano";
   if (name === "Rebar Fabrication Night Foreman") return "Hipolito Pereda";
@@ -4264,6 +4274,10 @@ function renderProduction() {
   const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
   const visibleProduction = productionForArea();
   const submittedCount = visibleProduction.filter((item) => item.reviewStatus === "Submitted").length;
+  const dayKey = localDateInputValue();
+  const dayTotalWeight = weightDoneToday(visibleProduction, dayKey);
+  const jobRollup = productionTotals(visibleProduction);
+  const jobRollupPct = jobRollup.planned ? Math.round((jobRollup.completed / jobRollup.planned) * 100) : 0;
   return `
     <section class="panel printable-report production-report">
       ${reportHeader(isFieldEntryMode() ? "Production Update" : "Production", state.selectedProductionJob ? `${state.selectedWeek} · ${jobName(state.selectedProductionJob)}` : state.selectedWeek)}
@@ -4280,6 +4294,10 @@ function renderProduction() {
       </div>
       ${activeJob ? `<div class="notice compact-notice">Filtered to ${activeJob}. New production will be added to this job. <span class="es">Filtrado a ${activeJob}. La nueva produccion se agregara a este trabajo.</span></div>` : ""}
       ${!roleIsElevated() && state.selectedRole !== "Quality" ? `<div class="notice section-gap">Showing only production assigned to ${selectedForeman}. <span class="es">Solo se muestra produccion asignada a este capataz.</span></div>` : ""}
+      <div class="metric-grid section-gap production-day-summary">
+        <article class="metric"><span>${t("Weight completed today", "Peso terminado hoy")}</span><strong data-day-total>${number(dayTotalWeight)} lbs</strong><small>${dayKey}</small></article>
+        <article class="metric"><span>${t("Job total complete", "Total del trabajo")}</span><strong data-job-pct>${jobRollupPct}%</strong><small>${number(jobRollup.completed)} ${t("of", "de")} ${number(jobRollup.planned)} lbs</small></article>
+      </div>
       ${canAddProduction ? renderProductionAdder() : ""}
       ${renderWindFoundationSummary(visibleProduction)}
       <div class="production-board section-gap">
@@ -4346,6 +4364,7 @@ function productionFactsMarkup(item) {
   return `
     <span>Total weight: <strong>${number(item.planned)} lbs</strong></span>
     ${quantity ? `<span>Total amount: <strong>${preciseNumber(quantity)}</strong></span><span>Each: <strong>${preciseNumber(perPiece)} lbs</strong></span>` : ""}
+    <span>Done today: <strong>${number(itemWeightToday(item))} lbs</strong></span>
   `;
 }
 
@@ -7683,6 +7702,15 @@ function updateProductionItem(event) {
   }
   item.quantity = productionQuantity(item);
   item.completed = completedWeight(item);
+  if (field === "completedQty" && event.type === "change") {
+    const prevQty = Number(oldValue) || 0;
+    const newQty = Number(item.completedQty) || 0;
+    const deltaWeight = (newQty - prevQty) * unitWeight(item);
+    if (deltaWeight) {
+      item.advances = item.advances || [];
+      item.advances.push({ date: localDateInputValue(), weight: deltaWeight, by: actorName(), at: timestamp() });
+    }
+  }
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
   item.reviewStatus = "Draft";
   item.submittedAt = "";
@@ -7692,6 +7720,13 @@ function updateProductionItem(event) {
     logActivity("Production changed", { foreman: item.foreman, job: jobName(item.jobId), field, from: oldValue, to: item[field] });
   }
   saveState();
+  const dayTotalBox = document.querySelector("[data-day-total]");
+  if (dayTotalBox) dayTotalBox.textContent = `${number(weightDoneToday())} lbs`;
+  const jobPctBox = document.querySelector("[data-job-pct]");
+  if (jobPctBox) {
+    const rollup = productionTotals();
+    jobPctBox.textContent = `${rollup.planned ? Math.round((rollup.completed / rollup.planned) * 100) : 0}%`;
+  }
   const weightBox = document.querySelector(`[data-prod-weight="${item.id}"]`);
   if (weightBox) weightBox.value = `${number(item.completed)} lbs`;
   const facts = document.querySelector(`[data-prod-facts="${item.id}"]`);
