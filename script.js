@@ -4396,8 +4396,11 @@ function renderProductionAdder() {
         <label>Foundation ID<span class="es">Cimentacion</span><select id="newFoundationId">${foundationIds.length ? setOptions(foundationIds, foundationIds[0]) : '<option value="">No IDs set up</option>'}</select></label>
         <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
         <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
-        <button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>
+        ${foundationIds.length
+          ? `<button class="secondary-action" id="addProduction" type="button">${t("Add completed part", "Agregar parte terminada")}</button>`
+          : `<button class="secondary-action" type="button" disabled title="No foundation IDs set up for this job">${t("Set up foundations first", "Configure cimentaciones primero")}</button>`}
       </div>
+      ${foundationIds.length ? "" : `<div class="notice section-gap">${t("This wind farm job has no foundation IDs yet. An admin can set them in Jobs.", "Este trabajo eolico no tiene cimentaciones. Un administrador puede configurarlas en Trabajos.")}</div>`}
     `;
   }
   if (isCustom) {
@@ -4677,7 +4680,14 @@ function renderJobs() {
                 <td><strong>${job.name}</strong></td>
                 <td>${areas[job.area]?.label || job.area}</td>
                 <td>${job.jobType || ""}</td>
-                <td>${job.foundationIds?.length || ""}</td>
+                <td>${job.jobType === "Wind Farm" && admin ? `
+                  <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                    <span class="tag">${job.foundationIds?.length || 0}</span>
+                    <input class="table-input" style="width:34px;" data-fnd-prefix="${job.id}" value="${foundationPrefixOf(job)}" placeholder="T" title="Prefix" />
+                    <input class="table-input" style="width:48px;" data-fnd-from="${job.id}" type="number" min="1" step="1" placeholder="from" title="From" />
+                    <input class="table-input" style="width:48px;" data-fnd-to="${job.id}" type="number" min="1" step="1" placeholder="to" title="To" />
+                    <button class="secondary-action table-action" data-set-foundations="${job.id}" type="button">Set</button>
+                  </div>` : (job.foundationIds?.length || "")}</td>
                 <td>${job.number || ""}</td>
                 <td>${job.customer || ""}</td>
                 <td><select class="table-select" data-job-foreman="${job.id}" ${!admin ? "disabled" : ""}><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), jobAssignedForeman(job))}</select></td>
@@ -6048,6 +6058,10 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-job-foreman]").forEach((select) => {
     select.addEventListener("change", () => reassignJobForeman(select.dataset.jobForeman, select.value));
+  });
+
+  document.querySelectorAll("[data-set-foundations]").forEach((button) => {
+    button.addEventListener("click", () => setJobFoundations(button.dataset.setFoundations));
   });
 
   document.querySelectorAll("[data-document-action]").forEach((button) => {
@@ -7710,6 +7724,31 @@ function jobAssignedForeman(job) {
   if (job.foreman) return job.foreman;
   const item = state.production.find((entry) => entry.jobId === job.id && entry.foreman);
   return item ? item.foreman : "";
+}
+
+function foundationPrefixOf(job) {
+  const first = job.foundationIds?.[0];
+  const match = first ? String(first).match(/^([^\d]*)/) : null;
+  return match && match[1] ? match[1] : "T";
+}
+
+function setJobFoundations(jobId) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return;
+  const prefix = document.querySelector(`[data-fnd-prefix="${jobId}"]`)?.value.trim() || "T";
+  const from = document.querySelector(`[data-fnd-from="${jobId}"]`)?.value;
+  const to = document.querySelector(`[data-fnd-to="${jobId}"]`)?.value;
+  const ids = generateFoundationIds(prefix, from, to);
+  if (!ids.length) { showToast("Enter a valid prefix, from, and to (for example T, 1, 82)"); return; }
+  const existing = state.production.filter((item) => item.jobId === jobId && item.productionMode === "foundation").length;
+  const warn = existing ? ` This job already has ${existing} completed-part entr(y/ies); those keep their foundation IDs.` : "";
+  if (!confirm(`Set ${job.name} to ${ids.length} foundations (${ids[0]}–${ids[ids.length - 1]})?${warn}`)) { render(); return; }
+  job.foundationIds = ids;
+  logActivity("Job foundations updated", { job: job.name, count: ids.length, prefix, from, to });
+  saveState();
+  render();
+  showToast(`${job.name}: ${ids.length} foundations set (${ids[0]}–${ids[ids.length - 1]})`);
 }
 
 function reassignJobForeman(jobId, foreman) {
