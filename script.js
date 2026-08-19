@@ -344,7 +344,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -929,6 +929,7 @@ function upgradeState(next) {
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
   next.hiddenForemen = next.hiddenForemen || [];
+  next.deletedSeedIds = next.deletedSeedIds || [];
   next.activityLog = next.activityLog || [];
   const aliasName = (name) => next.foremanAliases[normalizeForemanName(name)] || normalizeForemanName(name);
   const aliasCrew = (group) => {
@@ -1143,14 +1144,16 @@ function upgradeState(next) {
   });
   seedCurrentWeekInstallationTrialData(next);
   bakersfieldControlCodes.forEach((seedItem) => {
+    if (next.deletedSeedIds.includes(seedItem.id) || next.deletedSeedIds.includes(seedItem.jobId)) return;
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
   });
   next.jobs = next.jobs || [];
-  if (!next.jobs.some((job) => job.id === fourHorizonsJob.id || job.number === fourHorizonsJob.number)) {
+  if (!next.deletedSeedIds.includes(fourHorizonsJob.id) && !next.jobs.some((job) => job.id === fourHorizonsJob.id || job.number === fourHorizonsJob.number)) {
     next.jobs.push(structuredClone(fourHorizonsJob));
   }
   fourHorizonsControlCodes.forEach((seedItem) => {
+    if (next.deletedSeedIds.includes(seedItem.id) || next.deletedSeedIds.includes(seedItem.jobId)) return;
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
   });
@@ -1175,6 +1178,7 @@ function upgradeState(next) {
 function seedTrialWindFarmJobs(next) {
   next.jobs = next.jobs || [];
   trialWindFarmJobs.forEach((job) => {
+    if ((next.deletedSeedIds || []).includes(job.id)) return;
     const exists = next.jobs.some((entry) => entry.area === "rebarInstall" && (entry.id === job.id || entry.name === job.name));
     if (!exists) next.jobs.push(trialWindFarmJobRecord(job));
   });
@@ -6887,6 +6891,8 @@ function removeProductionItem(id) {
   const canEdit = canManageProductionItem(item);
   if (!canEdit) return;
   if (!confirm(`Remove ${item.code} from production?`)) return;
+  state.deletedSeedIds = state.deletedSeedIds || [];
+  if (!state.deletedSeedIds.includes(id)) state.deletedSeedIds.push(id);
   state.production = state.production.filter((entry) => entry.id !== id);
   logActivity("Production removed", { foreman: item.foreman, job: jobName(item.jobId), field: item.code || item.foundationId || item.description });
   saveState();
@@ -7702,6 +7708,8 @@ function deleteJob(jobId) {
   const productionCount = state.production.filter((item) => item.jobId === jobId).length;
   const warning = productionCount ? ` This will also remove ${productionCount} production item(s) tied to it.` : "";
   if (!confirm(`Delete ${job.name}?${warning}`)) return;
+  state.deletedSeedIds = state.deletedSeedIds || [];
+  if (!state.deletedSeedIds.includes(jobId)) state.deletedSeedIds.push(jobId);
   state.jobs = state.jobs.filter((entry) => entry.id !== jobId);
   state.production = state.production.filter((item) => item.jobId !== jobId);
   Object.values(state.sheets || {}).forEach((sheet) => {
