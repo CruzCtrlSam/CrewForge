@@ -4696,9 +4696,9 @@ function renderJobs() {
           <tbody>
             ${visibleJobs.length ? visibleJobs
               .map((job) => `<tr>
-                <td><strong>${job.name}</strong></td>
+                <td>${admin ? `<input class="table-input" style="min-width:170px;" data-edit-job-name="${job.id}" value="${escapeHtml(job.name || "")}" />` : `<strong>${job.name}</strong>`}</td>
                 <td>${areas[job.area]?.label || job.area}</td>
-                <td>${job.jobType || ""}</td>
+                <td>${admin ? `<select class="table-select" data-edit-job-type="${job.id}">${setOptions(jobTypeOptionsForArea(job.area), job.jobType || "")}</select>` : (job.jobType || "")}</td>
                 <td>${job.jobType === "Wind Farm" && admin ? `
                   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span class="tag">${job.foundationIds?.length || 0}</span>
@@ -4707,8 +4707,8 @@ function renderJobs() {
                     <label style="display:flex;flex-direction:column;font-size:10px;color:#64748b;gap:2px;">To<input class="table-input" style="width:72px;font-size:15px;" data-fnd-to="${job.id}" type="number" inputmode="numeric" min="1" step="1" placeholder="120" title="To number" /></label>
                     <button class="secondary-action table-action" data-set-foundations="${job.id}" type="button">Set</button>
                   </div>` : (job.foundationIds?.length || "")}</td>
-                <td>${job.number || ""}</td>
-                <td>${job.customer || ""}</td>
+                <td>${admin ? `<input class="table-input" style="width:110px;" data-edit-job-number="${job.id}" value="${escapeHtml(job.number || "")}" />` : (job.number || "")}</td>
+                <td>${admin ? `<input class="table-input" style="min-width:120px;" data-edit-job-customer="${job.id}" value="${escapeHtml(job.customer || "")}" />` : (job.customer || "")}</td>
                 <td><select class="table-select" data-job-foreman="${job.id}" ${!admin ? "disabled" : ""}><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), jobAssignedForeman(job))}</select></td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
                 <td><button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
@@ -6081,6 +6081,19 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-set-foundations]").forEach((button) => {
     button.addEventListener("click", () => setJobFoundations(button.dataset.setFoundations));
+  });
+
+  document.querySelectorAll("[data-edit-job-name]").forEach((el) => {
+    el.addEventListener("change", () => updateJobField(el.dataset.editJobName, "name", el.value));
+  });
+  document.querySelectorAll("[data-edit-job-number]").forEach((el) => {
+    el.addEventListener("change", () => updateJobField(el.dataset.editJobNumber, "number", el.value));
+  });
+  document.querySelectorAll("[data-edit-job-customer]").forEach((el) => {
+    el.addEventListener("change", () => updateJobField(el.dataset.editJobCustomer, "customer", el.value));
+  });
+  document.querySelectorAll("[data-edit-job-type]").forEach((el) => {
+    el.addEventListener("change", () => updateJobField(el.dataset.editJobType, "jobType", el.value));
   });
 
   document.querySelectorAll("[data-document-action]").forEach((button) => {
@@ -7788,6 +7801,18 @@ function reassignJobForeman(jobId, foreman) {
   saveState();
   render();
   showToast(`${job.name} assigned to ${foreman || "Unassigned"}`);
+}
+
+function updateJobField(jobId, field, value) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
+  const job = state.jobs.find((entry) => entry.id === jobId);
+  if (!job) return;
+  const clean = typeof value === "string" ? value.trim() : value;
+  if (field === "name" && !clean) { render(); return; }
+  job[field] = clean;
+  logActivity("Job updated", { job: job.name, field, to: clean });
+  saveState();
+  render();
 }
 
 function deleteJob(jobId) {

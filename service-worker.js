@@ -1,4 +1,4 @@
-const CACHE_NAME = "crewforge-v120";
+const CACHE_NAME = "crewforge-v121";
 const APP_SHELL = [
   "./",
   "./index.html",
