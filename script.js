@@ -913,14 +913,15 @@ document.addEventListener("focusout", () => {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    if (!saved) return upgradeState(structuredClone(defaultState));
-    return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: false });
+    if (!saved) return upgradeState(structuredClone(defaultState), true);
+    return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: false }, true);
   } catch {
-    return upgradeState(structuredClone(defaultState));
+    return upgradeState(structuredClone(defaultState), true);
   }
 }
 
-function upgradeState(next) {
+function upgradeState(next, resetToCurrentWeek = false) {
+  if (resetToCurrentWeek) next.selectedWeek = currentWeekEnding();
   if (next.auth === undefined) next.auth = null;
   if (next.companyVerified === undefined) next.companyVerified = Boolean(next.auth);
   next.companyName = next.companyName || (next.companyVerified ? "Valor" : "");
@@ -3881,6 +3882,12 @@ function addDays(dateValue, amount) {
 function weekRangeDates(weekEnding) {
   const end = dateInputValue(weekEnding, defaultState.selectedWeek);
   return { start: addDays(end, -4), end };
+}
+
+function currentWeekEnding(today = localDateInputValue()) {
+  const day = new Date(`${today}T00:00:00`).getDay();
+  const toMonday = day === 0 ? -6 : 1 - day;
+  return addDays(addDays(today, toMonday), 4);
 }
 
 function selectedWeekStart() {
