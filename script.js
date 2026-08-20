@@ -1171,6 +1171,9 @@ function upgradeState(next, resetToCurrentWeek = false) {
       const perPiece = unitWeight(item);
       item.completedQty = perPiece ? Math.round(((Number(item.completed) || 0) / perPiece) * 100) / 100 : 0;
     }
+    const completedCap = item.productionMode === "custom" ? Number(item.planned) || 0 : productionQuantity(item);
+    if (completedCap > 0 && Number(item.completedQty) > completedCap) item.completedQty = completedCap;
+    if (Number(item.completedQty) < 0) item.completedQty = 0;
     item.completed = completedWeight(item);
   });
   return next;
@@ -7834,6 +7837,13 @@ function updateProductionItem(event) {
   if (["quantity", "planned"].includes(field) && !["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
   const oldValue = event.target.dataset.startValue ?? item[field];
   item[field] = ["completed", "completedQty", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
+  if (field === "completedQty") {
+    const cap = item.productionMode === "custom" ? Number(item.planned) || 0 : productionQuantity(item);
+    let val = Math.max(0, Number(item.completedQty) || 0);
+    if (cap > 0) val = Math.min(val, cap);
+    item.completedQty = val;
+    if (event.target.value !== String(val)) event.target.value = String(val);
+  }
   if (item.productionMode === "custom") {
     item.completed = Number(item.completedQty) || 0;
     item.quantity = Number(item.planned) || 0;
