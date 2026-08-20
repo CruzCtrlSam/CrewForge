@@ -1176,6 +1176,10 @@ function upgradeState(next, resetToCurrentWeek = false) {
     if (Number(item.completedQty) < 0) item.completedQty = 0;
     item.completed = completedWeight(item);
   });
+  if (!next.advancesReconciledV1) {
+    next.production.forEach((item) => { if (Array.isArray(item.advances)) item.advances = []; });
+    next.advancesReconciledV1 = true;
+  }
   return next;
 }
 
