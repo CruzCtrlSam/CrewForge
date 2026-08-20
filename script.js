@@ -4450,6 +4450,8 @@ function renderProductionCard(item) {
   const canEditSetup = ["Admin", "Payroll"].includes(state.selectedRole);
   return `
     <article class="production-card">
+      <details class="prod-collapse">
+      <summary class="prod-summary" style="cursor:pointer;">
       <header class="production-card-header">
         <div>
           <h3>${item.code} - ${item.description}</h3>
@@ -4463,6 +4465,7 @@ function renderProductionCard(item) {
         </div>
       </header>
       <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </summary>
       <div class="production-equation" data-prod-equation="${item.id}">
         ${quantity ? `${preciseNumber(quantity)} total x ${preciseNumber(perPiece)} lbs each = ${number(item.planned)} lbs` : `Total weight: ${number(item.planned)} lbs`}
       </div>
@@ -4505,6 +4508,7 @@ function renderProductionCard(item) {
           <button class="danger-action table-action" data-remove-production="${item.id}" type="button" ${!canEdit ? "disabled" : ""}>Remove item<span class="es">Quitar partida</span></button>
         </div>
       </div>
+      </details>
     </article>
   `;
 }
