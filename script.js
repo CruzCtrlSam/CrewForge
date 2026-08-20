@@ -4447,6 +4447,7 @@ function renderProductionCard(item) {
   const remaining = Math.max((Number(item.planned) || 0) - weightDone, 0);
   const isFab = state.selectedArea === "rebarFab";
   const canEdit = canManageProductionItem(item);
+  const canEditSetup = ["Admin", "Payroll"].includes(state.selectedRole);
   return `
     <article class="production-card">
       <header class="production-card-header">
@@ -4471,10 +4472,10 @@ function renderProductionCard(item) {
       </div>
       <div class="production-controls-v2">
         <div class="production-fieldset">
-          <h4>Setup<span class="es">Datos base</span></h4>
+          <h4>Setup<span class="es">Datos base</span>${!canEditSetup ? `<span class="tag" style="margin-left:8px;font-weight:400;">${t("Office only", "Solo oficina")}</span>` : ""}</h4>
           <div class="production-fields two-up">
-            <label>Total amount<span class="es">Cantidad total</span><input data-prod="${item.id}" data-field="quantity" type="number" min="0" step="1" value="${quantity || 0}" ${!canEdit ? "disabled" : ""} /></label>
-            <label>Total weight<span class="es">Peso total</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="1" value="${item.planned || 0}" ${!canEdit ? "disabled" : ""} /></label>
+            <label>Total amount<span class="es">Cantidad total</span><input data-prod="${item.id}" data-field="quantity" type="number" min="0" step="1" value="${quantity || 0}" ${!canEditSetup ? "disabled" : ""} /></label>
+            <label>Total weight<span class="es">Peso total</span><input data-prod="${item.id}" data-field="planned" type="number" min="0" step="1" value="${item.planned || 0}" ${!canEditSetup ? "disabled" : ""} /></label>
           </div>
         </div>
         <div class="production-fieldset">
@@ -7815,6 +7816,7 @@ function updateProductionItem(event) {
   const item = state.production.find((entry) => entry.id === event.target.dataset.prod);
   if (!item) return;
   const field = event.target.dataset.field;
+  if (["quantity", "planned"].includes(field) && !["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
   const oldValue = event.target.dataset.startValue ?? item[field];
   item[field] = ["completed", "completedQty", "planned", "quantity"].includes(field) ? Number(event.target.value) : event.target.value;
   if (item.productionMode === "custom") {
