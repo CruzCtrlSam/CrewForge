@@ -4681,11 +4681,11 @@ function renderJobs() {
                 <td>${areas[job.area]?.label || job.area}</td>
                 <td>${job.jobType || ""}</td>
                 <td>${job.jobType === "Wind Farm" && admin ? `
-                  <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span class="tag">${job.foundationIds?.length || 0}</span>
-                    <input class="table-input" style="width:34px;" data-fnd-prefix="${job.id}" value="${foundationPrefixOf(job)}" placeholder="T" title="Prefix" />
-                    <input class="table-input" style="width:48px;" data-fnd-from="${job.id}" type="number" min="1" step="1" placeholder="from" title="From" />
-                    <input class="table-input" style="width:48px;" data-fnd-to="${job.id}" type="number" min="1" step="1" placeholder="to" title="To" />
+                    <label style="display:flex;flex-direction:column;font-size:10px;color:#64748b;gap:2px;">Letter<input class="table-input" style="width:52px;font-size:15px;text-align:center;" data-fnd-prefix="${job.id}" value="${foundationPrefixOf(job)}" maxlength="3" placeholder="T" title="Letter prefix" /></label>
+                    <label style="display:flex;flex-direction:column;font-size:10px;color:#64748b;gap:2px;">From<input class="table-input" style="width:72px;font-size:15px;" data-fnd-from="${job.id}" type="number" inputmode="numeric" min="1" step="1" placeholder="1" title="From number" /></label>
+                    <label style="display:flex;flex-direction:column;font-size:10px;color:#64748b;gap:2px;">To<input class="table-input" style="width:72px;font-size:15px;" data-fnd-to="${job.id}" type="number" inputmode="numeric" min="1" step="1" placeholder="120" title="To number" /></label>
                     <button class="secondary-action table-action" data-set-foundations="${job.id}" type="button">Set</button>
                   </div>` : (job.foundationIds?.length || "")}</td>
                 <td>${job.number || ""}</td>
