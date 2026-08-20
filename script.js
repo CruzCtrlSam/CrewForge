@@ -4455,6 +4455,7 @@ function renderProductionCard(item) {
   const isFab = state.selectedArea === "rebarFab";
   const canEdit = canManageProductionItem(item);
   const canEditSetup = ["Admin", "Payroll"].includes(state.selectedRole);
+  const today = localDateInputValue();
   return `
     <article class="production-card">
       <details class="prod-collapse">
@@ -4490,6 +4491,9 @@ function renderProductionCard(item) {
         </div>
         <div class="production-fieldset">
           <h4>Progress<span class="es">Avance</span></h4>
+          <div class="production-fields">
+            <label>Work date<span class="es">Fecha del trabajo</span><input data-prod-date="${item.id}" type="date" value="${today}" max="${today}" ${!canEdit ? "disabled" : ""} /><small style="color:#64748b;">${t("Day this amount was completed", "Dia en que se termino")}</small></label>
+          </div>
           <div class="production-fields two-up">
             <label>Amount completed<span class="es">Cantidad terminada</span><input data-prod="${item.id}" data-field="completedQty" type="number" min="0" step="1" ${quantity ? `max="${quantity}"` : ""} value="${item.completedQty || 0}" ${!canEdit ? "disabled" : ""} /></label>
             <label>Completed weight<span class="es">Peso terminado</span><input data-prod-weight="${item.id}" type="text" value="${number(weightDone)} lbs" readonly /></label>
@@ -7860,8 +7864,9 @@ function updateProductionItem(event) {
     const newQty = Number(item.completedQty) || 0;
     const deltaWeight = (newQty - prevQty) * unitWeight(item);
     if (deltaWeight) {
+      const chosenDate = document.querySelector(`[data-prod-date="${item.id}"]`)?.value || localDateInputValue();
       item.advances = item.advances || [];
-      item.advances.push({ date: localDateInputValue(), weight: deltaWeight, by: actorName(), at: timestamp() });
+      item.advances.push({ date: chosenDate, weight: deltaWeight, by: actorName(), at: timestamp() });
     }
   }
   item.status = item.completed >= item.planned ? "Complete" : item.completed > 0 ? "In Progress" : "Not Started";
