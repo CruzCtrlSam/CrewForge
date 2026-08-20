@@ -1655,6 +1655,13 @@ function selectedJobs() {
   return state.jobs.filter((job) => job.area === state.selectedArea && (job.status || "Active") === "Active");
 }
 
+function jobsForProductionFilter() {
+  const jobs = selectedJobs();
+  if (roleIsElevated() || state.selectedRole !== "Foreman") return jobs;
+  const me = state.currentForeman;
+  return jobs.filter((job) => job.foreman === me || state.production.some((item) => item.jobId === job.id && (item.foreman || "") === me));
+}
+
 function jobById(jobId) {
   return state.jobs.find((job) => job.id === jobId);
 }
@@ -4345,7 +4352,7 @@ function renderTimesheetRow(row, index, editable) {
 
 function renderProduction() {
   const canAddProduction = isFieldEntryMode() || ["Admin", "Payroll", "Quality"].includes(state.selectedRole);
-  const jobOptions = selectedJobs();
+  const jobOptions = jobsForProductionFilter();
   const activeJob = state.selectedProductionJob ? jobName(state.selectedProductionJob) : "";
   const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
   const visibleProduction = productionForArea();
@@ -4393,7 +4400,7 @@ function renderProduction() {
 }
 
 function renderProductionAdder() {
-  const defaultJob = state.selectedProductionJob || selectedJobs()[0]?.id || "";
+  const defaultJob = state.selectedProductionJob || jobsForProductionFilter()[0]?.id || "";
   const selectedJob = jobById(defaultJob);
   const selectedForeman = isApproverMode() ? productionForemanName() : state.currentForeman;
   const isWind = selectedJob?.jobType === "Wind Farm";
@@ -4402,7 +4409,7 @@ function renderProductionAdder() {
     const foundationIds = selectedJob.foundationIds || [];
     return `
       <div class="production-add-grid wind-production-add section-gap">
-        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
+        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(jobsForProductionFilter(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Foundation ID<span class="es">Cimentacion</span><select id="newFoundationId">${foundationIds.length ? setOptions(foundationIds, foundationIds[0]) : '<option value="">No IDs set up</option>'}</select></label>
         <label>Component<span class="es">Parte</span><select id="newFoundationComponent">${setOptions(windFoundationComponents, windFoundationComponents[0])}</select></label>
         <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
@@ -4416,7 +4423,7 @@ function renderProductionAdder() {
   if (isCustom) {
     return `
       <div class="production-add-grid commercial-production-add section-gap">
-        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
+        <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(jobsForProductionFilter(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
         <label>Tracking item<span class="es">Partida</span><select id="newCustomTracking">${setOptions(selectedJob.customTracking, selectedJob.customTracking[0]?.id || "", (item) => `${item.name} (${item.unit})`, (item) => item.id)}</select></label>
         <label>Amount completed<span class="es">Cantidad terminada</span><input id="newCustomCompleted" type="number" min="0" step="0.01" placeholder="0" /></label>
         <label>Foreman<span class="es">Capataz</span><select id="newProdForeman" ${state.selectedRole === "Foreman" ? "disabled" : ""}>${setOptions(foremenForArea().map((person) => person.name), selectedForeman)}</select></label>
@@ -4426,7 +4433,7 @@ function renderProductionAdder() {
   }
   return `
     <div class="production-add-grid section-gap">
-      <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(selectedJobs(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
+      <label>Job<span class="es">Trabajo</span><select id="newProdJob">${setOptions(jobsForProductionFilter(), defaultJob, (job) => job.name, (job) => job.id)}</select></label>
       <label>Control code<span class="es">Codigo</span><input id="newProdCode" placeholder="ACA" /></label>
       <label>Description<span class="es">Descripcion</span><input id="newProdDescription" placeholder="DE6 / 4-78D or Cage" /></label>
       <label>Total amount<span class="es">Cantidad total</span><input id="newProdQuantity" type="number" min="0" step="1" placeholder="4" /></label>
@@ -4711,13 +4718,49 @@ function renderJobs() {
                 <td>${admin ? `<input class="table-input" style="min-width:120px;" data-edit-job-customer="${job.id}" value="${escapeHtml(job.customer || "")}" />` : (job.customer || "")}</td>
                 <td><select class="table-select" data-job-foreman="${job.id}" ${!admin ? "disabled" : ""}><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), jobAssignedForeman(job))}</select></td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
-                <td><button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+                <td>${admin && job.jobType === "T-line Substation" ? `<button class="secondary-action table-action" data-edit-codes="${job.id}" type="button">Edit codes<span class="es">Editar codigos</span></button> ` : ""}<button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
               .join("") : `<tr><td colspan="9"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
           </tbody>
         </table>
       </div>
+      ${admin && state.editingJobCodes ? renderJobCodeEditor(state.editingJobCodes) : ""}
     </section>
+  `;
+}
+
+function renderJobCodeEditor(jobId) {
+  const job = jobById(jobId);
+  if (!job) return "";
+  const codes = state.production.filter((item) => item.jobId === jobId);
+  return `
+    <div class="section-gap" style="border:1px solid #d7dee6;border-radius:12px;padding:16px;background:#fbfcfe;">
+      <div class="split">
+        <div><h3>${t("Control codes", "Codigos de control")} — ${escapeHtml(job.name)}</h3><p class="sub">${t("Edit each code's amount and weight, or add new codes.", "Edite la cantidad y el peso de cada codigo, o agregue codigos nuevos.")}</p></div>
+        <button class="secondary-action" data-close-codes type="button">${t("Close", "Cerrar")}</button>
+      </div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Code</th><th>Description</th><th>Total amount</th><th>Total weight</th><th></th></tr></thead>
+          <tbody>
+            ${codes.length ? codes.map((item) => `<tr>
+              <td><strong>${escapeHtml(item.code || "")}</strong></td>
+              <td><input class="table-input" style="min-width:150px;" data-jobcode-desc="${item.id}" value="${escapeHtml(item.description || "")}" /></td>
+              <td><input class="table-input" style="width:90px;" data-jobcode-qty="${item.id}" type="number" min="0" step="1" value="${productionQuantity(item) || 0}" /></td>
+              <td><input class="table-input" style="width:110px;" data-jobcode-weight="${item.id}" type="number" min="0" step="1" value="${item.planned || 0}" /></td>
+              <td><button class="danger-action table-action" data-remove-production="${item.id}" type="button">${t("Remove", "Quitar")}</button></td>
+            </tr>`).join("") : `<tr><td colspan="5"><span class="sub">${t("No control codes yet.", "Sin codigos todavia.")}</span></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="form-grid compact-form-grid section-gap">
+        <label>${t("New control code", "Nuevo codigo")}<input id="addCodeCode" placeholder="AI2" /></label>
+        <label>${t("Description", "Descripcion")}<input id="addCodeDesc" placeholder="WEST - S1" /></label>
+        <label>${t("Total amount", "Cantidad total")}<input id="addCodeQty" type="number" min="0" step="1" placeholder="1" /></label>
+        <label>${t("Total weight", "Peso total")}<input id="addCodeWeight" type="number" min="0" step="1" placeholder="33716" /></label>
+        <button class="secondary-action" data-add-code="${jobId}" type="button">${t("Add code", "Agregar codigo")}</button>
+      </div>
+    </div>
   `;
 }
 
@@ -6094,6 +6137,28 @@ function bindTabEvents() {
   });
   document.querySelectorAll("[data-edit-job-type]").forEach((el) => {
     el.addEventListener("change", () => updateJobField(el.dataset.editJobType, "jobType", el.value));
+  });
+
+  document.querySelectorAll("[data-edit-codes]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.editingJobCodes = state.editingJobCodes === button.dataset.editCodes ? "" : button.dataset.editCodes;
+      render();
+    });
+  });
+  document.querySelectorAll("[data-close-codes]").forEach((button) => {
+    button.addEventListener("click", () => { state.editingJobCodes = ""; render(); });
+  });
+  document.querySelectorAll("[data-add-code]").forEach((button) => {
+    button.addEventListener("click", () => addJobControlCode(button.dataset.addCode));
+  });
+  document.querySelectorAll("[data-jobcode-desc]").forEach((el) => {
+    el.addEventListener("change", () => updateJobCodeField(el.dataset.jobcodeDesc, "description", el.value));
+  });
+  document.querySelectorAll("[data-jobcode-qty]").forEach((el) => {
+    el.addEventListener("change", () => updateJobCodeField(el.dataset.jobcodeQty, "quantity", el.value));
+  });
+  document.querySelectorAll("[data-jobcode-weight]").forEach((el) => {
+    el.addEventListener("change", () => updateJobCodeField(el.dataset.jobcodeWeight, "planned", el.value));
   });
 
   document.querySelectorAll("[data-document-action]").forEach((button) => {
@@ -7801,6 +7866,53 @@ function reassignJobForeman(jobId, foreman) {
   saveState();
   render();
   showToast(`${job.name} assigned to ${foreman || "Unassigned"}`);
+}
+
+function updateJobCodeField(itemId, field, value) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
+  const item = state.production.find((entry) => entry.id === itemId);
+  if (!item) return;
+  if (field === "description") item.description = value.trim();
+  else if (field === "quantity") item.quantity = Math.max(0, Number(value) || 0);
+  else if (field === "planned") item.planned = Math.max(0, Number(value) || 0);
+  item.quantity = productionQuantity(item);
+  const cap = productionQuantity(item);
+  if (cap > 0 && Number(item.completedQty) > cap) item.completedQty = cap;
+  item.completed = completedWeight(item);
+  logActivity("Control code edited", { job: jobName(item.jobId), code: item.code, field });
+  saveState();
+  render();
+}
+
+function addJobControlCode(jobId) {
+  if (!["Admin", "Payroll"].includes(state.selectedRole)) { render(); return; }
+  const job = jobById(jobId);
+  if (!job) return;
+  const code = $("addCodeCode")?.value.trim() || "";
+  if (!code) { showToast("Enter a control code"); return; }
+  if (state.production.some((item) => item.jobId === jobId && item.code === code)) { showToast(`${code} already exists on this job`); return; }
+  const description = $("addCodeDesc")?.value.trim() || code;
+  const quantity = Math.max(0, Number($("addCodeQty")?.value) || 0);
+  const planned = Math.max(0, Number($("addCodeWeight")?.value) || 0);
+  state.production.push({
+    id: `p${Date.now()}`,
+    area: job.area,
+    foreman: jobAssignedForeman(job),
+    jobId,
+    code,
+    description,
+    planned,
+    quantity,
+    completedQty: 0,
+    completed: 0,
+    weekly: 0,
+    delay: "No delay",
+    delayNote: "",
+    status: "Not Started"
+  });
+  logActivity("Control code added", { job: job.name, code });
+  saveState();
+  render();
 }
 
 function updateJobField(jobId, field, value) {
