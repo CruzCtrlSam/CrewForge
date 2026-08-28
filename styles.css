@@ -2592,23 +2592,25 @@ tr:last-child td {
 
 @media (max-width: 560px) {
   h1 {
-    font-size: 34px;
+    font-size: 28px;
+    line-height: 1.02;
   }
 
   .login-screen {
-    padding: 14px;
+    padding: 10px;
   }
 
   .login-card {
-    padding: 16px;
-  }
-
-  .intro-screen {
     padding: 14px;
   }
 
+  .intro-screen {
+    padding: 10px;
+  }
+
   .intro-card {
-    padding: 16px;
+    padding: 14px;
+    gap: 16px;
   }
 
   .shell {
@@ -2630,32 +2632,32 @@ tr:last-child td {
   .login-logo-stack,
   .intro-logo,
   .gate-logo-stack {
-    gap: 10px;
-    padding: 8px;
+    gap: 8px;
+    padding: 7px;
   }
 
   .login-icon,
   .gate-icon {
-    flex-basis: 48px;
-    width: 48px;
-    height: 48px;
+    flex-basis: 42px;
+    width: 42px;
+    height: 42px;
   }
 
   .login-wordmark,
   .gate-wordmark {
-    max-width: calc(100% - 58px);
-    max-height: 54px;
+    max-width: calc(100% - 50px);
+    max-height: 46px;
   }
 
   .workspace,
   .area-gate {
-    padding: 14px;
+    padding: 10px;
   }
 
   .panel,
   .metric,
   .area-card {
-    padding: 14px;
+    padding: 12px;
   }
 
   .top-actions > *,
@@ -2703,7 +2705,7 @@ tr:last-child td {
   }
 
   .foreman-entry-grid {
-    min-width: 840px;
+    min-width: 760px;
   }
 
   .document-actions {
@@ -2716,7 +2718,42 @@ tr:last-child td {
   .primary-action,
   .secondary-action,
   .danger-action {
-    min-height: 46px;
+    min-height: 40px;
+  }
+
+  label,
+  .select-label {
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  input,
+  select,
+  textarea {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  th,
+  td {
+    padding: 8px;
+  }
+
+  .foreman-entry-grid input,
+  .foreman-entry-grid select,
+  .entry-table input,
+  .entry-table .employee-select,
+  .entry-table .role-select {
+    min-height: 34px;
+  }
+
+  .foreman-entry-grid td:not(.worker-name-cell) input {
+    width: 62px;
+  }
+
+  .worker-name-cell {
+    width: 190px;
+    min-width: 190px;
   }
 }
 
