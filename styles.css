@@ -1722,6 +1722,13 @@ tr:last-child td {
   color: #5d3a00;
 }
 
+.sync-banner.pending,
+.sync-banner.local {
+  border-color: #d59a22;
+  background: #fff9e8;
+  color: #5d3a00;
+}
+
 .sync-banner.error {
   border-color: var(--red);
   background: #fff0ee;

@@ -377,7 +377,7 @@ const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
 const fabricationJobTypes = [...installationJobTypes, "Commercial"];
 const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
 const shifts = ["Day Shift", "Night Shift"];
-const appRoles = ["Foreman", "Payroll", "Management", "Admin"];
+const appRoles = ["Safety", "Quality", "Admin"];
 const foremanNames = ["Lidio Barron", "Gregorio Izaguirre", "Huguer Vazquez", "Hugo Martinez", "Paco", "Wilfredo Vargas", "Erik", "Paul Featherhat"];
 const trialWindFarmJobs = [
   { id: "wind-buffalo-gap-ira", name: "Buffalo Gap - IRA", number: "BG-IRA", customer: "Blattner", start: "2025-01-08", finish: "2026-05-01", wtgs: 117, tons: 5950, state: "TX", town: "Merkel", foreman: "Wilfredo Vargas", rrFolder: "Wilfredo Vargas", supply: "Rhome" },
@@ -588,13 +588,9 @@ const trialWeekHourPatterns = [
 const trialPerDiems = [175, 225, 275, 325, 350, 400, 450, 500, 525, 575];
 const trialSeedWeek = "2026-07-03";
 const trialAccounts = [
-  { code: "FOREMAN", name: "Foreman", role: "Foreman", needsForeman: true },
-  { code: "MAYORDOMO", name: "Mayordomo", role: "Approver", foreman: "Lidio Barron", area: "rebarInstall" },
-  { code: "QUALITY", name: "Quality", role: "Quality", area: "rebarFab", foreman: "Daniel Medrano" },
-  { code: "SAFETY", name: "Safety", role: "Safety", area: "rebarInstall", foreman: "Lidio Barron" },
-  { code: "PAYROLL", name: "Payroll", role: "Payroll", foreman: "Lidio Barron" },
-  { code: "MANAGER", name: "Management", role: "Management", foreman: "Lidio Barron" },
-  { code: "ADMIN", name: "Admin", role: "Admin", foreman: "Lidio Barron" }
+  { code: "SAFETY", name: "Safety", role: "Safety" },
+  { code: "QUALITY", name: "Quality", role: "Quality" },
+  { code: "ADMIN", name: "Admin", role: "Admin" }
 ];
 let lastLoginCode = "";
 
@@ -1073,7 +1069,10 @@ function applyRemoteState(remoteData) {
 }
 
 function pushCloud(immediate = false) {
-  if (!cloud) return;
+  if (!cloud) {
+    setSyncStatus("local", "Saved on this device. Cloud sync will resume when the connection is available.");
+    return;
+  }
   const save = async () => {
     if (!navigator.onLine) {
       setSyncStatus("offline", "Offline. Changes are saved on this device.");
@@ -1081,7 +1080,10 @@ function pushCloud(immediate = false) {
     }
     const snapshot = sharedSnapshot();
     const serialized = JSON.stringify(snapshot);
-    if (serialized === lastCloudPush) return;
+    if (serialized === lastCloudPush) {
+      if (navigator.onLine) setSyncStatus("synced", "Saved on this device. Shared records are up to date.");
+      return;
+    }
     lastCloudPush = serialized;
     try {
       await cloud.from("app_state").upsert({
@@ -1588,6 +1590,7 @@ function trialTimesheetRow(person, foremanIndex, rowIndex, seedHours = true) {
 function saveState() {
   pendingRemoteState = null;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  setSyncStatus(navigator.onLine ? "pending" : "offline", navigator.onLine ? "Saved on this device. Syncing when connection is available." : "Offline. Changes are saved on this device.");
   pushCloud();
 }
 
@@ -1739,11 +1742,11 @@ function area() {
 }
 
 function roleIsElevated() {
-  return ["Payroll", "Management", "Admin"].includes(state.selectedRole);
+  return ["Safety", "Quality", "Admin"].includes(state.selectedRole);
 }
 
 function roleIsOffice() {
-  return ["Payroll", "Management", "Admin"].includes(state.selectedRole);
+  return ["Safety", "Quality", "Admin"].includes(state.selectedRole);
 }
 
 function canManagePeopleSetup() {
@@ -1751,19 +1754,19 @@ function canManagePeopleSetup() {
 }
 
 function canEditPayRates() {
-  return ["Admin", "Payroll"].includes(state.selectedRole);
+  return state.selectedRole === "Admin";
 }
 
 function canEditEmployeeProfiles() {
-  return ["Admin", "Payroll", "Quality", "Safety"].includes(state.selectedRole);
+  return ["Admin", "Quality", "Safety"].includes(state.selectedRole);
 }
 
 function canManagePayrollAdjustments() {
-  return ["Admin", "Payroll"].includes(state.selectedRole);
+  return state.selectedRole === "Admin";
 }
 
 function canManageJobDocuments() {
-  return ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
+  return ["Admin", "Quality", "Safety"].includes(state.selectedRole);
 }
 
 function canManageTraining() {
@@ -1775,7 +1778,7 @@ function canManageTrainingResources() {
 }
 
 function canReviewTrainingResults() {
-  return ["Admin", "Management", "Safety"].includes(state.selectedRole);
+  return ["Admin", "Safety"].includes(state.selectedRole);
 }
 
 function canAccreditTraining() {
@@ -1789,16 +1792,16 @@ function roleIsProductionVisible() {
 function canAccessSelectedArea(account) {
   if (!account) return false;
   if (state.selectedArea === "bundleLab") {
-    return ["Admin", "Management", "Quality", "Foreman", "Safety"].includes(account.role);
+    return ["Admin", "Quality", "Safety"].includes(account.role);
   }
-  if (!state.selectedArea) return ["Payroll", "Management", "Admin"].includes(account.role);
-  if (account.area && account.area !== state.selectedArea && !["Payroll", "Management", "Admin"].includes(account.role)) return false;
+  if (!state.selectedArea) return ["Safety", "Quality", "Admin"].includes(account.role);
+  if (account.area && account.area !== state.selectedArea && !["Safety", "Quality", "Admin"].includes(account.role)) return false;
   if (areas[state.selectedArea]?.adminOnly && account.role !== "Admin") return false;
   return true;
 }
 
 function canManageBundlePlanner() {
-  return ["Admin", "Management", "Quality"].includes(state.selectedRole);
+  return ["Admin", "Quality"].includes(state.selectedRole);
 }
 
 function canUpdateBundleProductionStatus() {
@@ -1806,7 +1809,7 @@ function canUpdateBundleProductionStatus() {
 }
 
 function canUseQualityControl() {
-  return ["Admin", "Management", "Quality"].includes(state.selectedRole) && ["rebarFab", "rebarInstall"].includes(state.selectedArea);
+  return ["Admin", "Quality"].includes(state.selectedRole) && ["rebarFab", "rebarInstall"].includes(state.selectedArea);
 }
 
 function isApproverMode() {
@@ -1830,47 +1833,28 @@ function availableTabs() {
   if (state.selectedRole === "Quality") {
     return [
       ["qualityControl", "Quality Control", "Control de calidad"],
-      ["production", "Production", "Produccion"],
-      ["training", "Training", "Capacitacion"],
-      ["safety", "Safety Forms", "Documentos de seguridad"],
       ["audits", "Field Audits", "Auditorias de campo"],
-      ["documents", "Documents", "Documentos"]
+      ["documents", "Documents", "Documentos"],
+      ["setup", "People / Departments", "Personas / Departamentos"]
     ];
   }
   if (state.selectedRole === "Safety") {
     return [
-      ["safety", "Safety Forms", "Documentos de seguridad"],
-      ["training", "Training", "Capacitacion"],
+      ["training", "Training & Competency", "Capacitacion"],
       ["audits", "Field Audits", "Auditorias de campo"],
+      ["safety", "Safety Forms", "Documentos de seguridad"],
       ["documents", "Documents", "Documentos"],
-      ["setup", "People / Crews", "Personas / Cuadrillas"]
-    ];
-  }
-  if (isFieldEntryMode()) {
-    return [
-      ["timesheet", isApproverMode() ? "Crew Timesheets" : "My Timesheet", isApproverMode() ? "Horas de cuadrillas" : "Mis horas"],
-      ["production", "Production Update", "Produccion"],
-      ["reimbursements", "Reimbursements", "Reembolsos"],
-      ["training", "Training", "Capacitacion"],
-      ["safety", "Safety Forms", "Documentos de seguridad"],
-      ["audits", "Field Audits", "Auditorias de campo"],
-      ["documents", "Documents", "Documentos"]
+      ["setup", "People / Departments", "Personas / Departamentos"]
     ];
   }
   return [
-    ["dashboard", "Dashboard", "Tablero"],
-    ["timesheet", "Timesheet Review", "Revision de horas"],
-    ["production", "Production", "Produccion"],
-    ["reimbursements", "Reimbursements", "Reembolsos"],
-    ["jobs", "Jobs", "Trabajos"],
-    ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
-    ["training", "Training", "Capacitacion"],
-    ["safety", "Safety Forms", "Documentos de seguridad"],
+    ["training", "Training & Competency", "Capacitacion"],
     ["audits", "Field Audits", "Auditorias de campo"],
+    ["safety", "Safety Forms", "Documentos de seguridad"],
     ["documents", "Documents", "Documentos"],
-    ["employeeReports", "Employee Reports", "Reportes de empleados"],
-    ["deliverables", "Deliverables", "Entregables"],
-    ["setup", "People / Crews", "Personas / Cuadrillas"]
+    ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
+    ["jobs", "Jobs / Sites", "Trabajos / sitios"],
+    ["setup", "People / Departments", "Personas / Departamentos"]
   ];
 }
 
@@ -2435,7 +2419,7 @@ function setOptions(values, selected, labeler = (value) => value, valueGetter = 
 }
 
 function renderLogin() {
-  const selectedAreaLabel = state.selectedArea ? areas[state.selectedArea]?.label : "All areas";
+  const selectedAreaLabel = state.selectedArea ? areas[state.selectedArea]?.label : "All departments";
   const foremanOptions = loginForemanOptions();
   const loginCode = (state.loginCodeDraft || "").trim().toUpperCase();
   const selectedLoginForeman = foremanOptions.includes(state.loginForemanDraft) ? state.loginForemanDraft : foremanOptions[0] || "";
@@ -2450,22 +2434,20 @@ function renderLogin() {
         <div>
           <p class="eyebrow">${state.companyName || "Valor"} · ${selectedAreaLabel}</p>
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
-          <p class="sub">Use your trial code for this department. Office users can still change areas after signing in.</p>
+          <p class="sub">Use SAFETY, QUALITY, or ADMIN. The department is used as a record filter, not a separate app.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="FOREMAN, MAYORDOMO, QUALITY, SAFETY, PAYROLL, MANAGER, ADMIN" /></label>
+        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="SAFETY, QUALITY, or ADMIN" /></label>
         <label id="foremanLoginField" class="login-select-field ${showForemen ? "" : "hidden"}">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, selectedLoginForeman)}</select></label>
         <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
         <div class="trial-note">
           <strong>Trial codes</strong>
-          <span>Foremen: FOREMAN, then choose a name</span>
-          <span>Quality: QUALITY</span>
           <span>Safety: SAFETY</span>
-          <span>Approver: MAYORDOMO</span>
-          <span>Office: PAYROLL, MANAGER, or ADMIN</span>
+          <span>Quality: QUALITY</span>
+          <span>Admin: ADMIN</span>
           <span class="es">Codigos de prueba para esta demo.</span>
         </div>
-        <button class="text-button" id="loginChangeArea" type="button">Change area<span class="es">Cambiar area</span></button>
-        <p class="sub login-limit">This is trial access for workflow testing. Real company use still needs hosted login and server-side permissions.</p>
+        <button class="text-button" id="loginChangeArea" type="button">Change department filter<span class="es">Cambiar departamento</span></button>
+        <p class="sub login-limit">Works offline after the app has loaded once. Records save on this device and sync when internet returns.</p>
       </section>
     </main>
   `;
@@ -2561,9 +2543,9 @@ function loginWithCode() {
   state.setupForeman = selectedForeman || state.setupForeman;
   state.selectedArea = account.area || state.selectedArea || "";
   state.showIntro = false;
-  state.activeTab = isFieldEntryMode() ? "timesheet" : "dashboard";
+  state.activeTab = account.role === "Quality" ? "qualityControl" : "training";
   if (state.selectedArea === "bundleLab") state.activeTab = "bundlePlanner";
-  if (state.selectedRole === "Quality") state.activeTab = ["rebarFab", "rebarInstall"].includes(state.selectedArea) ? "qualityControl" : "production";
+  if (state.selectedRole === "Quality") state.activeTab = ["rebarFab", "rebarInstall"].includes(state.selectedArea) ? "qualityControl" : "audits";
   saveState();
   render();
   syncHistory();
@@ -2579,13 +2561,13 @@ function renderIntro() {
         </div>
         <div>
           <p class="eyebrow">CrewForge</p>
-          <h1>${t("Field work, payroll, production, and documents in one place.", "Horas, produccion y documentos en un solo lugar.")}</h1>
-          <p class="sub">Start by choosing the part of the company you are working in today. CrewForge will only show the timesheets, jobs, production, and documents for that area.</p>
+          <h1>${t("Safety training, audits, documents, and quality records in one place.", "Capacitacion, auditorias, documentos y calidad en un solo lugar.")}</h1>
+          <p class="sub">Start with the safety category you need, then tag records by department, job, and site.</p>
         </div>
         <div class="intro-points">
-          <article><strong>1</strong><span>Choose area<span class="es">Escoja area</span></span></article>
-          <article><strong>2</strong><span>Fill the work<span class="es">Llene el trabajo</span></span></article>
-          <article><strong>3</strong><span>Send reports<span class="es">Envie reportes</span></span></article>
+          <article><strong>1</strong><span>Pick safety record<span class="es">Escoja registro</span></span></article>
+          <article><strong>2</strong><span>Attach evidence<span class="es">Agregue evidencia</span></span></article>
+          <article><strong>3</strong><span>Export records<span class="es">Exporte registros</span></span></article>
         </div>
         <div class="intro-actions">
           <button class="primary-action" id="continueIntro" type="button">${t("Continue", "Continuar")}</button>
@@ -2624,8 +2606,8 @@ function renderGate() {
             <p class="sub">${appTagline}</p>
           </div>
         </div>
-        <h1>${t("Choose operating area", "Escoja area de trabajo")}</h1>
-        <p class="sub">Pick the department first. Then CrewForge will ask for the right login for that area.</p>
+        <h1>${t("Choose department filter", "Escoja departamento")}</h1>
+        <p class="sub">Safety and audits are available in every department. This choice tags the records you create.</p>
         <button class="text-button gate-logout" id="gateLogout" type="button">Change company<span class="es">Cambiar compania</span></button>
       </section>
       <section class="area-grid">
@@ -2638,7 +2620,7 @@ function renderGate() {
                 <strong>${info.label}</strong>
                 <span class="es">${info.es}</span>
               </span>
-              <span class="sub">${info.mode === "crew" ? "Crew timesheets, production, safety, and audits" : "Shift timesheets, production, safety, and audits"}</span>
+              <span class="sub">Safety training, audits, forms, documents, and records</span>
             </button>
           `
           )
@@ -2675,6 +2657,7 @@ function renderShell() {
           <div><strong>${appName}</strong><span>${appTagline}</span><small>${isFieldEntryMode() ? "Field view" : "Office view"}</small></div>
         </div>
         <div class="area-badge">
+          <span>Department filter</span>
           <strong>${area().label}</strong>
           <span class="es">${area().es}</span>
         </div>
@@ -2700,12 +2683,13 @@ function renderShell() {
               <img src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
               <strong>${appName}</strong>
             </div>
-            <p class="eyebrow">${area().label}</p>
+            <p class="eyebrow">Safety recordkeeping · ${area().label}</p>
             <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
             ${isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
+            <div class="login-pill">Department<span class="es">Departamento</span><strong>${area().label}</strong><small>Record filter</small></div>
             <label class="select-label">Week starting<span class="es">Semana empieza</span><input id="weekStartSelect" type="date" value="${selectedWeekStart()}" /></label>
             <div class="login-pill date-pill">Week ending<span class="es">Semana termina</span><strong>${state.selectedWeek}</strong></div>
             ${dateShiftControls("selectedWeek", "Back one week", "Forward one week")}
@@ -5268,7 +5252,7 @@ function renderDocuments() {
             <label>Document type<span class="es">Tipo de documento</span><select id="documentTypeSelect">${setOptions(documentTypes, documentTypes[0])}</select></label>
             <label id="otherDocumentTypeField" class="hidden">Other type<span class="es">Otro tipo</span><input id="otherDocumentType" placeholder="Safety orientation, site map, etc." /></label>
             <label>Upload document (25 MB max)<span class="es">Subir documento (25 MB max)</span><input id="jobDocumentFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" multiple /></label>
-          ` : `<div class="notice compact-notice">Only Admin, Management, Quality, or Safety can upload or delete job documents. <span class="es">Solo Admin, gerencia, calidad o seguridad puede subir o borrar documentos.</span></div>`}
+          ` : `<div class="notice compact-notice">Only Safety, Quality, or Admin can upload or delete job documents. <span class="es">Solo seguridad, calidad o admin puede subir o borrar documentos.</span></div>`}
         </div>
         <div class="document-job-summary section-gap">
           <strong>${selectedJob.name}</strong>
@@ -5327,7 +5311,7 @@ function renderQualityControl() {
         </div>
         <span class="tag sync-tag">QUALITY<span class="es">Calidad</span></span>
       </div>
-      ${!canSubmit ? `<div class="notice">Quality Control is available to QUALITY, Admin, and Management for the two rebar departments.</div>` : ""}
+      ${!canSubmit ? `<div class="notice">Quality Control is available to QUALITY and Admin for the two rebar departments.</div>` : ""}
       <div class="form-grid section-gap">
         <label>Rebar department<span class="es">Departamento de varilla</span><select id="qcAreaSelect">${setOptions(qualityAreaOptions(), qualityArea, (item) => item.name, (item) => item.id)}</select></label>
         <label>Job control code<span class="es">Codigo de control del trabajo</span><input id="qcJobCode" placeholder="Example: VS26-LAURW, Q369, AAFR" /></label>
@@ -5389,7 +5373,7 @@ function selectedAreaJobsWithFallback(selectedId) {
 }
 
 function renderSafetyForms() {
-  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
+  const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedSafetyJob);
   const forms = state.safetyForms.filter((form) => form.area === state.selectedArea && (!selectedJob || form.jobId === selectedJob.id));
   const selectedType = state.selectedSafetyFormType || "JHA";
@@ -5398,12 +5382,13 @@ function renderSafetyForms() {
       <div class="split">
         <div>
           <h2>${t("Safety Forms", "Documentos de seguridad")}</h2>
-          <p class="sub">Fill out daily safety records by job, attach evidence, and keep the packet available for print or review.</p>
+          <p class="sub">Fill out daily safety records by department and job, attach evidence, and keep the packet available for print or review.</p>
         </div>
         <span class="tag sync-tag">Offline draft ready<span class="es">Borrador sin conexion</span></span>
       </div>
       ${!jobs.length ? `<div class="notice">Add a job first so safety records can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
         <div class="form-grid section-gap">
+          <label>Department<span class="es">Departamento</span><input value="${escapeHtml(area().label)}" disabled /></label>
           <label>Job site<span class="es">Sitio de trabajo</span><select id="safetyJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
           <label>Form type<span class="es">Tipo de forma</span><select id="safetyTypeSelect">${setOptions(safetyFormTypes, selectedType)}</select></label>
           <label>Date<span class="es">Fecha</span><input id="safetyDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
@@ -5496,7 +5481,7 @@ function safetyFormCard(form) {
 }
 
 function renderFieldAudits() {
-  const canSubmit = isFieldEntryMode() || ["Admin", "Management", "Quality", "Safety"].includes(state.selectedRole);
+  const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
   const audits = state.fieldAudits.filter((audit) => audit.area === state.selectedArea && (!selectedJob || audit.jobId === selectedJob.id));
   return `
@@ -5504,12 +5489,13 @@ function renderFieldAudits() {
       <div class="split">
         <div>
           <h2>${t("Field Audits", "Auditorias de campo")}</h2>
-          <p class="sub">Checklist and evidence upload by job site for client inspections, safety checks, and field accountability.</p>
+          <p class="sub">Checklist and evidence upload by department, job site, date, and inspector.</p>
         </div>
         <span class="tag sync-tag">Evidence by job<span class="es">Evidencia por trabajo</span></span>
       </div>
       ${!jobs.length ? `<div class="notice">Add a job first so audits can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
         <div class="form-grid section-gap">
+          <label>Department<span class="es">Departamento</span><input value="${escapeHtml(area().label)}" disabled /></label>
           <label>Job site<span class="es">Sitio de trabajo</span><select id="auditJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
           <label>Date<span class="es">Fecha</span><input id="auditDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
           <label>Inspector / user<span class="es">Inspector / usuario</span><input id="auditUser" value="${escapeHtml(actorName())}" /></label>
