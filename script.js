@@ -96,6 +96,118 @@ const accidentInjuryTypes = [
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
 const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
 const employeeMachineOptions = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender", "Shear", "Forklift", "Loader", "Telehandler"];
+const trainingQuestionTypes = [
+  { id: "multiple_choice", label: "Multiple choice", es: "Opcion multiple" },
+  { id: "yes_no_na", label: "Yes / No / N/A", es: "Si / No / N/A" },
+  { id: "text", label: "Written response", es: "Respuesta escrita" }
+];
+const competencyStages = [
+  ["orientation", "Orientation & General Safety", "General safety rules, PPE, visual ID system, emergency procedures", "Safety"],
+  ["hazards", "Machine-Specific Hazard & Guarding Review", "Hazards, guards, emergency stops, and lockout/tagout points", "Trainer"],
+  ["setup", "Setup & Prep", "Material staging, tooling changes, start-up, and pre-use checks", "Trainer"],
+  ["supervised", "Supervised Operation", "Production under direct supervision until the trainee is consistent", "Trainer"],
+  ["independent", "Independent Operation Evaluation", "Unassisted cycle from setup through shutdown, observed by trainer and Safety", "Trainer + Safety"],
+  ["certification", "Certification & Badge Issuance", "Final approval, employee badge, and refresher date recorded", "Safety"]
+].map(([id, title, objective, signoffBy]) => ({ id, title, objective, signoffBy }));
+const competencyTemplates = [
+  {
+    id: "bender-operator",
+    category: "Machine operator",
+    title: "Bender / Press Brake Operator Competency",
+    equipment: "Bender",
+    role: "Machine Operator",
+    description: "Covers machine parts, guarding, pinch points, tooling setup, lockout/tagout, PPE, material support, quality checks, shutdown, and final observed operation.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "What is the name of the upper moving component that applies force to bend material?", ["Die / lower tool", "Punch / upper tool", "Back gauge", "Ram plate"], "B"),
+      mc("q2", "What is the function of the die on a press brake?", ["Hold the back gauge in place", "Clamp material from the top", "Receive the material and give the bend its shape and angle", "Control ram speed"], "C"),
+      mc("q3", "What does the back gauge do?", ["Controls ram stroke speed", "Positions material for consistent bends", "Measures tonnage", "Controls crowning"], "B"),
+      mc("q4", "What should be checked on the die and punch before starting?", ["Color and brand", "Proper seating, clamps, cracks/chips, and job match", "Maximum ram speed", "Material storage only"], "B"),
+      mc("q5", "What is the primary pinch point hazard?", ["Back gauge", "Area between punch and die", "Hydraulic unit", "Side frame"], "B"),
+      mc("q6", "Before tooling changes or maintenance, what must happen?", ["Slow the ram", "Call supervisor only", "Apply lockout/tagout and verify zero energy", "Wear extra gloves only"], "C"),
+      mc("q7", "When is it acceptable to reach into the die area while powered?", ["Ram is raised", "In inch mode", "Supervisor is watching", "Never"], "D"),
+      yn("q8", "Can the operator identify guards, e-stops, LOTO points, and pinch points without help?", "Yes"),
+      textq("q9", "Trainer notes: describe the supervised work observed and any limits or corrective actions.")
+    ]
+  },
+  {
+    id: "radius-bender-operator",
+    category: "Machine operator",
+    title: "Radius Bender Operator Competency",
+    equipment: "Radius Bender",
+    role: "Machine Operator",
+    description: "Covers roll functions, radius adjustment, flat spots, material support, roll pinch points, LOTO, rated capacity, roll condition, and final observed operation.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "What are the three main rolls on a radius bender?", ["Two feed rolls and one bending roll", "Top cutting roll, bottom feed roll, side guide", "Pinch roll, pressure roll, ejector roll", "Two bending rolls and one cutting roll"], "A"),
+      mc("q2", "How is a tighter radius normally produced?", ["Raise the roll away from material", "Move the bending roll closer to the material", "Change speed only", "No setting affects radius"], "B"),
+      mc("q3", "What does a flat spot mean on a rolled piece?", ["A dent", "A smooth area", "An unbent straight section near an end", "A radius that is too tight"], "C"),
+      mc("q4", "What is the most critical hand/body safety rule?", ["Keep one hand on controls", "Hands never follow material into roll nip points", "Push material with both hands", "Do not wear gloves"], "B"),
+      mc("q5", "What is required before clearing a jam or changing tooling?", ["Stop rolls only", "Full lockout/tagout and zero energy verification", "Slowest speed", "Coworker holds e-stop"], "B"),
+      mc("q6", "How should long material be controlled?", ["Coworker holds it by hand near rolls", "Run it faster", "Use supports and clear the swing area", "Only bend short pieces"], "C"),
+      yn("q7", "Can the operator inspect the rolls, guards, support area, and emergency stops before use?", "Yes"),
+      textq("q8", "Trainer notes: document the radius checks and final observed operation.")
+    ]
+  },
+  {
+    id: "shear-line-operator",
+    category: "Machine operator",
+    title: "Shear Line Operator Competency",
+    equipment: "Shear Line",
+    role: "Machine Operator",
+    description: "Covers shear blades, hold-downs, back gauge, blade clearance, guards, hand placement, LOTO, sharp edges, stacking, and shutdown.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "How does a hydraulic shear produce the cut?", ["Upper blade descends to the fixed lower blade", "Two rotating saw blades cut", "Punch and die stamp through", "Two horizontal blades squeeze from both sides"], "A"),
+      mc("q2", "What is the purpose of hold-down clamps?", ["Guide the blade", "Secure material before and during the cut", "Measure cut length", "Return blade home"], "B"),
+      mc("q3", "What does blade clearance control?", ["Vertical blade travel", "Space to the back gauge", "Gap between upper and lower blades for material thickness", "Finger safety gap"], "C"),
+      mc("q4", "What is the most severe shear hazard?", ["Descending blade/cutting zone", "Hydraulic fluid temperature", "Material sliding", "Back gauge impact"], "A"),
+      mc("q5", "What must never happen while the blade can cycle?", ["Look at the gauge", "Stand to the side", "Place body parts in the cutting zone", "Keep both feet down"], "C"),
+      mc("q6", "If the front guard is missing or damaged, what should happen?", ["Continue slowly", "Stop, tag out, and report it", "Tape a warning", "Have someone watch"], "B"),
+      yn("q7", "Can the operator explain safe helper positioning and who activates the cut control?", "Yes"),
+      textq("q8", "Trainer notes: document observed cuts, guard verification, and stacking/cleanup.")
+    ]
+  },
+  ...["Double Bender", "Automatic Bender", "Spiral Bender"].map((equipment) => ({
+    id: equipment.toLowerCase().replaceAll(" ", "-") + "-operator",
+    category: "Machine operator",
+    title: `${equipment} Operator Competency`,
+    equipment,
+    role: "Machine Operator",
+    description: `Uses the standard six-stage competency plan for ${equipment}. Safety can add the exact company questions and answer key before assigning the training.`,
+    rubric: competencyStages,
+    questions: [
+      yn("q1", `Has the trainee reviewed the specific hazards, guards, e-stops, and LOTO points for the ${equipment}?`, "Yes"),
+      yn("q2", `Can the trainee complete setup and pre-use inspection on the ${equipment} without prompting?`, "Yes"),
+      yn("q3", `Can the trainee complete a supervised operating cycle on the ${equipment} safely and to quality requirements?`, "Yes"),
+      textq("q4", "Trainer notes: list hazards, setup items, supervised cycles, and any restrictions.")
+    ]
+  })),
+  {
+    id: "rigging-safety",
+    category: "Safety topic",
+    title: "Rigging Competency",
+    equipment: "Rigging",
+    role: "All field/shop employees",
+    description: "Documents practical rigging knowledge, inspection habits, signaling awareness, load control, and Safety accreditation.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Task-Specific") })),
+    questions: [
+      yn("q1", "Can the employee inspect rigging before use and remove damaged rigging from service?", "Yes"),
+      yn("q2", "Can the employee explain load control, pinch points, and communication before a lift?", "Yes"),
+      textq("q3", "Evaluator notes: describe the practical demonstration and any restrictions.")
+    ]
+  },
+  {
+    id: "custom-competency",
+    category: "Custom",
+    title: "Custom Competency / Training",
+    equipment: "General",
+    role: "All employees",
+    description: "Blank template for new company training, customer-required training, or future equipment.",
+    rubric: competencyStages,
+    questions: defaultTrainingQuestions()
+  }
+];
 const reimbursementCategories = ["Fuel", "Hotel", "Meals", "Supplies", "Tools", "Parking/Tolls", "Mileage", "Other"];
 const reimbursementStatuses = ["Pending", "Approved", "Denied", "Paid"];
 const qcBendLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "K"];
@@ -106,6 +218,19 @@ const rebarShapeOptions = [
   "78", "79", "710", "711", "712", "5A", "6A", "7A", "41", "42", "43", "44",
   "45", "46", "37A", "47", "99 SP", "48", "Other"
 ];
+
+function mc(id, text, options, answer) {
+  return { id, type: "multiple_choice", text, options, answer };
+}
+
+function yn(id, text, answer = "Yes") {
+  return { id, type: "yes_no_na", text, options: ["Yes", "No", "N/A", ""], answer };
+}
+
+function textq(id, text) {
+  return { id, type: "text", text, options: ["", "", "", ""], answer: "" };
+}
+
 const fieldAuditChecks = [
   ["ppe", "PPE in use", "EPP en uso"],
   ["jha", "JHA available", "JHA disponible"],
@@ -954,6 +1079,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedSafetyJob = next.selectedSafetyJob || "";
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
+  next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
@@ -967,6 +1093,11 @@ function upgradeState(next, resetToCurrentWeek = false) {
     files: course.files || [],
     questions: course.questions?.length ? course.questions : defaultTrainingQuestions(),
     passingScore: Number(course.passingScore) || 80,
+    trainingType: course.trainingType || "Training",
+    templateId: course.templateId || "",
+    equipment: course.equipment || "",
+    role: course.role || "",
+    rubric: course.rubric?.length ? course.rubric : [],
     area: course.area || next.selectedArea || "rebarInstall"
   }));
   next.trainingResults = (next.trainingResults || []).map((result) => ({
@@ -2513,26 +2644,33 @@ function renderActiveTab() {
 
 function defaultTrainingQuestions() {
   return [
-    { id: "q1", text: "", options: ["", "", "", ""], answer: "A" },
-    { id: "q2", text: "", options: ["", "", "", ""], answer: "A" },
-    { id: "q3", text: "", options: ["", "", "", ""], answer: "A" }
+    { id: "q1", type: "multiple_choice", text: "", options: ["", "", "", ""], answer: "A" },
+    { id: "q2", type: "yes_no_na", text: "", options: ["Yes", "No", "N/A", ""], answer: "Yes" },
+    { id: "q3", type: "text", text: "", options: ["", "", "", ""], answer: "" }
   ];
 }
 
 function normalizeTrainingQuestion(question = {}) {
   const legacyYesNo = question.answer === "Yes" || question.answer === "No";
+  const type = question.type || (legacyYesNo ? "yes_no_na" : "multiple_choice");
   const options = question.options?.length
     ? question.options.slice(0, 4)
-    : legacyYesNo
+    : type === "yes_no_na"
       ? ["Yes", "No", "", ""]
       : ["", "", "", ""];
   while (options.length < 4) options.push("");
-  const answer = legacyYesNo ? (question.answer === "No" ? "B" : "A") : String(question.answer || "A").toUpperCase();
+  if (type === "yes_no_na") {
+    options[0] = "Yes";
+    options[1] = "No";
+    options[2] = "N/A";
+  }
+  const answer = type === "text" ? "" : (legacyYesNo ? question.answer : String(question.answer || "A").toUpperCase());
   return {
     id: question.id,
+    type,
     text: question.text || "",
     options,
-    answer: ["A", "B", "C", "D"].includes(answer) ? answer : "A"
+    answer: type === "yes_no_na" ? (["Yes", "No", "N/A"].includes(answer) ? answer : "Yes") : (["A", "B", "C", "D"].includes(answer) ? answer : "A")
   };
 }
 
@@ -2546,27 +2684,39 @@ function renderTraining() {
   const jobs = allJobsForArea();
   const manageResources = canManageTrainingResources();
   const reviewResults = canReviewTrainingResults();
+  const selectedTemplate = competencyTemplates.find((template) => template.id === state.selectedTrainingTemplate) || competencyTemplates[0];
   return `
     <section class="panel training-panel">
       <div class="split">
         <div>
-          <h2>${t("Training", "Capacitacion")}</h2>
-          <p class="sub">Upload training material, build a short quiz, and record who completed it. Courses can also be opened with a no-login training link.</p>
+          <h2>${t("Training & Competency", "Capacitacion y competencia")}</h2>
+          <p class="sub">Choose a machine or topic template, attach the training material, customize the questions, and keep the signed competency record.</p>
         </div>
         <span class="tag sync-tag">Offline capable<span class="es">Funciona sin conexion</span></span>
       </div>
       ${manageResources ? `
         <div class="training-builder section-gap">
-          <h3>Create training<span class="es">Crear capacitacion</span></h3>
+          <h3>Create training / certification<span class="es">Crear capacitacion / certificacion</span></h3>
+          <div class="template-picker">
+            <label>Competency template<span class="es">Plantilla de competencia</span><select id="trainingTemplate">${setOptions(competencyTemplates, selectedTemplate?.id || "", (template) => `${template.category} - ${template.title}`, (template) => template.id)}</select></label>
+            <button class="secondary-action" id="loadTrainingTemplate" type="button">Load template<span class="es">Cargar plantilla</span></button>
+          </div>
           <div class="form-grid">
-            <label>Training title<span class="es">Titulo</span><input id="trainingTitle" placeholder="Fall protection, heat illness, rigging basics..." /></label>
+            <label>Training title<span class="es">Titulo</span><input id="trainingTitle" value="${escapeHtml(selectedTemplate?.title || "")}" placeholder="Fall protection, heat illness, rigging basics..." /></label>
+            <label>Machine / topic<span class="es">Maquina / tema</span><input id="trainingEquipment" value="${escapeHtml(selectedTemplate?.equipment || "")}" placeholder="Bender, rigging, forklift..." /></label>
+            <label>Training type<span class="es">Tipo</span><select id="trainingType">${setOptions(["Machine competency", "Safety training", "Company policy", "Client required", "Custom"], selectedTemplate?.category === "Machine operator" ? "Machine competency" : "Safety training")}</select></label>
+            <label>Role / audience<span class="es">Rol / audiencia</span><input id="trainingRole" value="${escapeHtml(selectedTemplate?.role || "")}" placeholder="Operator, helper, all employees..." /></label>
             <label>Job / site<span class="es">Trabajo / sitio</span><select id="trainingJob">${setOptions([{ id: "", name: "General / all jobs" }, ...jobs], "", (job) => job.name, (job) => job.id)}</select></label>
             <label>Passing score %<span class="es">Calificacion minima %</span><input id="trainingPassingScore" type="number" min="0" max="100" value="80" /></label>
             <label>Training files<span class="es">Archivos de capacitacion</span><input id="trainingFiles" type="file" accept=".pdf,.ppt,.pptx,.doc,.docx,.mp4,.mov,.png,.jpg,.jpeg,.webp" multiple /></label>
-            <label class="wide-field">Description / instructions<span class="es">Descripcion / instrucciones</span><textarea id="trainingDescription" placeholder="What the worker should review before answering the quiz"></textarea></label>
+            <label class="wide-field">Description / instructions<span class="es">Descripcion / instrucciones</span><textarea id="trainingDescription" placeholder="What the worker should review before answering the quiz">${escapeHtml(selectedTemplate?.description || "")}</textarea></label>
+          </div>
+          <div class="competency-rubric-preview">
+            <h4>Fixed competency rubric<span class="es">Rubrica fija de competencia</span></h4>
+            ${renderCompetencyRubric(selectedTemplate?.rubric || [])}
           </div>
           <div class="training-question-list">
-            ${defaultTrainingQuestions().map(trainingQuestionBuilderRow).join("")}
+            ${(selectedTemplate?.questions || defaultTrainingQuestions()).map(trainingQuestionBuilderRow).join("")}
           </div>
           <div class="action-row">
             <button class="secondary-action" id="addTrainingQuestion" type="button">${t("Add question", "Agregar pregunta")}</button>
@@ -2585,18 +2735,39 @@ function renderTraining() {
   `;
 }
 
+function renderCompetencyRubric(rubric = []) {
+  return `
+    <div class="table-wrap compact-table">
+      <table>
+        <thead><tr><th>Stage</th><th>Objective</th><th>Sign-off</th></tr></thead>
+        <tbody>
+          ${rubric.length ? rubric.map((stage, index) => `
+            <tr>
+              <td><strong>${index + 1}. ${escapeHtml(stage.title)}</strong></td>
+              <td>${escapeHtml(stage.objective)}</td>
+              <td>${escapeHtml(stage.signoffBy)}</td>
+            </tr>
+          `).join("") : `<tr><td colspan="3">No rubric stages yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function trainingQuestionBuilderRow(question, index) {
   const normalized = normalizeTrainingQuestion(question);
   const letters = ["A", "B", "C", "D"];
+  const showOptions = normalized.type === "multiple_choice";
   return `
     <div class="training-question-row">
-      <label class="wide-field">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(normalized.text)}" placeholder="Write the question" /></label>
-      <div class="training-answer-grid">
+      <label>Answer type<span class="es">Tipo de respuesta</span><select data-training-question="type">${setOptions(trainingQuestionTypes, normalized.type, (type) => type.label, (type) => type.id)}</select></label>
+      <label class="wide-field">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(normalized.text)}" placeholder="Write the question or observation item" /></label>
+      <div class="training-answer-grid" ${showOptions ? "" : "hidden"}>
         ${letters.map((letter, optionIndex) => `
           <label>${letter}<span class="es">Opcion ${letter}</span><input data-training-option="${optionIndex}" value="${escapeHtml(normalized.options[optionIndex] || "")}" placeholder="Answer ${letter}" /></label>
         `).join("")}
       </div>
-      <label>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(letters, normalized.answer)}</select></label>
+      <label data-training-correct-wrap ${normalized.type === "text" ? "hidden" : ""}>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(normalized.type === "yes_no_na" ? ["Yes", "No", "N/A"] : letters, normalized.answer)}</select></label>
     </div>
   `;
 }
@@ -2607,9 +2778,10 @@ function trainingCourseCard(course) {
   return `
     <article class="document-card training-card">
       <div>
-        <span class="tag">${escapeHtml(course.jobName || "General")}</span>
+        <span class="tag">${escapeHtml(course.trainingType || "Training")}</span>
         <h3>${escapeHtml(course.title)}</h3>
-        <p class="sub">${escapeHtml(course.description || "No instructions")} · ${course.files?.length || 0} file(s) · ${resultCount} result(s)</p>
+        <p class="sub">${escapeHtml(course.equipment || course.jobName || "General")} · ${escapeHtml(course.role || "All employees")} · ${course.files?.length || 0} file(s) · ${resultCount} result(s)</p>
+        <p class="sub">${escapeHtml(course.description || "No instructions")}</p>
         <p class="sub">Training link: <code>${escapeHtml(shareUrl)}</code></p>
       </div>
       <div class="document-actions">
@@ -2645,21 +2817,23 @@ function renderTrainingRunner(course, publicMode) {
         </div>
         <span class="tag">${course.passingScore || 80}% pass<span class="es">minimo</span></span>
       </div>
+      ${course.rubric?.length ? `
+        <div class="competency-rubric-preview">
+          <h4>Competency sign-off stages<span class="es">Etapas de aprobacion</span></h4>
+          ${renderCompetencyRubric(course.rubric)}
+        </div>
+      ` : ""}
       ${course.files?.length ? `<div class="attachment-list">${course.files.map((file) => trainingAttachmentRow(course.id, file)).join("")}</div>` : `<div class="notice">No files attached yet.<span class="es">No hay archivos todavia.</span></div>`}
       <div class="form-grid section-gap">
         <label>Employee name<span class="es">Nombre del empleado</span><input id="trainingEmployeeName" placeholder="Full name" /></label>
         <label>Signature / initials<span class="es">Firma / iniciales</span><input id="trainingSignature" placeholder="Type name or initials" /></label>
       </div>
+      ${!publicMode && course.rubric?.length ? renderCompetencyStageSignoffs(course.rubric) : ""}
       <div class="training-quiz">
         ${questions.length ? questions.map((question, index) => `
           <label class="audit-choice">
             <span>${index + 1}. ${escapeHtml(question.text)}<span class="es">Respuesta</span></span>
-            <select data-training-answer="${question.id}">
-              <option value="">Choose answer</option>
-              ${setOptions(question.options
-                .map((option, optionIndex) => ({ letter: ["A", "B", "C", "D"][optionIndex], label: option }))
-                .filter((option) => option.label?.trim()), "", (option) => `${option.letter}. ${escapeHtml(option.label)}`, (option) => option.letter)}
-            </select>
+            ${renderTrainingAnswerControl(question)}
           </label>
         `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
       </div>
@@ -2667,6 +2841,43 @@ function renderTrainingRunner(course, publicMode) {
         <button class="primary-action" id="submitTrainingResult" data-course-id="${course.id}" data-public-training="${publicMode ? "true" : "false"}" type="button" ${questions.length ? "" : "disabled"}>${t("Submit training", "Enviar capacitacion")}</button>
       </div>
     </div>
+  `;
+}
+
+function renderCompetencyStageSignoffs(rubric = []) {
+  return `
+    <div class="competency-signoff-grid">
+      <h4>Evaluator stage sign-off<span class="es">Aprobacion por etapa</span></h4>
+      ${rubric.map((stage, index) => `
+        <div class="competency-stage-row">
+          <div>
+            <strong>${index + 1}. ${escapeHtml(stage.title)}</strong>
+            <span class="sub">${escapeHtml(stage.objective)} · ${escapeHtml(stage.signoffBy)}</span>
+          </div>
+          <select data-competency-stage="${escapeHtml(stage.id)}">
+            ${setOptions(["Not reviewed", "Complete", "Needs review", "N/A"], "Not reviewed")}
+          </select>
+          <input data-competency-stage-note="${escapeHtml(stage.id)}" placeholder="Stage notes" />
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderTrainingAnswerControl(question) {
+  if (question.type === "text") {
+    return `<textarea data-training-answer="${question.id}" placeholder="Write response or evaluator notes"></textarea>`;
+  }
+  if (question.type === "yes_no_na") {
+    return `<select data-training-answer="${question.id}"><option value="">Choose answer</option>${setOptions(["Yes", "No", "N/A"], "")}</select>`;
+  }
+  return `
+    <select data-training-answer="${question.id}">
+      <option value="">Choose answer</option>
+      ${setOptions(question.options
+        .map((option, optionIndex) => ({ letter: ["A", "B", "C", "D"][optionIndex], label: option }))
+        .filter((option) => option.label?.trim()), "", (option) => `${option.letter}. ${escapeHtml(option.label)}`, (option) => option.letter)}
+    </select>
   `;
 }
 
@@ -2683,19 +2894,20 @@ function renderTrainingResults() {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Employee</th><th>Course</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Employee</th><th>Course</th><th>Machine / topic</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
           <tbody>
             ${results.length ? results.slice(0, 50).map((result) => `
               <tr>
                 <td>${escapeHtml(result.employeeName)}</td>
                 <td>${escapeHtml(result.courseTitle)}</td>
+                <td>${escapeHtml(result.equipment || "")}</td>
                 <td>${result.score}%</td>
                 <td>${result.passed ? "Passed" : "Needs review"}</td>
                 <td>${result.accredited ? `Accredited by ${escapeHtml(result.accreditedBy || "Safety")}<span class="es">Acreditado</span>` : `Pending<span class="es">Pendiente</span>`}</td>
                 <td>${escapeHtml(result.completedAt)}</td>
                 <td>${canAccreditTraining() && !result.accredited ? `<button class="primary-action table-action" data-accredit-training="${result.id}" type="button">Accredit<span class="es">Acreditar</span></button>` : ""}</td>
               </tr>
-            `).join("") : `<tr><td colspan="7">No training results yet.</td></tr>`}
+            `).join("") : `<tr><td colspan="8">No training results yet.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -2724,14 +2936,21 @@ function trainingShareUrl(courseId) {
 
 function collectTrainingQuestions() {
   return Array.from(document.querySelectorAll(".training-question-row"))
-    .map((row, index) => ({
-      id: `q${index + 1}`,
-      text: row.querySelector('[data-training-question="text"]')?.value.trim() || "",
-      options: Array.from(row.querySelectorAll("[data-training-option]"))
+    .map((row, index) => {
+      const type = row.querySelector('[data-training-question="type"]')?.value || "multiple_choice";
+      const options = type === "yes_no_na"
+        ? ["Yes", "No", "N/A", ""]
+        : Array.from(row.querySelectorAll("[data-training-option]"))
         .sort((a, b) => Number(a.dataset.trainingOption) - Number(b.dataset.trainingOption))
-        .map((input) => input.value.trim()),
-      answer: row.querySelector('[data-training-question="answer"]')?.value || "A"
-    }))
+        .map((input) => input.value.trim());
+      return {
+        id: `q${index + 1}`,
+        type,
+        text: row.querySelector('[data-training-question="text"]')?.value.trim() || "",
+        options,
+        answer: type === "text" ? "" : (row.querySelector('[data-training-question="answer"]')?.value || (type === "yes_no_na" ? "Yes" : "A"))
+      };
+    })
     .filter((question) => question.text);
 }
 
@@ -2739,7 +2958,25 @@ function addTrainingQuestionRow() {
   const list = document.querySelector(".training-question-list");
   if (!list) return;
   const count = list.querySelectorAll(".training-question-row").length;
-  list.insertAdjacentHTML("beforeend", trainingQuestionBuilderRow({ id: `q${count + 1}`, text: "", answer: "Yes" }, count));
+  list.insertAdjacentHTML("beforeend", trainingQuestionBuilderRow({ id: `q${count + 1}`, type: "multiple_choice", text: "", answer: "A" }, count));
+}
+
+function loadTrainingTemplate() {
+  state.selectedTrainingTemplate = $("trainingTemplate")?.value || competencyTemplates[0]?.id || "";
+  saveState();
+  render();
+}
+
+function updateTrainingQuestionType(row) {
+  const type = row.querySelector('[data-training-question="type"]')?.value || "multiple_choice";
+  const answerSelect = row.querySelector('[data-training-question="answer"]');
+  const optionsGrid = row.querySelector(".training-answer-grid");
+  const correctWrap = row.querySelector("[data-training-correct-wrap]");
+  if (optionsGrid) optionsGrid.hidden = type !== "multiple_choice";
+  if (correctWrap) correctWrap.hidden = type === "text";
+  if (!answerSelect) return;
+  const choices = type === "yes_no_na" ? ["Yes", "No", "N/A"] : ["A", "B", "C", "D"];
+  answerSelect.innerHTML = setOptions(choices, choices[0]);
 }
 
 async function saveTrainingCourse() {
@@ -2757,11 +2994,12 @@ async function saveTrainingCourse() {
     showToast("Add at least one quiz question");
     return;
   }
-  if (questions.some((question) => question.options.filter(Boolean).length < 2)) {
+  if (questions.some((question) => question.type === "multiple_choice" && question.options.filter(Boolean).length < 2)) {
     showToast("Each question needs at least two answer choices");
     return;
   }
   if (questions.some((question) => {
+    if (question.type !== "multiple_choice") return false;
     const correctIndex = ["A", "B", "C", "D"].indexOf(question.answer);
     return correctIndex < 0 || !question.options[correctIndex];
   })) {
@@ -2769,16 +3007,22 @@ async function saveTrainingCourse() {
     return;
   }
   const job = jobById($("trainingJob")?.value || "");
+  const template = competencyTemplates.find((entry) => entry.id === ($("trainingTemplate")?.value || state.selectedTrainingTemplate)) || null;
   const files = await filesToStoredAttachments(Array.from($("trainingFiles")?.files || []));
   const course = {
     id: `training-${Date.now()}`,
     area: state.selectedArea || "all",
+    templateId: template?.id || "",
+    trainingType: $("trainingType")?.value || "Training",
+    equipment: $("trainingEquipment")?.value.trim() || template?.equipment || "",
+    role: $("trainingRole")?.value.trim() || template?.role || "",
     title,
     description: $("trainingDescription")?.value.trim() || "",
     jobId: job?.id || "",
     jobName: job?.name || "General",
     passingScore: Number($("trainingPassingScore")?.value) || 80,
     files,
+    rubric: template?.rubric || [],
     questions,
     createdBy: actorName(),
     createdAt: timestamp()
@@ -2836,26 +3080,36 @@ function submitTrainingResult() {
     return;
   }
   const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
+  const stageResponses = Array.from(document.querySelectorAll("[data-competency-stage]")).map((select) => ({
+    id: select.dataset.competencyStage,
+    status: select.value,
+    note: document.querySelector(`[data-competency-stage-note="${select.dataset.competencyStage}"]`)?.value.trim() || ""
+  }));
   const answers = questions.map((question) => {
-    const answer = document.querySelector(`[data-training-answer="${question.id}"]`)?.value || "";
+    const control = document.querySelector(`[data-training-answer="${question.id}"]`);
+    const answer = control?.value || "";
     const correctIndex = ["A", "B", "C", "D"].indexOf(question.answer);
     const answerIndex = ["A", "B", "C", "D"].indexOf(answer);
+    const gradable = question.type !== "text";
     return {
       id: question.id,
+      type: question.type,
       question: question.text,
       answer,
-      answerText: answerIndex >= 0 ? question.options[answerIndex] || "" : "",
+      answerText: question.type === "text" ? answer : (answerIndex >= 0 ? question.options[answerIndex] || "" : answer),
       correctAnswer: question.answer,
-      correctAnswerText: correctIndex >= 0 ? question.options[correctIndex] || "" : "",
-      correct: answer === question.answer
+      correctAnswerText: question.type === "yes_no_na" ? question.answer : (correctIndex >= 0 ? question.options[correctIndex] || "" : ""),
+      gradable,
+      correct: gradable ? answer === question.answer : null
     };
   });
   if (answers.some((answer) => !answer.answer)) {
     showToast("Answer every question before submitting");
     return;
   }
-  const correctCount = answers.filter((answer) => answer.correct).length;
-  const score = questions.length ? Math.round((correctCount / questions.length) * 100) : 0;
+  const gradableAnswers = answers.filter((answer) => answer.gradable);
+  const correctCount = gradableAnswers.filter((answer) => answer.correct).length;
+  const score = gradableAnswers.length ? Math.round((correctCount / gradableAnswers.length) * 100) : 0;
   const passed = score >= (Number(course.passingScore) || 80);
   const result = {
     id: `training-result-${Date.now()}`,
@@ -2863,12 +3117,15 @@ function submitTrainingResult() {
     courseTitle: course.title,
     employeeName,
     signature,
+    equipment: course.equipment || "",
+    role: course.role || "",
     score,
-    passed,
+    passed: gradableAnswers.length ? passed : false,
     accredited: false,
     accreditedBy: "",
     accreditedAt: "",
     answers,
+    stageResponses,
     completedAt: timestamp(),
     createdBy: button?.dataset.publicTraining === "true" ? employeeName : actorName()
   };
@@ -2882,9 +3139,14 @@ function submitTrainingResult() {
 
 function bindTrainingEvents(publicMode = false) {
   if ($("addTrainingQuestion")) $("addTrainingQuestion").addEventListener("click", addTrainingQuestionRow);
+  if ($("loadTrainingTemplate")) $("loadTrainingTemplate").addEventListener("click", loadTrainingTemplate);
+  if ($("trainingTemplate")) $("trainingTemplate").addEventListener("change", loadTrainingTemplate);
   if ($("saveTrainingCourse")) $("saveTrainingCourse").addEventListener("click", saveTrainingCourse);
   if ($("submitTrainingResult")) $("submitTrainingResult").addEventListener("click", submitTrainingResult);
   if ($("exportTrainingCsv")) $("exportTrainingCsv").addEventListener("click", exportTrainingCsv);
+  document.querySelectorAll('[data-training-question="type"]').forEach((select) => {
+    select.addEventListener("change", () => updateTrainingQuestionType(select.closest(".training-question-row")));
+  });
   document.querySelectorAll("[data-select-training]").forEach((button) => {
     button.addEventListener("click", () => selectTrainingCourse(button.dataset.selectTraining));
   });
@@ -6732,6 +6994,8 @@ function exportTrainingCsv() {
   const headers = [
     "Employee",
     "Course",
+    "Machine / topic",
+    "Audience",
     "Score",
     "Passed",
     "Accredited",
@@ -6740,16 +7004,23 @@ function exportTrainingCsv() {
     "Completed at",
     "Signature",
     "Created by",
+    "Stage sign-offs",
     "Answers"
   ];
   const rows = (state.trainingResults || []).map((result) => {
+    const stages = (result.stageResponses || []).map((stage) => {
+      const note = stage.note ? ` - ${stage.note}` : "";
+      return `${stage.id}: ${stage.status}${note}`;
+    }).join(" | ");
     const answers = (result.answers || []).map((answer) => {
-      const expected = answer.correct ? "" : ` (expected: ${answer.correctAnswer || "not set"})`;
-      return `${answer.question}: ${answer.answer}${expected}`;
+      const expected = answer.gradable && !answer.correct ? ` (expected: ${answer.correctAnswer || "not set"})` : "";
+      return `${answer.question}: ${answer.answerText || answer.answer}${expected}`;
     }).join(" | ");
     return [
       result.employeeName,
       result.courseTitle,
+      result.equipment || "",
+      result.role || "",
       result.score,
       result.passed ? "Yes" : "No",
       result.accredited ? "Yes" : "No",
@@ -6758,6 +7029,7 @@ function exportTrainingCsv() {
       result.completedAt || "",
       result.signature || "",
       result.createdBy || "",
+      stages,
       answers
     ];
   });

@@ -1104,6 +1104,49 @@ textarea {
   padding: 14px;
 }
 
+.template-picker {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.competency-rubric-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.competency-rubric-preview h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.competency-signoff-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.competency-signoff-grid h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.competency-stage-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 170px minmax(180px, 0.8fr);
+  gap: 10px;
+  align-items: center;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.competency-stage-row .sub {
+  display: block;
+  margin-top: 3px;
+}
+
 .training-question-list,
 .training-quiz,
 .training-library {
@@ -1113,13 +1156,13 @@ textarea {
 
 .training-question-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: 190px minmax(0, 1fr) 180px;
   gap: 12px;
   align-items: end;
 }
 
 .training-question-row .wide-field {
-  grid-column: 1 / -1;
+  grid-column: span 1;
 }
 
 .training-answer-grid {
@@ -1127,6 +1170,11 @@ textarea {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.training-answer-grid[hidden],
+[data-training-correct-wrap][hidden] {
+  display: none;
 }
 
 .training-card code {
@@ -1226,6 +1274,11 @@ textarea {
 
 .audit-choice select {
   width: 100%;
+}
+
+.audit-choice textarea {
+  min-height: 84px;
+  resize: vertical;
 }
 
 .audit-result-list {
@@ -2443,6 +2496,8 @@ tr:last-child td {
 
   .document-grid,
   .document-card,
+  .template-picker,
+  .competency-stage-row,
   .training-question-row {
     grid-template-columns: 1fr;
   }
