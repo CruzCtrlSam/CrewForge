@@ -198,6 +198,138 @@ const competencyTemplates = [
     ]
   },
   {
+    id: "forklift-operator",
+    category: "Equipment operator",
+    title: "Forklift Operator Competency",
+    equipment: "Forklift",
+    role: "Authorized forklift operators",
+    description: "Covers powered industrial truck operation, inspection, load stability, pedestrian traffic, ramps, workplace conditions, practical evaluation, refresher triggers, and certification recordkeeping.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "What must happen before an employee operates a forklift independently?", ["They watched another operator once", "They completed formal instruction, practical training, and workplace evaluation", "They have a driver's license", "They signed the daily timesheet"], "B"),
+      mc("q2", "What should be checked during a pre-use forklift inspection?", ["Only fuel level", "Controls, brakes, steering, horn, tires, forks, leaks, warning devices, and visible damage", "Only the seat belt", "Only the load chart"], "B"),
+      mc("q3", "What is the safest way to travel with a load?", ["Load high for visibility", "Load low and stable, with clear view or traveling in reverse when needed", "Fast enough to avoid pedestrians", "Forks raised above waist height"], "B"),
+      mc("q4", "When is refresher training or re-evaluation needed?", ["Never after initial training", "Only every 10 years", "After unsafe operation, accident/near miss, different truck type, or workplace change", "Only when the operator asks"], "C"),
+      yn("q5", "Can the trainee explain load stability, ramps/slopes, pedestrians, and site-specific hazards?", "Yes"),
+      textq("q6", "Evaluator notes: document practical driving, load handling, inspection, restrictions, and next evaluation date.")
+    ]
+  },
+  {
+    id: "crane-operator",
+    category: "Equipment operator",
+    title: "Crane Operator Competency",
+    equipment: "Crane",
+    role: "Crane operators / operators in training",
+    description: "Covers equipment-specific safe operation, load/capacity information, power line hazards, ground/support conditions, operational aids, assigned hoisting activities, and documented evaluation.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "What does crane operator competency need to show?", ["Only that the operator has seniority", "Safe operation knowledge, ability to recognize and avert risk, and ability to perform assigned hoisting work", "Only that a spotter is present", "Only that the crane started"], "B"),
+      mc("q2", "What information must an operator understand before a lift?", ["Load/capacity information and the crane configuration", "Only the weather", "Only the rigging color", "Only the delivery ticket"], "A"),
+      mc("q3", "What hazard requires special planning and procedures?", ["Fresh paint", "Power line contact", "Lunch breaks", "A clean windshield"], "B"),
+      mc("q4", "What should be considered about the crane setup area?", ["Ground/support conditions, site hazards, and site access", "Only where parking is easiest", "Only where the load starts", "Only where the crew is standing"], "A"),
+      yn("q5", "Has the evaluator confirmed this operator is qualified for this crane type/configuration and assigned work?", "Yes"),
+      textq("q6", "Evaluator notes: list crane type, capacity/configuration, observed hoisting activity, limitations, and required certification details.")
+    ]
+  },
+  {
+    id: "signal-person",
+    category: "Equipment support",
+    title: "Crane Signal Person Qualification",
+    equipment: "Crane signals",
+    role: "Signal persons",
+    description: "Covers hand/radio signals, signal application, crane limitations, swing/stopping dynamics, boom deflection, practical demonstration, documentation, and retraining if performance shows a gap.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Task-Specific") })),
+    questions: [
+      mc("q1", "What must a signal person know and understand?", ["Only the operator's name", "The type of signals used and how to apply them correctly", "Only the load weight", "Only where the truck is parked"], "B"),
+      mc("q2", "What crane behavior should a signal person understand?", ["Swinging and stopping loads and boom deflection", "Paint color", "Fuel brand", "Office paperwork"], "A"),
+      mc("q3", "How should signal person qualification be confirmed?", ["A supervisor guesses", "Oral/written test plus practical test by a qualified evaluator", "The employee says they know it", "Only by attendance"], "B"),
+      yn("q4", "Does the documentation identify which signal types the employee is qualified to use?", "Yes"),
+      textq("q5", "Evaluator notes: document hand signals, radio signals, practical test, and any limits.")
+    ]
+  },
+  {
+    id: "aerial-lift-operator",
+    category: "Equipment operator",
+    title: "Aerial Lift Operator Competency",
+    equipment: "Aerial lift / boom lift / scissor lift",
+    role: "Authorized lift operators",
+    description: "Covers fall, electrical, struck-by, falling object, tip-over, ejection, load capacity, pre-start inspections, manufacturer instructions, worksite hazards, PPE, and practical demonstration.",
+    rubric: competencyStages,
+    questions: [
+      mc("q1", "Who may operate an aerial lift?", ["Anyone on the crew", "Only trained and authorized workers", "Only the newest employee", "Anyone with a harness"], "B"),
+      mc("q2", "What hazards must the operator recognize?", ["Fall, electrical, struck-by, falling object, tip-over, ejection, and entanglement hazards", "Only bad weather", "Only vehicle traffic", "Only sharp edges"], "A"),
+      mc("q3", "What must be checked before operating the lift?", ["Pre-start inspection, controls, tires/wheels, leaks, alarms, emergency controls, PPE, and manufacturer requirements", "Only the battery", "Only the platform gate", "Only the paint condition"], "A"),
+      mc("q4", "When is retraining appropriate?", ["After an incident, changed hazards, different lift type, or improper operation", "Never", "Only every 20 years", "Only after promotion"], "A"),
+      yn("q5", "Can the trainee demonstrate safe setup, travel, elevation, lowering, and emergency controls?", "Yes"),
+      textq("q6", "Evaluator notes: document lift type, worksite conditions, practical demonstration, and restrictions.")
+    ]
+  },
+  {
+    id: "machine-guarding-loto",
+    category: "Safety topic",
+    title: "Machine Guarding and Lockout/Tagout",
+    equipment: "Machine guarding / LOTO",
+    role: "Machine operators, helpers, maintenance, supervisors",
+    description: "Covers point-of-operation hazards, ingoing nip points, rotating parts, guards, danger zones, energy sources, authorized/affected employee roles, lock/tag limitations, and retraining triggers.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Task-Specific") })),
+    questions: [
+      mc("q1", "What is the point of operation?", ["Where work is performed on the material", "The break room", "The electrical panel only", "The parking area"], "A"),
+      mc("q2", "What hazards should guarding protect against?", ["Point of operation, nip points, rotating parts, flying chips, and sparks", "Only dust", "Only noise", "Only housekeeping"], "A"),
+      mc("q3", "What must authorized employees understand for lockout/tagout?", ["Energy sources, magnitude, isolation methods, and control procedures", "Only where locks are stored", "Only machine color", "Only production rates"], "A"),
+      mc("q4", "What is true about tags?", ["They are warning devices and do not provide physical restraint like locks", "They replace all locks", "They may be ignored", "They are decorative"], "A"),
+      yn("q5", "Can the employee identify guards, danger zones, energy sources, and when LOTO is required?", "Yes"),
+      textq("q6", "Evaluator notes: document machines reviewed, energy sources, practical demonstration, and retraining needs.")
+    ]
+  },
+  {
+    id: "fall-protection",
+    category: "Safety topic",
+    title: "Fall Protection Training",
+    equipment: "Fall protection",
+    role: "Employees exposed to fall hazards",
+    description: "Covers fall hazard recognition, correct use/inspection of fall protection systems, employee roles, controlled access/warning systems when used, material handling, overhead protection, certification record, and retraining triggers.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Task-Specific") })),
+    questions: [
+      mc("q1", "What is the first thing fall protection training should help employees do?", ["Recognize fall hazards", "Work faster", "Avoid paperwork", "Choose lunch area"], "A"),
+      mc("q2", "What must employees understand about fall protection systems?", ["Correct use, inspection, maintenance, disassembly, and limitations", "Only the brand name", "Only the color", "Only storage location"], "A"),
+      mc("q3", "When is retraining needed?", ["When workplace or equipment changes make prior training obsolete, or knowledge/use is inadequate", "Never", "Only when a new year starts", "Only after payroll asks"], "A"),
+      yn("q4", "Can the employee inspect and explain the fall protection equipment used on this job/site?", "Yes"),
+      textq("q5", "Evaluator notes: document systems used, hazards reviewed, practical demonstration, and restrictions.")
+    ]
+  },
+  {
+    id: "heat-illness",
+    category: "Safety topic",
+    title: "Heat Illness Prevention",
+    equipment: "Heat exposure",
+    role: "All employees / supervisors",
+    description: "Covers heat illness signs and symptoms, first aid, emergency response, acclimatization, personal risk factors, hydration, electrolyte replacement, rest breaks, shade/cooling areas, and supervisor response.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Topic Review") })),
+    questions: [
+      mc("q1", "What should workers be trained to recognize during hot work?", ["Signs and symptoms of heat-related illness", "Only production goals", "Only lunch schedule", "Only wind speed"], "A"),
+      mc("q2", "What should happen when a worker shows possible heat illness symptoms?", ["Provide first aid immediately and contact emergency help when needed", "Wait until the end of shift", "Send them to work alone", "Ignore it if they drank water"], "A"),
+      mc("q3", "What helps prevent heat illness?", ["Water, rest, shade/cooling, acclimatization, and work/rest planning", "Skipping breaks", "Only drinking at lunch", "Wearing extra layers"], "A"),
+      yn("q4", "Can the employee explain where water, rest, shade/cooling, and emergency help are available?", "Yes"),
+      textq("q5", "Trainer notes: document site heat controls, acclimatization plan, and supervisor responsibilities.")
+    ]
+  },
+  {
+    id: "fire-extinguisher",
+    category: "Safety topic",
+    title: "Portable Fire Extinguisher Awareness",
+    equipment: "Fire extinguisher",
+    role: "Employees / designated extinguisher users",
+    description: "Covers evacuation expectations, alarm/emergency response, basic extinguisher principles, incipient-stage fire hazards, designated-user training, and annual awareness where extinguishers are provided for employee use.",
+    rubric: competencyStages.map((stage) => ({ ...stage, title: stage.title.replace("Machine-Specific", "Topic Review") })),
+    questions: [
+      mc("q1", "Before attempting to use an extinguisher, what should happen first?", ["Sound the alarm and follow emergency procedures", "Close your eyes", "Move closer without checking conditions", "Ask payroll"], "A"),
+      mc("q2", "What type of fire response is extinguisher training generally focused on?", ["Incipient-stage/small developing fires when safe and authorized", "Fully involved fires", "Any fire no matter size", "Only outdoor fires"], "A"),
+      mc("q3", "What should employees understand if they are not designated to fight fires?", ["Evacuate according to the emergency action plan", "Always fight the fire", "Hide nearby", "Return for tools"], "A"),
+      yn("q4", "Can the employee identify extinguisher locations, emergency exits, and when to evacuate?", "Yes"),
+      textq("q5", "Trainer notes: document whether this was awareness only or designated-user hands-on training.")
+    ]
+  },
+  {
     id: "custom-competency",
     category: "Custom",
     title: "Custom Competency / Training",
@@ -469,17 +601,12 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
 
-const defaultPeople = [
-  ...foremanNames.map((name) => [name, "Foreman", "rebarInstall", `${name} Crew`, false]),
-  ...rebarFabForemen.map((name, index) => [name, "Foreman", "rebarFab", shifts[index] || shifts[0], false]),
-  ...solarPilesForemen.map((name, index) => [name, "Foreman", "solarPiles", shifts[index] || shifts[0], false]),
-  ...mockTrialCrews.flatMap((crew) => crew.workers.map(([name, role, hourlyRate]) => [name, role, "rebarInstall", `${crew.foreman} Crew`, false, hourlyRate]))
-].map(([name, role, area, group, dol, hourlyRate = 0]) => ({ name, role, area, group, dol, hourlyRate, certs: [], machines: [] }));
+const defaultPeople = [];
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -1249,11 +1376,11 @@ function upgradeState(next, resetToCurrentWeek = false) {
     const isInstallationForeman = foremanNames.includes(person.name) && person.role === "Foreman";
     return !(isFabricationArea && isInstallationForeman);
   });
-  defaultPeople.forEach((person) => {
-    const nextPerson = { ...structuredClone(person), name: aliasName(person.name), group: aliasCrew(person.group) };
-    const exists = next.people.some((entry) => entry.area === nextPerson.area && entry.name === nextPerson.name);
-    if (!exists) next.people.push(nextPerson);
-  });
+  if (!next.employeeRosterClearedV126) {
+    next.people = [];
+    next.selectedEmployeeProfile = "";
+    next.employeeRosterClearedV126 = true;
+  }
   next.sheets = next.sheets || {};
   Object.entries(next.sheets).forEach(([key, sheet]) => {
     const parts = key.split(":");
