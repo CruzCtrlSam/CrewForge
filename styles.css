@@ -1156,20 +1156,47 @@ textarea {
 
 .training-question-row {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 180px;
-  gap: 12px;
+  gap: 14px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.training-question-head {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 0.8fr) minmax(170px, 0.6fr);
+  gap: 10px;
   align-items: end;
 }
 
-.training-question-row .wide-field {
-  grid-column: span 1;
+.training-question-head strong {
+  align-self: center;
+}
+
+.training-question-text-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.training-question-text-grid textarea {
+  min-height: 78px;
 }
 
 .training-answer-grid {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.training-option-pair {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  padding: 10px;
 }
 
 .training-answer-grid[hidden],
@@ -1185,6 +1212,52 @@ textarea {
   background: var(--soft);
   border-radius: 6px;
   padding: 3px 6px;
+}
+
+.training-course-access {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.training-question-card {
+  display: grid;
+  gap: 10px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  font-weight: 800;
+}
+
+.training-question-number {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.training-question-es {
+  color: #0e7490;
+  font-weight: 900;
+}
+
+.training-question-card select,
+.training-question-card textarea {
+  width: 100%;
+}
+
+.signature-pad-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.signature-pad {
+  width: 100%;
+  height: 150px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  touch-action: none;
 }
 
 .badge-row {
@@ -2504,6 +2577,8 @@ tr:last-child td {
   .document-grid,
   .document-card,
   .template-picker,
+  .training-question-head,
+  .training-question-text-grid,
   .competency-stage-row,
   .training-question-row {
     grid-template-columns: 1fr;

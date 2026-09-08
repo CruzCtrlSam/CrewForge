@@ -351,16 +351,16 @@ const rebarShapeOptions = [
   "45", "46", "37A", "47", "99 SP", "48", "Other"
 ];
 
-function mc(id, text, options, answer) {
-  return { id, type: "multiple_choice", text, options, answer };
+function mc(id, text, options, answer, textEs = "", optionsEs = []) {
+  return { id, type: "multiple_choice", text, textEs, options, optionsEs, answer };
 }
 
-function yn(id, text, answer = "Yes") {
-  return { id, type: "yes_no_na", text, options: ["Yes", "No", "N/A", ""], answer };
+function yn(id, text, answer = "Yes", textEs = "") {
+  return { id, type: "yes_no_na", text, textEs, options: ["Yes", "No", "N/A", ""], optionsEs: ["Si", "No", "N/A", ""], answer };
 }
 
-function textq(id, text) {
-  return { id, type: "text", text, options: ["", "", "", ""], answer: "" };
+function textq(id, text, textEs = "") {
+  return { id, type: "text", text, textEs, options: ["", "", "", ""], optionsEs: ["", "", "", ""], answer: "" };
 }
 
 const fieldAuditChecks = [
@@ -2755,9 +2755,9 @@ function renderActiveTab() {
 
 function defaultTrainingQuestions() {
   return [
-    { id: "q1", type: "multiple_choice", text: "", options: ["", "", "", ""], answer: "A" },
-    { id: "q2", type: "yes_no_na", text: "", options: ["Yes", "No", "N/A", ""], answer: "Yes" },
-    { id: "q3", type: "text", text: "", options: ["", "", "", ""], answer: "" }
+    { id: "q1", type: "multiple_choice", text: "", textEs: "", options: ["", "", "", ""], optionsEs: ["", "", "", ""], answer: "A" },
+    { id: "q2", type: "yes_no_na", text: "", textEs: "", options: ["Yes", "No", "N/A", ""], optionsEs: ["Si", "No", "N/A", ""], answer: "Yes" },
+    { id: "q3", type: "text", text: "", textEs: "", options: ["", "", "", ""], optionsEs: ["", "", "", ""], answer: "" }
   ];
 }
 
@@ -2770,17 +2770,24 @@ function normalizeTrainingQuestion(question = {}) {
       ? ["Yes", "No", "", ""]
       : ["", "", "", ""];
   while (options.length < 4) options.push("");
+  const optionsEs = question.optionsEs?.length ? question.optionsEs.slice(0, 4) : ["", "", "", ""];
+  while (optionsEs.length < 4) optionsEs.push("");
   if (type === "yes_no_na") {
     options[0] = "Yes";
     options[1] = "No";
     options[2] = "N/A";
+    optionsEs[0] = "Si";
+    optionsEs[1] = "No";
+    optionsEs[2] = "N/A";
   }
   const answer = type === "text" ? "" : (legacyYesNo ? question.answer : String(question.answer || "A").toUpperCase());
   return {
     id: question.id,
     type,
     text: question.text || "",
+    textEs: question.textEs || "",
     options,
+    optionsEs,
     answer: type === "yes_no_na" ? (["Yes", "No", "N/A"].includes(answer) ? answer : "Yes") : (["A", "B", "C", "D"].includes(answer) ? answer : "A")
   };
 }
@@ -2871,14 +2878,24 @@ function trainingQuestionBuilderRow(question, index) {
   const showOptions = normalized.type === "multiple_choice";
   return `
     <div class="training-question-row">
-      <label>Answer type<span class="es">Tipo de respuesta</span><select data-training-question="type">${setOptions(trainingQuestionTypes, normalized.type, (type) => type.label, (type) => type.id)}</select></label>
-      <label class="wide-field">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span><input data-training-question="text" value="${escapeHtml(normalized.text)}" placeholder="Write the question or observation item" /></label>
+      <div class="training-question-head">
+        <strong>Question ${index + 1}<span class="es">Pregunta ${index + 1}</span></strong>
+        <label>Answer type<span class="es">Tipo de respuesta</span><select data-training-question="type">${setOptions(trainingQuestionTypes, normalized.type, (type) => `${type.label} / ${type.es}`, (type) => type.id)}</select></label>
+        <label data-training-correct-wrap ${normalized.type === "text" ? "hidden" : ""}>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(normalized.type === "yes_no_na" ? ["Yes", "No", "N/A"] : letters, normalized.answer)}</select></label>
+      </div>
+      <div class="training-question-text-grid">
+        <label>Question in English<span class="es">Pregunta en ingles</span><textarea data-training-question="text" placeholder="Write the question or observation item">${escapeHtml(normalized.text)}</textarea></label>
+        <label>Question in Spanish<span class="es">Pregunta en espanol</span><textarea data-training-question="textEs" placeholder="Escriba la pregunta o punto de observacion">${escapeHtml(normalized.textEs)}</textarea></label>
+      </div>
       <div class="training-answer-grid" ${showOptions ? "" : "hidden"}>
         ${letters.map((letter, optionIndex) => `
-          <label>${letter}<span class="es">Opcion ${letter}</span><input data-training-option="${optionIndex}" value="${escapeHtml(normalized.options[optionIndex] || "")}" placeholder="Answer ${letter}" /></label>
+          <div class="training-option-pair">
+            <strong>${letter}</strong>
+            <label>English<span class="es">Ingles</span><input data-training-option="${optionIndex}" value="${escapeHtml(normalized.options[optionIndex] || "")}" placeholder="Answer ${letter}" /></label>
+            <label>Spanish<span class="es">Espanol</span><input data-training-option-es="${optionIndex}" value="${escapeHtml(normalized.optionsEs[optionIndex] || "")}" placeholder="Respuesta ${letter}" /></label>
+          </div>
         `).join("")}
       </div>
-      <label data-training-correct-wrap ${normalized.type === "text" ? "hidden" : ""}>Correct answer<span class="es">Respuesta correcta</span><select data-training-question="answer">${setOptions(normalized.type === "yes_no_na" ? ["Yes", "No", "N/A"] : letters, normalized.answer)}</select></label>
     </div>
   `;
 }
@@ -2893,10 +2910,16 @@ function trainingCourseCard(course) {
         <h3>${escapeHtml(course.title)}</h3>
         <p class="sub">${escapeHtml(course.equipment || course.jobName || "General")} · ${escapeHtml(course.role || "All employees")} · ${course.files?.length || 0} file(s) · ${resultCount} result(s)</p>
         <p class="sub">${escapeHtml(course.description || "No instructions")}</p>
-        <p class="sub">Training link: <code>${escapeHtml(shareUrl)}</code></p>
+        <div class="training-course-access">
+          <span class="sub">Worker access<span class="es">Acceso para trabajadores</span></span>
+          <code>${escapeHtml(shareUrl)}</code>
+        </div>
       </div>
       <div class="document-actions">
         <button class="secondary-action table-action" data-copy-training="${course.id}" type="button">Copy link<span class="es">Copiar enlace</span></button>
+        <button class="secondary-action table-action" data-qr-training="${course.id}" type="button">Show access<span class="es">Ver acceso</span></button>
+        <button class="secondary-action table-action" data-print-training-access="${course.id}" type="button">Print access<span class="es">Imprimir acceso</span></button>
+        <button class="secondary-action table-action" data-print-training-paper="${course.id}" type="button">Print paper quiz<span class="es">Imprimir examen</span></button>
         <button class="primary-action table-action" data-select-training="${course.id}" type="button">Open<span class="es">Abrir</span></button>
         ${canManageTrainingResources() ? `<button class="danger-action table-action" data-delete-training="${course.id}" type="button">Delete<span class="es">Borrar</span></button>` : ""}
       </div>
@@ -2937,13 +2960,23 @@ function renderTrainingRunner(course, publicMode) {
       ${course.files?.length ? `<div class="attachment-list">${course.files.map((file) => trainingAttachmentRow(course.id, file)).join("")}</div>` : `<div class="notice">No files attached yet.<span class="es">No hay archivos todavia.</span></div>`}
       <div class="form-grid section-gap">
         <label>Employee name<span class="es">Nombre del empleado</span><input id="trainingEmployeeName" placeholder="Full name" /></label>
-        <label>Signature / initials<span class="es">Firma / iniciales</span><input id="trainingSignature" placeholder="Type name or initials" /></label>
+        <label>Instructor name<span class="es">Nombre del instructor</span><input id="trainingInstructorName" placeholder="Instructor / evaluator" /></label>
+        <label>Company name<span class="es">Nombre de la compania</span><input id="trainingCompanyName" placeholder="Company" /></label>
+        <label>Address / location<span class="es">Direccion / ubicacion</span><input id="trainingLocation" placeholder="Job site, shop, or address" /></label>
+        <label class="wide-field">Employee signature<span class="es">Firma del empleado</span>
+          <div class="signature-pad-wrap">
+            <canvas id="trainingSignaturePad" class="signature-pad" width="720" height="180" aria-label="Employee signature"></canvas>
+            <button class="secondary-action table-action" id="clearTrainingSignature" type="button">Clear signature<span class="es">Borrar firma</span></button>
+          </div>
+        </label>
       </div>
       ${!publicMode && course.rubric?.length ? renderCompetencyStageSignoffs(course.rubric) : ""}
       <div class="training-quiz">
         ${questions.length ? questions.map((question, index) => `
-          <label class="audit-choice">
-            <span>${index + 1}. ${escapeHtml(question.text)}<span class="es">Respuesta</span></span>
+          <label class="training-question-card">
+            <span class="training-question-number">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span></span>
+            <strong>${escapeHtml(question.text)}</strong>
+            ${question.textEs ? `<span class="training-question-es">${escapeHtml(question.textEs)}</span>` : ""}
             ${renderTrainingAnswerControl(question)}
           </label>
         `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
@@ -2977,19 +3010,29 @@ function renderCompetencyStageSignoffs(rubric = []) {
 
 function renderTrainingAnswerControl(question) {
   if (question.type === "text") {
-    return `<textarea data-training-answer="${question.id}" placeholder="Write response or evaluator notes"></textarea>`;
+    return `<textarea data-training-answer="${question.id}" placeholder="Write response or evaluator notes / Escriba respuesta o notas"></textarea>`;
   }
   if (question.type === "yes_no_na") {
-    return `<select data-training-answer="${question.id}"><option value="">Choose answer</option>${setOptions(["Yes", "No", "N/A"], "")}</select>`;
+    return `<select data-training-answer="${question.id}"><option value="">Choose answer / Elija respuesta</option>${setOptions(["Yes", "No", "N/A"], "", (option) => option === "Yes" ? "Yes / Si" : option)}</select>`;
   }
   return `
     <select data-training-answer="${question.id}">
-      <option value="">Choose answer</option>
+      <option value="">Choose answer / Elija respuesta</option>
       ${setOptions(question.options
-        .map((option, optionIndex) => ({ letter: ["A", "B", "C", "D"][optionIndex], label: option }))
-        .filter((option) => option.label?.trim()), "", (option) => `${option.letter}. ${escapeHtml(option.label)}`, (option) => option.letter)}
+        .map((option, optionIndex) => ({
+          letter: ["A", "B", "C", "D"][optionIndex],
+          label: option,
+          labelEs: question.optionsEs?.[optionIndex] || ""
+        }))
+        .filter((option) => option.label?.trim()), "", (option) => trainingOptionLabel(option), (option) => option.letter)}
     </select>
   `;
+}
+
+function trainingOptionLabel(option) {
+  const english = option.label || "";
+  const spanish = option.labelEs || "";
+  return `${option.letter}. ${english}${spanish ? ` / ${spanish}` : ""}`;
 }
 
 function renderTrainingResults() {
@@ -3005,11 +3048,13 @@ function renderTrainingResults() {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Employee</th><th>Course</th><th>Machine / topic</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Employee</th><th>Instructor</th><th>Company</th><th>Course</th><th>Machine / topic</th><th>Score</th><th>Status</th><th>Accreditation</th><th>Completed</th><th>Actions</th></tr></thead>
           <tbody>
             ${results.length ? results.slice(0, 50).map((result) => `
               <tr>
                 <td>${escapeHtml(result.employeeName)}</td>
+                <td>${escapeHtml(result.instructorName || "")}</td>
+                <td>${escapeHtml(result.companyName || "")}</td>
                 <td>${escapeHtml(result.courseTitle)}</td>
                 <td>${escapeHtml(result.equipment || "")}</td>
                 <td>${result.score}%</td>
@@ -3018,7 +3063,7 @@ function renderTrainingResults() {
                 <td>${escapeHtml(result.completedAt)}</td>
                 <td>${canAccreditTraining() && !result.accredited ? `<button class="primary-action table-action" data-accredit-training="${result.id}" type="button">Accredit<span class="es">Acreditar</span></button>` : ""}</td>
               </tr>
-            `).join("") : `<tr><td colspan="8">No training results yet.</td></tr>`}
+            `).join("") : `<tr><td colspan="10">No training results yet.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -3054,11 +3099,18 @@ function collectTrainingQuestions() {
         : Array.from(row.querySelectorAll("[data-training-option]"))
         .sort((a, b) => Number(a.dataset.trainingOption) - Number(b.dataset.trainingOption))
         .map((input) => input.value.trim());
+      const optionsEs = type === "yes_no_na"
+        ? ["Si", "No", "N/A", ""]
+        : Array.from(row.querySelectorAll("[data-training-option-es]"))
+        .sort((a, b) => Number(a.dataset.trainingOptionEs) - Number(b.dataset.trainingOptionEs))
+        .map((input) => input.value.trim());
       return {
         id: `q${index + 1}`,
         type,
         text: row.querySelector('[data-training-question="text"]')?.value.trim() || "",
+        textEs: row.querySelector('[data-training-question="textEs"]')?.value.trim() || "",
         options,
+        optionsEs,
         answer: type === "text" ? "" : (row.querySelector('[data-training-question="answer"]')?.value || (type === "yes_no_na" ? "Yes" : "A"))
       };
     })
@@ -3162,6 +3214,96 @@ async function copyTrainingLink(courseId) {
   }
 }
 
+function writePrintDocument(title, body) {
+  const page = window.open("", "_blank", "width=820,height=920");
+  if (!page) {
+    showToast("Allow popups to print this sheet");
+    return;
+  }
+  page.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(title)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 28px; line-height: 1.35; }
+          h1, h2, h3 { margin: 0 0 8px; }
+          .sub { color: #4b5563; font-weight: 700; }
+          .box { border: 2px solid #9aa7b1; border-radius: 8px; padding: 14px; margin: 14px 0; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+          .line { border-bottom: 1px solid #111827; min-height: 30px; margin-top: 8px; }
+          .link { overflow-wrap: anywhere; font-weight: 700; }
+          ol { padding-left: 24px; }
+          li { margin: 16px 0; break-inside: avoid; }
+          .option { margin: 7px 0 0 18px; }
+          button { margin-bottom: 16px; padding: 10px 14px; font-weight: 700; }
+          @media print { button { display: none; } body { margin: 18px; } }
+        </style>
+      </head>
+      <body>
+        <button onclick="window.print()">Print / Imprimir</button>
+        ${body}
+      </body>
+    </html>
+  `);
+  page.document.close();
+}
+
+function showTrainingAccess(courseId) {
+  const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
+  if (!course) return;
+  const link = trainingShareUrl(courseId);
+  writePrintDocument(`Training access - ${course.title}`, `
+    <h1>${escapeHtml(course.title)}</h1>
+    <p class="sub">Worker assessment access / Acceso a evaluacion del trabajador</p>
+    <div class="box">
+      <h2>Open this link on the employee device</h2>
+      <p>Abra este enlace en el telefono o tableta del empleado.</p>
+      <p class="link">${escapeHtml(link)}</p>
+    </div>
+    <div class="box">
+      <p class="sub">Private QR note / Nota de QR privado</p>
+      <p>CrewForge will not send this link to an outside QR website. Use the printed link for now; a fully local QR generator should be added before relying on QR in the field.</p>
+      <p>CrewForge no enviara este enlace a una pagina externa de QR. Use el enlace impreso por ahora; se debe agregar un generador de QR local antes de depender del QR en campo.</p>
+    </div>
+  `);
+}
+
+function printTrainingAccessSheet(courseId) {
+  showTrainingAccess(courseId);
+}
+
+function printTrainingPaperQuiz(courseId) {
+  const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
+  if (!course) return;
+  const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
+  writePrintDocument(`Paper quiz - ${course.title}`, `
+    <h1>${escapeHtml(course.title)}</h1>
+    <p class="sub">${escapeHtml(course.description || "Review the material and answer the questions.")}</p>
+    <div class="box grid">
+      <div><strong>Employee / Empleado</strong><div class="line"></div></div>
+      <div><strong>Instructor / Instructor</strong><div class="line"></div></div>
+      <div><strong>Company / Compania</strong><div class="line"></div></div>
+      <div><strong>Address or location / Direccion o ubicacion</strong><div class="line"></div></div>
+      <div><strong>Date / Fecha</strong><div class="line"></div></div>
+      <div><strong>Employee signature / Firma del empleado</strong><div class="line"></div></div>
+    </div>
+    ${course.files?.length ? `<div class="box"><strong>Training files to review / Archivos para revisar</strong><ul>${course.files.map((file) => `<li>${escapeHtml(file.name)}</li>`).join("")}</ul></div>` : ""}
+    <ol>
+      ${questions.map((question) => `
+        <li>
+          <strong>${escapeHtml(question.text)}</strong>
+          ${question.textEs ? `<div>${escapeHtml(question.textEs)}</div>` : ""}
+          ${question.type === "multiple_choice" ? question.options.map((option, optionIndex) => option?.trim() ? `
+            <div class="option">${["A", "B", "C", "D"][optionIndex]}. ${escapeHtml(option)}${question.optionsEs?.[optionIndex] ? ` / ${escapeHtml(question.optionsEs[optionIndex])}` : ""}</div>
+          ` : "").join("") : question.type === "yes_no_na" ? `<div class="option">Yes / Si &nbsp;&nbsp; No &nbsp;&nbsp; N/A</div>` : `<div class="line"></div><div class="line"></div>`}
+          <div class="option">Answer / Respuesta: ____________________</div>
+        </li>
+      `).join("")}
+    </ol>
+  `);
+}
+
 function deleteTrainingCourse(courseId) {
   if (!canManageTrainingResources()) {
     showToast("Only Safety can delete training resources");
@@ -3185,9 +3327,12 @@ function submitTrainingResult() {
   const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
   if (!course) return;
   const employeeName = $("trainingEmployeeName")?.value.trim() || "";
-  const signature = $("trainingSignature")?.value.trim() || "";
-  if (!employeeName || !signature) {
-    showToast("Employee name and signature required");
+  const instructorName = $("trainingInstructorName")?.value.trim() || "";
+  const companyName = $("trainingCompanyName")?.value.trim() || "";
+  const location = $("trainingLocation")?.value.trim() || "";
+  const signature = signaturePadHasInk("trainingSignaturePad") ? $("trainingSignaturePad").toDataURL("image/png") : "";
+  if (!employeeName || !instructorName || !companyName || !location || !signature) {
+    showToast("Employee, instructor, company, location, and signature required");
     return;
   }
   const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
@@ -3206,10 +3351,13 @@ function submitTrainingResult() {
       id: question.id,
       type: question.type,
       question: question.text,
+      questionEs: question.textEs || "",
       answer,
       answerText: question.type === "text" ? answer : (answerIndex >= 0 ? question.options[answerIndex] || "" : answer),
+      answerTextEs: question.type === "yes_no_na" ? (answer === "Yes" ? "Si" : answer) : (answerIndex >= 0 ? question.optionsEs?.[answerIndex] || "" : ""),
       correctAnswer: question.answer,
       correctAnswerText: question.type === "yes_no_na" ? question.answer : (correctIndex >= 0 ? question.options[correctIndex] || "" : ""),
+      correctAnswerTextEs: question.type === "yes_no_na" ? (question.answer === "Yes" ? "Si" : question.answer) : (correctIndex >= 0 ? question.optionsEs?.[correctIndex] || "" : ""),
       gradable,
       correct: gradable ? answer === question.answer : null
     };
@@ -3227,6 +3375,9 @@ function submitTrainingResult() {
     courseId: course.id,
     courseTitle: course.title,
     employeeName,
+    instructorName,
+    companyName,
+    location,
     signature,
     equipment: course.equipment || "",
     role: course.role || "",
@@ -3264,6 +3415,15 @@ function bindTrainingEvents(publicMode = false) {
   document.querySelectorAll("[data-copy-training]").forEach((button) => {
     button.addEventListener("click", () => copyTrainingLink(button.dataset.copyTraining));
   });
+  document.querySelectorAll("[data-qr-training]").forEach((button) => {
+    button.addEventListener("click", () => showTrainingAccess(button.dataset.qrTraining));
+  });
+  document.querySelectorAll("[data-print-training-access]").forEach((button) => {
+    button.addEventListener("click", () => printTrainingAccessSheet(button.dataset.printTrainingAccess));
+  });
+  document.querySelectorAll("[data-print-training-paper]").forEach((button) => {
+    button.addEventListener("click", () => printTrainingPaperQuiz(button.dataset.printTrainingPaper));
+  });
   document.querySelectorAll("[data-delete-training]").forEach((button) => {
     button.addEventListener("click", () => deleteTrainingCourse(button.dataset.deleteTraining));
   });
@@ -3276,6 +3436,7 @@ function bindTrainingEvents(publicMode = false) {
   document.querySelectorAll("[data-accredit-training]").forEach((button) => {
     button.addEventListener("click", () => accreditTrainingResult(button.dataset.accreditTraining));
   });
+  bindSignaturePad("trainingSignaturePad", "clearTrainingSignature");
   if (publicMode) return;
 }
 
@@ -3301,6 +3462,71 @@ function accreditTrainingResult(resultId) {
   saveState();
   render();
   showToast(`${result.employeeName} training accredited`);
+}
+
+function signaturePadHasInk(canvasId) {
+  const canvas = $(canvasId);
+  if (!canvas) return false;
+  return canvas.dataset.hasInk === "true";
+}
+
+function bindSignaturePad(canvasId, clearButtonId) {
+  const canvas = $(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  let drawing = false;
+  let last = null;
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect();
+    const scale = window.devicePixelRatio || 1;
+    const existing = canvas.dataset.hasInk === "true" ? canvas.toDataURL("image/png") : "";
+    canvas.width = Math.max(1, Math.floor(rect.width * scale));
+    canvas.height = Math.max(1, Math.floor(rect.height * scale));
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = "#0f172a";
+    if (existing) {
+      const image = new Image();
+      image.onload = () => ctx.drawImage(image, 0, 0, rect.width, rect.height);
+      image.src = existing;
+    }
+  };
+  const point = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+  const start = (event) => {
+    drawing = true;
+    last = point(event);
+    canvas.setPointerCapture?.(event.pointerId);
+  };
+  const move = (event) => {
+    if (!drawing || !last) return;
+    event.preventDefault();
+    const next = point(event);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(next.x, next.y);
+    ctx.stroke();
+    last = next;
+    canvas.dataset.hasInk = "true";
+  };
+  const end = () => {
+    drawing = false;
+    last = null;
+  };
+  resize();
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  $(clearButtonId)?.addEventListener("click", () => {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    canvas.dataset.hasInk = "false";
+  });
 }
 
 function renderPublicTraining() {
@@ -7106,6 +7332,9 @@ function exportEmployeeCsv() {
 function exportTrainingCsv() {
   const headers = [
     "Employee",
+    "Instructor",
+    "Company",
+    "Address / location",
     "Course",
     "Machine / topic",
     "Audience",
@@ -7131,6 +7360,9 @@ function exportTrainingCsv() {
     }).join(" | ");
     return [
       result.employeeName,
+      result.instructorName || "",
+      result.companyName || "",
+      result.location || "",
       result.courseTitle,
       result.equipment || "",
       result.role || "",
