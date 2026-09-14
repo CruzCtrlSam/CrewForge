@@ -288,6 +288,18 @@ const competencyTemplates = [
     role: "Authorized forklift operators",
     description: "Covers powered industrial truck operation, inspection, load stability, pedestrian traffic, ramps, workplace conditions, practical evaluation, refresher triggers, and certification recordkeeping.",
     rubric: competencyStages,
+    evaluationChecklist: [
+      { id: "pre_use", label: "Completed pre-use inspection and identified defects that require removal from service", labelEs: "Completo la inspeccion previa e identifico defectos que requieren retirar el equipo de servicio" },
+      { id: "mount_dismount", label: "Mounted, dismounted, adjusted seat, and used seatbelt correctly", labelEs: "Subio, bajo, ajusto el asiento y uso el cinturon correctamente" },
+      { id: "controls", label: "Identified and used travel, lift, tilt, horn, lights, parking brake, and emergency controls", labelEs: "Identifico y uso controles de traslado, elevacion, inclinacion, bocina, luces, freno de estacionamiento y emergencia" },
+      { id: "load_chart", label: "Read the data plate and confirmed load weight, center, height, and attachment limits", labelEs: "Leyo la placa de datos y confirmo peso, centro, altura y limites de accesorios de la carga" },
+      { id: "pickup", label: "Approached, picked, tilted, and secured the load without damaging material or equipment", labelEs: "Se acerco, levanto, inclino y aseguro la carga sin danar material ni equipo" },
+      { id: "travel", label: "Traveled with forks/load low, controlled speed, clear view, and safe stopping distance", labelEs: "Manejo con unas/carga bajas, velocidad controlada, vista clara y distancia segura de frenado" },
+      { id: "pedestrians", label: "Used horn, eye contact, and right-of-way controls around pedestrians and blind intersections", labelEs: "Uso bocina, contacto visual y controles de paso cerca de peatones e intersecciones sin visibilidad" },
+      { id: "ramps", label: "Handled ramps or grades correctly with load uphill and no turning on the ramp", labelEs: "Manejo rampas o pendientes correctamente con la carga cuesta arriba y sin girar en la rampa" },
+      { id: "stacking", label: "Stacked, unstacked, and placed loads square, stable, and within rated capacity", labelEs: "Apilo, desapilo y coloco cargas cuadradas, estables y dentro de la capacidad nominal" },
+      { id: "shutdown", label: "Parked safely, lowered forks, set brake, neutralized controls, and shut down properly", labelEs: "Estaciono seguro, bajo las unas, puso freno, neutralizo controles y apago correctamente" }
+    ],
     questions: [
       mc("q1", "What is the stability triangle used for?", ["Measuring fuel efficiency", "Finding the shortest travel route", "Determining whether a load will tip the forklift", "Setting mast tilt angle"], "C", "Para que se usa el triangulo de estabilidad?", ["Medir eficiencia de combustible", "Encontrar la ruta mas corta", "Determinar si una carga puede volcar el montacargas", "Ajustar el angulo del mastil"]),
       mc("q2", "What should be checked during the pre-shift inspection?", ["Only tire pressure", "Only the horn", "Only fuel level", "Tires, forks, mast/chains, hydraulics, horn, lights, seatbelt, and leaks"], "D", "Que se debe revisar durante la inspeccion antes del turno?", ["Solo presion de llantas", "Solo la bocina", "Solo nivel de combustible", "Llantas, unas, mastil/cadenas, hidraulicos, bocina, luces, cinturon y fugas"]),
@@ -325,6 +337,18 @@ const competencyTemplates = [
     role: "Machine Operator",
     description: "Covers pre-operation inspection, boom/load charts, stability on uneven ground, outriggers if equipped, attachments, overhead hazards, and final observed operation.",
     rubric: competencyStages,
+    evaluationChecklist: [
+      { id: "pre_use", label: "Completed pre-use inspection of tires, forks/attachment, boom, hydraulics, alarms, and visible damage", labelEs: "Completo inspeccion previa de llantas, unas/accesorio, pluma, hidraulicos, alarmas y dano visible" },
+      { id: "mount_dismount", label: "Mounted, dismounted, adjusted seat, and used seatbelt correctly", labelEs: "Subio, bajo, ajusto el asiento y uso el cinturon correctamente" },
+      { id: "controls", label: "Identified travel, lift, boom extend/retract, tilt, stabilizer/outrigger, horn, and emergency controls", labelEs: "Identifico controles de traslado, elevacion, extender/retraer pluma, inclinacion, estabilizadores, bocina y emergencia" },
+      { id: "load_chart", label: "Read the load chart and confirmed boom angle, reach, attachment, and load limits before lifting", labelEs: "Leyo la tabla de carga y confirmo angulo de pluma, alcance, accesorio y limites de carga antes de levantar" },
+      { id: "site_setup", label: "Evaluated ground conditions, slope, overhead hazards, pedestrian traffic, and swing/landing area", labelEs: "Evaluo condiciones del suelo, pendiente, peligros aereos, trafico peatonal y area de giro/descarga" },
+      { id: "pickup", label: "Approached and picked the load squarely with boom low/retracted and load secured", labelEs: "Se acerco y levanto la carga de forma cuadrada con pluma baja/retraida y carga asegurada" },
+      { id: "travel", label: "Traveled with boom low and retracted, controlled speed, clear view, and safe stopping distance", labelEs: "Manejo con pluma baja y retraida, velocidad controlada, vista clara y distancia segura de frenado" },
+      { id: "placement", label: "Raised, extended, placed, and withdrew from load without sudden movement or loss of stability", labelEs: "Levanto, extendio, coloco y retiro la carga sin movimientos bruscos ni perdida de estabilidad" },
+      { id: "communication", label: "Used spotter or signals when visibility, overhead hazards, or load placement required assistance", labelEs: "Uso observador o senales cuando la visibilidad, peligros aereos o colocacion de carga requirieron ayuda" },
+      { id: "shutdown", label: "Parked safely, lowered attachment, retracted boom, set brake, neutralized controls, and shut down properly", labelEs: "Estaciono seguro, bajo accesorio, retrajo pluma, puso freno, neutralizo controles y apago correctamente" }
+    ],
     questions: [
       mc("q1", "What determines the maximum safe load at a given boom length/angle?", ["Operator's judgment", "The machine's load chart", "The size of the forks", "Ground color"], "B", "Que determina la carga maxima segura segun el largo/angulo de la pluma?", ["El criterio del operador", "La tabla de carga de la maquina", "El tamano de las unas", "El color del suelo"]),
       mc("q2", "What must be checked before extending the boom?", ["Fuel level only", "Radio channel", "Tire brand", "Ground stability, overhead clearance, and machine level; outriggers if equipped"], "D", "Que se debe revisar antes de extender la pluma?", ["Solo nivel de combustible", "Canal de radio", "Marca de llantas", "Estabilidad del suelo, espacio libre arriba y nivel de la maquina; estabilizadores si los tiene"]),
@@ -3006,15 +3030,21 @@ function trainingQuestionBuilderRow(question, index) {
   `;
 }
 
+function trainingEvaluationChecklistForCourse(course) {
+  if (course?.evaluationChecklist?.length) return course.evaluationChecklist;
+  return competencyTemplates.find((template) => template.id === course?.templateId)?.evaluationChecklist || [];
+}
+
 function trainingCourseCard(course) {
   const resultCount = (state.trainingResults || []).filter((result) => result.courseId === course.id).length;
+  const evaluationChecklist = trainingEvaluationChecklistForCourse(course);
   const shareUrl = trainingShareUrl(course.id);
   return `
     <article class="document-card training-card">
       <div>
         <span class="tag">${escapeHtml(course.trainingType || "Training")}</span>
         <h3>${escapeHtml(course.title)}</h3>
-        <p class="sub">${escapeHtml(course.equipment || course.jobName || "General")} · ${escapeHtml(course.role || "All employees")} · ${course.files?.length || 0} file(s) · ${resultCount} result(s)</p>
+        <p class="sub">${escapeHtml(course.equipment || course.jobName || "General")} · ${escapeHtml(course.role || "All employees")} · ${course.files?.length || 0} file(s) · ${evaluationChecklist.length} checklist item(s) · ${resultCount} result(s)</p>
         <p class="sub">${escapeHtml(course.description || "No instructions")}</p>
         <div class="training-course-access">
           <span class="sub">Worker access<span class="es">Acceso para trabajadores</span></span>
@@ -3048,6 +3078,7 @@ function trainingAttachmentRow(courseId, file) {
 
 function renderTrainingRunner(course, publicMode) {
   const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
+  const evaluationChecklist = trainingEvaluationChecklistForCourse(course);
   return `
     <div class="training-runner section-gap">
       <div class="split">
@@ -3077,6 +3108,7 @@ function renderTrainingRunner(course, publicMode) {
         </label>
       </div>
       ${!publicMode && course.rubric?.length ? renderCompetencyStageSignoffs(course.rubric) : ""}
+      ${evaluationChecklist.length ? renderTrainingEvaluationChecklist(evaluationChecklist) : ""}
       <div class="training-quiz">
         ${questions.length ? questions.map((question, index) => `
           <label class="training-question-card">
@@ -3112,6 +3144,42 @@ function renderCompetencyStageSignoffs(rubric = []) {
       `).join("")}
     </div>
   `;
+}
+
+function renderTrainingEvaluationChecklist(checklist = []) {
+  return `
+    <div class="training-evaluation-checklist section-gap">
+      <h4>Operator evaluation checklist<span class="es">Lista de evaluacion del operador</span></h4>
+      <p class="sub">Instructor must observe the operator and mark each competency item.<span class="es">El instructor debe observar al operador y marcar cada punto de competencia.</span></p>
+      ${checklist.map((item, index) => `
+        <div class="training-evaluation-row">
+          <div>
+            <strong>${index + 1}. ${escapeHtml(item.label)}</strong>
+            ${item.labelEs ? `<span class="training-question-es">${escapeHtml(item.labelEs)}</span>` : ""}
+          </div>
+          <select data-training-eval="${escapeHtml(item.id)}">
+            <option value="">Choose / Elegir</option>
+            ${setOptions(["Yes", "No", "N/A"], "", (option) => option === "Yes" ? "Yes / Si" : option)}
+          </select>
+          <input data-training-eval-note="${escapeHtml(item.id)}" placeholder="Notes / Notas" />
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function collectTrainingEvaluationResponses(checklist = []) {
+  return checklist.map((item) => {
+    const status = document.querySelector(`[data-training-eval="${item.id}"]`)?.value || "";
+    const note = document.querySelector(`[data-training-eval-note="${item.id}"]`)?.value.trim() || "";
+    return {
+      id: item.id,
+      label: item.label,
+      labelEs: item.labelEs || "",
+      status,
+      note
+    };
+  });
 }
 
 function renderTrainingAnswerControl(question) {
@@ -3292,6 +3360,7 @@ async function saveTrainingCourse() {
     passingScore: Number($("trainingPassingScore")?.value) || 80,
     files,
     rubric: template?.rubric || [],
+    evaluationChecklist: template?.evaluationChecklist || [],
     questions,
     createdBy: actorName(),
     createdAt: timestamp()
@@ -3383,6 +3452,7 @@ function printTrainingPaperQuiz(courseId) {
   const course = (state.trainingCourses || []).find((entry) => entry.id === courseId);
   if (!course) return;
   const questions = (course.questions || []).map(normalizeTrainingQuestion).filter((question) => question.text?.trim());
+  const evaluationChecklist = trainingEvaluationChecklistForCourse(course);
   writePrintDocument(`Paper quiz - ${course.title}`, `
     <h1>${escapeHtml(course.title)}</h1>
     <p class="sub">${escapeHtml(course.description || "Review the material and answer the questions.")}</p>
@@ -3395,6 +3465,7 @@ function printTrainingPaperQuiz(courseId) {
       <div><strong>Employee signature / Firma del empleado</strong><div class="line"></div></div>
     </div>
     ${course.files?.length ? `<div class="box"><strong>Training files to review / Archivos para revisar</strong><ul>${course.files.map((file) => `<li>${escapeHtml(file.name)}</li>`).join("")}</ul></div>` : ""}
+    ${evaluationChecklist.length ? `<div class="box"><strong>Operator evaluation checklist / Lista de evaluacion del operador</strong><ol>${evaluationChecklist.map((item) => `<li>${escapeHtml(item.label)}${item.labelEs ? `<br />${escapeHtml(item.labelEs)}` : ""}<div class="option">Yes / Si ____ &nbsp;&nbsp; No ____ &nbsp;&nbsp; N/A ____ &nbsp;&nbsp; Notes / Notas ____________________</div></li>`).join("")}</ol></div>` : ""}
     <ol>
       ${questions.map((question) => `
         <li>
@@ -3447,6 +3518,12 @@ function submitTrainingResult() {
     status: select.value,
     note: document.querySelector(`[data-competency-stage-note="${select.dataset.competencyStage}"]`)?.value.trim() || ""
   }));
+  const evaluationChecklist = trainingEvaluationChecklistForCourse(course);
+  const evaluationResponses = collectTrainingEvaluationResponses(evaluationChecklist);
+  if (evaluationChecklist.length && evaluationResponses.some((entry) => !entry.status)) {
+    showToast("Complete the operator evaluation checklist");
+    return;
+  }
   const answers = questions.map((question) => {
     const control = document.querySelector(`[data-training-answer="${question.id}"]`);
     const answer = control?.value || "";
@@ -3494,6 +3571,7 @@ function submitTrainingResult() {
     accreditedAt: "",
     answers,
     stageResponses,
+    evaluationResponses,
     completedAt: timestamp(),
     createdBy: button?.dataset.publicTraining === "true" ? employeeName : actorName()
   };
@@ -7453,12 +7531,17 @@ function exportTrainingCsv() {
     "Signature",
     "Created by",
     "Stage sign-offs",
+    "Evaluation checklist",
     "Answers"
   ];
   const rows = (state.trainingResults || []).map((result) => {
     const stages = (result.stageResponses || []).map((stage) => {
       const note = stage.note ? ` - ${stage.note}` : "";
       return `${stage.id}: ${stage.status}${note}`;
+    }).join(" | ");
+    const evaluation = (result.evaluationResponses || []).map((entry) => {
+      const note = entry.note ? ` - ${entry.note}` : "";
+      return `${entry.label}: ${entry.status}${note}`;
     }).join(" | ");
     const answers = (result.answers || []).map((answer) => {
       const expected = answer.gradable && !answer.correct ? ` (expected: ${answer.correctAnswer || "not set"})` : "";
@@ -7481,6 +7564,7 @@ function exportTrainingCsv() {
       result.signature || "",
       result.createdBy || "",
       stages,
+      evaluation,
       answers
     ];
   });
