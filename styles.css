@@ -1094,6 +1094,39 @@ textarea {
   gap: 14px;
 }
 
+.training-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 2px solid var(--line);
+}
+
+.training-tab {
+  min-width: 140px;
+  border: 2px solid var(--line);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--field);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.training-tab.active {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 -2px 0 var(--accent) inset;
+}
+
+.training-tab .es {
+  color: var(--blue);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
 .training-builder,
 .training-runner {
   display: grid;

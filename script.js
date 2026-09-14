@@ -1131,6 +1131,7 @@ const defaultState = {
   selectedSafetyJob: "",
   selectedSafetyFormType: "JHA",
   selectedTrainingCourse: "",
+  selectedTrainingTab: "library",
   selectedAuditJob: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
@@ -1350,6 +1351,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedSafetyJob = next.selectedSafetyJob || "";
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
+  next.selectedTrainingTab = next.selectedTrainingTab || "library";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
@@ -2938,6 +2940,27 @@ function trainingCoursesForArea() {
   return (state.trainingCourses || []).filter((course) => course.area === state.selectedArea || course.area === "all");
 }
 
+function trainingTabs(manageResources, reviewResults) {
+  return [
+    { id: "library", label: "Library", labelEs: "Biblioteca" },
+    ...(manageResources ? [{ id: "builder", label: "Create training", labelEs: "Crear capacitacion" }] : []),
+    { id: "assessment", label: "Assessment", labelEs: "Evaluacion" },
+    ...(reviewResults ? [{ id: "results", label: "Results", labelEs: "Resultados" }] : [])
+  ];
+}
+
+function renderTrainingTabNav(tabs, activeTab) {
+  return `
+    <div class="training-tabs" role="tablist" aria-label="Training and competency sections">
+      ${tabs.map((tab) => `
+        <button class="training-tab ${tab.id === activeTab ? "active" : ""}" type="button" role="tab" aria-selected="${tab.id === activeTab ? "true" : "false"}" data-training-tab="${tab.id}">
+          ${tab.label}<span class="es">${tab.labelEs}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderTraining() {
   const courses = trainingCoursesForArea();
   const selectedCourse = courses.find((course) => course.id === state.selectedTrainingCourse) || courses[0];
@@ -2945,6 +2968,8 @@ function renderTraining() {
   const manageResources = canManageTrainingResources();
   const reviewResults = canReviewTrainingResults();
   const selectedTemplate = competencyTemplates.find((template) => template.id === state.selectedTrainingTemplate) || competencyTemplates[0];
+  const tabs = trainingTabs(manageResources, reviewResults);
+  const activeTrainingTab = tabs.some((tab) => tab.id === state.selectedTrainingTab) ? state.selectedTrainingTab : "library";
   return `
     <section class="panel training-panel">
       <div class="split">
@@ -2954,7 +2979,8 @@ function renderTraining() {
         </div>
         <span class="tag sync-tag">Offline capable<span class="es">Funciona sin conexion</span></span>
       </div>
-      ${manageResources ? `
+      ${renderTrainingTabNav(tabs, activeTrainingTab)}
+      ${activeTrainingTab === "builder" && manageResources ? `
         <div class="training-builder section-gap">
           <h3>Create training / certification<span class="es">Crear capacitacion / certificacion</span></h3>
           <div class="template-picker">
@@ -2984,13 +3010,13 @@ function renderTraining() {
           </div>
         </div>
       ` : ""}
-      <div class="training-library section-gap">
+      ${activeTrainingTab === "library" ? `<div class="training-library section-gap">
         <h3>Training library<span class="es">Biblioteca de capacitacion</span></h3>
         ${!manageResources ? `<p class="sub">Only Safety can upload or delete training resources.<span class="es">Solo Seguridad puede subir o borrar recursos de capacitacion.</span></p>` : ""}
         ${courses.length ? courses.map(trainingCourseCard).join("") : `<div class="empty-state">No training courses yet.<span class="es">Todavia no hay capacitaciones.</span></div>`}
-      </div>
-      ${selectedCourse ? renderTrainingRunner(selectedCourse, false) : ""}
-      ${reviewResults ? renderTrainingResults() : ""}
+      </div>` : ""}
+      ${activeTrainingTab === "assessment" ? (selectedCourse ? renderTrainingRunner(selectedCourse, false) : `<div class="empty-state">Choose or create a training course first.<span class="es">Primero elija o cree una capacitacion.</span></div>`) : ""}
+      ${activeTrainingTab === "results" && reviewResults ? renderTrainingResults() : ""}
     </section>
   `;
 }
@@ -3379,6 +3405,7 @@ async function saveTrainingCourse() {
   };
   state.trainingCourses = [course, ...(state.trainingCourses || [])];
   state.selectedTrainingCourse = course.id;
+  state.selectedTrainingTab = "assessment";
   logActivity("Training course created", { title: course.title, area: area().label, files: files.length, questions: questions.length });
   saveState();
   render();
@@ -3387,6 +3414,7 @@ async function saveTrainingCourse() {
 
 function selectTrainingCourse(courseId) {
   state.selectedTrainingCourse = courseId;
+  state.selectedTrainingTab = "assessment";
   saveState();
   render();
 }
@@ -3596,6 +3624,13 @@ function submitTrainingResult() {
 }
 
 function bindTrainingEvents(publicMode = false) {
+  document.querySelectorAll("[data-training-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedTrainingTab = button.dataset.trainingTab || "library";
+      saveState();
+      render();
+    });
+  });
   if ($("addTrainingQuestion")) $("addTrainingQuestion").addEventListener("click", addTrainingQuestionRow);
   if ($("loadTrainingTemplate")) $("loadTrainingTemplate").addEventListener("click", loadTrainingTemplate);
   if ($("trainingTemplate")) $("trainingTemplate").addEventListener("change", loadTrainingTemplate);
