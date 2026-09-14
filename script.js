@@ -320,6 +320,18 @@ const competencyTemplates = [
     role: "Crane operators / operators in training",
     description: "Covers equipment-specific safe operation, load/capacity information, power line hazards, ground/support conditions, operational aids, assigned hoisting activities, and documented evaluation.",
     rubric: competencyStages,
+    evaluationChecklist: [
+      { id: "pre_use", label: "Completed pre-use inspection of pendant/radio controls, hook, latch, wire rope or chain, bridge/trolley, limit devices, and visible defects", labelEs: "Completo inspeccion previa de botonera/radio control, gancho, seguro, cable o cadena, puente/trole, limites y defectos visibles" },
+      { id: "controls", label: "Identified hoist, bridge, trolley, emergency stop, warning device, and direction controls before operating", labelEs: "Identifico controles de polipasto, puente, trole, paro de emergencia, advertencia y direccion antes de operar" },
+      { id: "capacity", label: "Confirmed crane, hoist, rigging, and below-the-hook capacity before lifting", labelEs: "Confirmo capacidad de grua, polipasto, rigging y dispositivo bajo gancho antes de levantar" },
+      { id: "rigging", label: "Verified load is balanced, rigged correctly, hook latch closed, and sling angles acceptable", labelEs: "Verifico que la carga este balanceada, correctamente aparejada, seguro del gancho cerrado y angulos de eslinga aceptables" },
+      { id: "test_lift", label: "Performed a controlled test lift and checked load balance before traveling", labelEs: "Realizo levantamiento de prueba controlado y reviso balance de carga antes de trasladar" },
+      { id: "travel_path", label: "Cleared travel path, kept personnel out from under the load, and used warnings before movement", labelEs: "Despejo ruta de traslado, mantuvo personal fuera de debajo de la carga y uso advertencias antes de mover" },
+      { id: "smooth_control", label: "Used smooth controlled movements without side loading, sudden starts/stops, or swinging the load", labelEs: "Uso movimientos suaves y controlados sin carga lateral, arranques/paros bruscos ni balancear la carga" },
+      { id: "landing", label: "Landed the load on stable support with hands/body clear of pinch points", labelEs: "Coloco la carga sobre soporte estable con manos/cuerpo fuera de puntos de atrapamiento" },
+      { id: "communication", label: "Followed one designated signal person or radio communication plan when assistance was required", labelEs: "Siguio a una sola persona designada para senales o plan de comunicacion por radio cuando se requirio ayuda" },
+      { id: "shutdown", label: "Returned hook/control to safe position, removed rigging from service if damaged, and reported issues", labelEs: "Dejo gancho/control en posicion segura, retiro rigging danado de servicio y reporto problemas" }
+    ],
     questions: [
       mc("q1", "What does crane operator competency need to show?", ["Only that the operator has seniority", "Safe operation knowledge, ability to recognize and avert risk, and ability to perform assigned hoisting work", "Only that a spotter is present", "Only that the crane started"], "B"),
       mc("q2", "What information must an operator understand before a lift?", ["Load/capacity information and the crane configuration", "Only the weather", "Only the rigging color", "Only the delivery ticket"], "A"),
