@@ -73,25 +73,25 @@ const accidentYesNoFields = [
   ["otherPersonInvolved", "Another person involved", "Otra persona involucrada"]
 ];
 const accidentInjuryTypes = [
-  "Heat/cold burn",
-  "Cut/laceration",
-  "Chemical burn",
-  "Fracture",
-  "Slip",
-  "Electrical shock",
-  "Foreign body",
-  "Strain",
-  "Puncture",
-  "Trip",
-  "Physical exhaustion",
-  "Heat/cold stress",
-  "Contusion/bruise",
-  "Struck by",
-  "Fall",
-  "Chemical inhalation",
-  "Chemical irritation",
-  "Sprain",
-  "Other"
+  ["Heat/cold burn", "Quemadura por calor/frio"],
+  ["Cut/laceration", "Cortada/laceracion"],
+  ["Chemical burn", "Quemadura quimica"],
+  ["Fracture", "Fractura"],
+  ["Slip", "Resbalon"],
+  ["Electrical shock", "Choque electrico"],
+  ["Foreign body", "Objeto extrano"],
+  ["Strain", "Distension"],
+  ["Puncture", "Puncion"],
+  ["Trip", "Tropiezo"],
+  ["Physical exhaustion", "Agotamiento fisico"],
+  ["Heat/cold stress", "Estres por calor/frio"],
+  ["Contusion/bruise", "Contusion/moreton"],
+  ["Struck by", "Golpeado por"],
+  ["Fall", "Caida"],
+  ["Chemical inhalation", "Inhalacion quimica"],
+  ["Chemical irritation", "Irritacion quimica"],
+  ["Sprain", "Torcedura"],
+  ["Other", "Otro"]
 ];
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
 const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
@@ -3146,19 +3146,41 @@ function renderTrainingRunner(course, publicMode) {
         </label>
       </div>
       ${!publicMode && course.rubric?.length ? renderCompetencyStageSignoffs(course.rubric) : ""}
-      ${evaluationChecklist.length ? renderTrainingEvaluationChecklist(evaluationChecklist) : ""}
-      <div class="training-quiz">
-        ${questions.length ? questions.map((question, index) => `
-          <label class="training-question-card">
-            <span class="training-question-number">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span></span>
-            <strong>${escapeHtml(question.text)}</strong>
-            ${question.textEs ? `<span class="training-question-es">${escapeHtml(question.textEs)}</span>` : ""}
-            ${renderTrainingAnswerControl(question)}
-          </label>
-        `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
-      </div>
+      ${renderTrainingAssessmentTabs(evaluationChecklist, questions)}
       <div class="action-row section-gap">
         <button class="primary-action" id="submitTrainingResult" data-course-id="${course.id}" data-public-training="${publicMode ? "true" : "false"}" type="button" ${questions.length ? "" : "disabled"}>${t("Submit training", "Enviar capacitacion")}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTrainingAssessmentTabs(evaluationChecklist = [], questions = []) {
+  const quizContent = `
+    <div class="training-quiz">
+      ${questions.length ? questions.map((question, index) => `
+        <label class="training-question-card">
+          <span class="training-question-number">Question ${index + 1}<span class="es">Pregunta ${index + 1}</span></span>
+          <strong>${escapeHtml(question.text)}</strong>
+          ${question.textEs ? `<span class="training-question-es">${escapeHtml(question.textEs)}</span>` : ""}
+          ${renderTrainingAnswerControl(question)}
+        </label>
+      `).join("") : `<div class="empty-state">No quiz questions yet. Safety/Admin should add questions before using this course.<span class="es">Agregue preguntas primero.</span></div>`}
+    </div>
+  `;
+  if (!evaluationChecklist.length) return quizContent;
+  return `
+    <div class="assessment-tabs section-gap">
+      <input class="assessment-tab-radio" id="assessmentTabChecklist" name="assessmentTab" type="radio" checked />
+      <input class="assessment-tab-radio" id="assessmentTabQuiz" name="assessmentTab" type="radio" />
+      <div class="assessment-tab-nav" role="tablist" aria-label="Assessment sections">
+        <label class="assessment-tab-button" for="assessmentTabChecklist" role="tab">Evaluation list<span class="es">Lista de evaluacion</span></label>
+        <label class="assessment-tab-button" for="assessmentTabQuiz" role="tab">Quiz<span class="es">Examen</span></label>
+      </div>
+      <div class="assessment-tab-panel assessment-checklist-panel">
+        ${renderTrainingEvaluationChecklist(evaluationChecklist)}
+      </div>
+      <div class="assessment-tab-panel assessment-quiz-panel">
+        ${quizContent}
       </div>
     </div>
   `;
@@ -5831,44 +5853,52 @@ function selectedAreaJobsWithFallback(selectedId) {
 
 function renderSafetyForms() {
   const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
-  const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedSafetyJob);
-  const forms = state.safetyForms.filter((form) => form.area === state.selectedArea && (!selectedJob || form.jobId === selectedJob.id));
+  const forms = state.safetyForms.filter((form) => form.area === state.selectedArea);
   const selectedType = state.selectedSafetyFormType || "JHA";
+  const locationSuggestions = safetyLocationSuggestions();
   return `
     <section class="panel">
       <div class="split">
         <div>
           <h2>${t("Safety Forms", "Documentos de seguridad")}</h2>
-          <p class="sub">Fill out daily safety records by department and job, attach evidence, and keep the packet available for print or review.</p>
+          <p class="sub">Fill out daily safety records by department and location, attach evidence, and keep the packet available for print or review.</p>
         </div>
         <span class="tag sync-tag">Offline draft ready<span class="es">Borrador sin conexion</span></span>
       </div>
-      ${!jobs.length ? `<div class="notice">Add a job first so safety records can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
-        <div class="form-grid section-gap">
-          <label>Department<span class="es">Departamento</span><input value="${escapeHtml(area().label)}" disabled /></label>
-          <label>Job site<span class="es">Sitio de trabajo</span><select id="safetyJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
-          <label>Form type<span class="es">Tipo de forma</span><select id="safetyTypeSelect">${setOptions(safetyFormTypes, selectedType)}</select></label>
-          <label>Date<span class="es">Fecha</span><input id="safetyDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
-          <label>Notes<span class="es">Notas</span><input id="safetyNotes" placeholder="Topic, hazard, permit number, or inspection note" /></label>
-          <label>Evidence / completed form<span class="es">Evidencia / forma completa</span><input id="safetyFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
-          <button class="primary-action form-button" id="addSafetyForm" type="button" ${canSubmit ? "" : "disabled"}>${t("Save safety record", "Guardar seguridad")}</button>
-        </div>
-        ${selectedType === "Accident Report" ? renderAccidentReportFields(selectedJob) : ""}
-        <div class="offline-note section-gap">
-          <strong>Offline use:</strong> records can be filled out in the browser and will stay on the device until sync is available.
-          <span class="es">Uso sin conexion: se guarda en el equipo hasta sincronizar.</span>
-        </div>
-        <div class="document-grid section-gap">
-          ${forms.length ? forms.map(safetyFormCard).join("") : `<div class="empty-state">No safety records for this job yet.<span class="es">Todavia no hay registros de seguridad.</span></div>`}
-        </div>
-      `}
+      <div class="form-grid section-gap">
+        <label>Department<span class="es">Departamento</span><input value="${escapeHtml(area().label)}" disabled /></label>
+        <label class="wide-field">Location / address / GPS<span class="es">Ubicacion / direccion / GPS</span><input id="safetyLocation" list="safetyLocationSuggestions" placeholder="Start typing an address, site name, or use GPS" /><datalist id="safetyLocationSuggestions">${locationSuggestions.map((location) => `<option value="${escapeHtml(location)}"></option>`).join("")}</datalist></label>
+        <button class="secondary-action form-button" id="useSafetyGps" type="button">${t("Use GPS", "Usar GPS")}</button>
+        <label>Form type<span class="es">Tipo de forma</span><select id="safetyTypeSelect">${setOptions(safetyFormTypes, selectedType)}</select></label>
+        <label>Date<span class="es">Fecha</span><input id="safetyDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
+        <label>Notes<span class="es">Notas</span><input id="safetyNotes" placeholder="Topic, hazard, permit number, or inspection note" /></label>
+        <label>Evidence / completed form<span class="es">Evidencia / forma completa</span><input id="safetyFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
+        <button class="primary-action form-button" id="addSafetyForm" type="button" ${canSubmit ? "" : "disabled"}>${t("Save safety record", "Guardar seguridad")}</button>
+      </div>
+      ${selectedType === "Accident Report" ? renderAccidentReportFields() : ""}
+      <div class="offline-note section-gap">
+        <strong>Offline use:</strong> records can be filled out in the browser and will stay on the device until sync is available.
+        <span class="es">Uso sin conexion: se guarda en el equipo hasta sincronizar.</span>
+      </div>
+      <div class="document-grid section-gap">
+        ${forms.length ? forms.map(safetyFormCard).join("") : `<div class="empty-state">No safety records for this department yet.<span class="es">Todavia no hay registros de seguridad en este departamento.</span></div>`}
+      </div>
     </section>
   `;
 }
 
-function renderAccidentReportFields(selectedJob) {
-  const workerOptions = peopleForArea(selectedJob?.area || state.selectedArea).slice().sort((a, b) => a.name.localeCompare(b.name));
-  const department = areas[selectedJob?.area || state.selectedArea]?.label || "";
+function safetyLocationSuggestions() {
+  return [...new Set((state.jobs || [])
+    .filter((job) => job.area === state.selectedArea || job.area === "all")
+    .flatMap((job) => {
+      const townState = [job.town, job.state].filter(Boolean).join(", ");
+      return [job.name, townState, [job.name, townState].filter(Boolean).join(" - ")].filter(Boolean);
+    }))].sort((a, b) => a.localeCompare(b));
+}
+
+function renderAccidentReportFields() {
+  const workerOptions = peopleForArea(state.selectedArea).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const department = areas[state.selectedArea]?.label || "";
   return `
     <div class="accident-report-form section-gap">
       <div>
@@ -5898,8 +5928,8 @@ function renderAccidentReportFields(selectedJob) {
       <div>
         <h4>Type of injury / illness<span class="es">Tipo de lesion / enfermedad</span></h4>
         <div class="injury-type-grid">
-          ${accidentInjuryTypes.map((type) => `
-            <label class="checkbox-tile"><input type="checkbox" data-accident-injury="${escapeHtml(type)}" /> ${escapeHtml(type)}</label>
+          ${accidentInjuryTypes.map(([type, typeEs]) => `
+            <label class="checkbox-tile"><input type="checkbox" data-accident-injury="${escapeHtml(type)}" /> ${escapeHtml(type)}<span class="es">${escapeHtml(typeEs)}</span></label>
           `).join("")}
         </div>
       </div>
@@ -5920,11 +5950,12 @@ function renderAccidentReportFields(selectedJob) {
 function safetyFormCard(form) {
   const files = form.files || [];
   const accident = form.accident || null;
+  const location = form.location || accident?.location || jobName(form.jobId);
   return `
     <article class="document-card">
       <div>
         <span class="tag">${escapeHtml(form.type)}</span>
-        <h3>${escapeHtml(jobName(form.jobId))}</h3>
+        <h3>${escapeHtml(location)}</h3>
         <p class="sub">${escapeHtml(form.date)} · ${escapeHtml(form.createdBy || "")}${form.notes ? ` · ${escapeHtml(form.notes)}` : ""}</p>
         ${accident ? `<p class="sub"><strong>${escapeHtml(accident.employee || "No employee")}</strong> · ${escapeHtml(accident.status || "Draft")} · ${escapeHtml(accident.location || "No location")}</p>` : ""}
         ${files.length ? `<p class="sub">${files.length} attachment${files.length === 1 ? "" : "s"}</p>` : ""}
@@ -6771,13 +6802,6 @@ function bindTabEvents() {
   if ($("addQcBend")) $("addQcBend").addEventListener("click", addQualityBendRow);
   if ($("saveQualityCheck")) $("saveQualityCheck").addEventListener("click", saveQualityCheck);
   bindTrainingEvents();
-  if ($("safetyJobSelect")) {
-    $("safetyJobSelect").addEventListener("change", (event) => {
-      state.selectedSafetyJob = event.target.value;
-      saveState();
-      render();
-    });
-  }
   if ($("safetyTypeSelect")) {
     $("safetyTypeSelect").addEventListener("change", (event) => {
       state.selectedSafetyFormType = event.target.value;
@@ -6785,6 +6809,7 @@ function bindTabEvents() {
       render();
     });
   }
+  if ($("useSafetyGps")) $("useSafetyGps").addEventListener("click", useSafetyGpsLocation);
   if ($("addSafetyForm")) $("addSafetyForm").addEventListener("click", addSafetyFormRecord);
   document.querySelectorAll("[data-safety-file]").forEach((button) => {
     button.addEventListener("click", () => openRecordFile("safetyForms", button.dataset.safetyFile, button.dataset.fileId));
@@ -8266,18 +8291,18 @@ function saveQualityCheck() {
 }
 
 async function addSafetyFormRecord() {
-  const jobId = $("safetyJobSelect")?.value;
-  const job = state.jobs.find((entry) => entry.id === jobId);
-  if (!job) return showToast("Choose a job first");
+  const location = $("safetyLocation")?.value.trim() || "";
+  if (!location) return showToast("Enter a location or GPS coordinate");
   const type = $("safetyTypeSelect")?.value || "JHA";
-  const accident = type === "Accident Report" ? collectAccidentReportData() : null;
+  const accident = type === "Accident Report" ? collectAccidentReportData(location) : null;
   if (type === "Accident Report" && !accident.employee) return showToast("Choose or type the injured employee");
   const files = await filesToStoredAttachments($("safetyFiles")?.files);
   if (!files) return;
   const record = {
     id: `safety-${Date.now()}`,
     area: state.selectedArea,
-    jobId,
+    jobId: "",
+    location,
     type,
     date: $("safetyDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
     notes: $("safetyNotes")?.value.trim() || "",
@@ -8288,11 +8313,10 @@ async function addSafetyFormRecord() {
     status: accident?.status || "Saved"
   };
   state.safetyForms.unshift(record);
-  state.selectedSafetyJob = jobId;
   state.selectedSafetyFormType = record.type;
   logActivity(record.type === "Accident Report" ? "Accident report saved" : "Safety record saved", {
     area: state.selectedArea,
-    job: job.name,
+    location,
     field: record.type,
     employee: accident?.employee || ""
   });
@@ -8301,7 +8325,27 @@ async function addSafetyFormRecord() {
   showToast(record.type === "Accident Report" ? "Accident report saved" : "Safety record saved");
 }
 
-function collectAccidentReportData() {
+function useSafetyGpsLocation() {
+  if (!navigator.geolocation) {
+    showToast("GPS is not available on this device");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((position) => {
+    const { latitude, longitude, accuracy } = position.coords;
+    const value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}${accuracy ? ` (accuracy ${Math.round(accuracy)} m)` : ""}`;
+    if ($("safetyLocation")) $("safetyLocation").value = value;
+    if ($("accidentLocation") && !$("accidentLocation").value.trim()) $("accidentLocation").value = value;
+    showToast("GPS location added");
+  }, () => {
+    showToast("GPS permission was denied or unavailable");
+  }, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 60000
+  });
+}
+
+function collectAccidentReportData(defaultLocation = "") {
   const yesNo = {};
   document.querySelectorAll("[data-accident-yn]").forEach((input) => {
     yesNo[input.dataset.accidentYn] = input.value || "N/A";
@@ -8313,7 +8357,7 @@ function collectAccidentReportData() {
     sex: $("accidentSex")?.value || "",
     time: $("accidentTime")?.value || "",
     department: $("accidentDepartment")?.value.trim() || "",
-    location: $("accidentLocation")?.value.trim() || "",
+    location: $("accidentLocation")?.value.trim() || defaultLocation,
     otherPeople: $("accidentOtherPeople")?.value.trim() || "",
     status: $("accidentStatus")?.value || "Draft",
     yesNo,
@@ -8374,7 +8418,7 @@ function deleteRecordFile(collectionName, recordId, fileId) {
   record.files = (record.files || []).filter((entry) => entry.id !== fileId);
   logActivity("Attachment deleted", {
     area: record.area || state.selectedArea,
-    job: jobName(record.jobId),
+    job: record.location || jobName(record.jobId),
     field: file.name
   });
   saveState();
@@ -8389,11 +8433,12 @@ function printSafetyRecord(recordId) {
   const win = window.open("", "_blank");
   if (!win) return showToast("Allow popups to print this record");
   const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
+  const location = record.location || jobName(record.jobId);
   win.document.write(`
     <!doctype html>
     <html>
       <head>
-        <title>${escapeHtml(record.type)} - ${escapeHtml(jobName(record.jobId))}</title>
+        <title>${escapeHtml(record.type)} - ${escapeHtml(location)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 28px; color: #0b1828; }
           header { border-bottom: 2px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
@@ -8404,9 +8449,10 @@ function printSafetyRecord(recordId) {
         </style>
       </head>
       <body>
-        <header><h1>${escapeHtml(record.type)}</h1><p>${escapeHtml(jobName(record.jobId))}</p></header>
+        <header><h1>${escapeHtml(record.type)}</h1><p>${escapeHtml(location)}</p></header>
         <div class="meta">
           <div class="box"><strong>Date</strong><br>${escapeHtml(record.date)}</div>
+          <div class="box"><strong>Location</strong><br>${escapeHtml(location)}</div>
           <div class="box"><strong>Saved by</strong><br>${escapeHtml(record.createdBy || "")}</div>
         </div>
         <section class="box"><strong>Notes</strong><p>${escapeHtml(record.notes || "No notes")}</p></section>
@@ -8423,14 +8469,19 @@ function printAccidentReport(record) {
   const win = window.open("", "_blank");
   if (!win) return showToast("Allow popups to print this accident report");
   const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
-  const ynRows = accidentYesNoFields.map(([key, en]) => `
-    <tr><th>${escapeHtml(en)}</th><td>${escapeHtml(accident.yesNo?.[key] || "N/A")}</td></tr>
+  const location = record.location || accident.location || jobName(record.jobId);
+  const ynRows = accidentYesNoFields.map(([key, en, es]) => `
+    <tr><th>${escapeHtml(en)}<br><small>${escapeHtml(es)}</small></th><td>${escapeHtml(accident.yesNo?.[key] || "N/A")}</td></tr>
   `).join("");
+  const injuryTypes = (accident.injuryTypes || []).map((type) => {
+    const match = accidentInjuryTypes.find(([en]) => en === type);
+    return match ? `${match[0]} / ${match[1]}` : type;
+  });
   win.document.write(`
     <!doctype html>
     <html>
       <head>
-        <title>Accident Report - ${escapeHtml(accident.employee || jobName(record.jobId))}</title>
+        <title>Accident Report - ${escapeHtml(accident.employee || location)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 28px; color: #0b1828; }
           header { border-bottom: 3px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
@@ -8450,7 +8501,7 @@ function printAccidentReport(record) {
       <body>
         <header>
           <h1>Injury / Accident Report</h1>
-          <p class="muted">${escapeHtml(jobName(record.jobId))} · ${escapeHtml(record.date)} · ${escapeHtml(accident.status || "Draft")}</p>
+          <p class="muted">${escapeHtml(location)} · ${escapeHtml(record.date)} · ${escapeHtml(accident.status || "Draft")}</p>
         </header>
         <h2>Worker Information</h2>
         <div class="grid">
@@ -8458,12 +8509,12 @@ function printAccidentReport(record) {
           <div class="box"><strong>Sex</strong><br>${escapeHtml(accident.sex || "")}</div>
           <div class="box"><strong>Date / Time</strong><br>${escapeHtml(record.date)} ${escapeHtml(accident.time || "")}</div>
           <div class="box"><strong>Department</strong><br>${escapeHtml(accident.department || "")}</div>
-          <div class="box"><strong>Location</strong><br>${escapeHtml(accident.location || "")}</div>
+          <div class="box"><strong>Location</strong><br>${escapeHtml(accident.location || location)}</div>
           <div class="box"><strong>Treatment / doctor / hospital</strong><br>${escapeHtml(accident.treatment || "")}</div>
         </div>
         <table>${ynRows}</table>
         <h2>Injury Information</h2>
-        <div class="box"><strong>Type of injury / illness</strong><br>${(accident.injuryTypes || []).map(escapeHtml).join(", ") || "None selected"}</div>
+        <div class="box"><strong>Type of injury / illness</strong><br>${injuryTypes.map(escapeHtml).join(", ") || "None selected"}</div>
         <div class="box"><strong>Affected body part(s)</strong><br>${escapeHtml(accident.bodyParts || "")}</div>
         <h2>Incident Details</h2>
         <div class="line-box"><strong>What happened</strong><br>${escapeHtml(accident.whatHappened || "")}</div>

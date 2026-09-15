@@ -1127,6 +1127,58 @@ textarea {
   margin-top: 2px;
 }
 
+.assessment-tabs {
+  display: grid;
+  gap: 12px;
+}
+
+.assessment-tab-radio {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.assessment-tab-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 2px solid var(--line);
+}
+
+.assessment-tab-button {
+  min-width: 160px;
+  border: 2px solid var(--line);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.assessment-tab-button .es {
+  color: var(--blue);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.assessment-tab-panel {
+  display: none;
+}
+
+#assessmentTabChecklist:checked ~ .assessment-tab-nav label[for="assessmentTabChecklist"],
+#assessmentTabQuiz:checked ~ .assessment-tab-nav label[for="assessmentTabQuiz"] {
+  color: var(--ink);
+  box-shadow: 0 -2px 0 var(--accent) inset;
+}
+
+#assessmentTabChecklist:checked ~ .assessment-checklist-panel,
+#assessmentTabQuiz:checked ~ .assessment-quiz-panel {
+  display: block;
+}
+
 .training-builder,
 .training-runner {
   display: grid;
