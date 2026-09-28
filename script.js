@@ -739,7 +739,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1132,6 +1132,7 @@ const defaultState = {
   selectedSafetyFormType: "JHA",
   selectedTrainingCourse: "",
   selectedTrainingTab: "library",
+  selectedDrugTestingDepartment: "Rebar",
   selectedAuditJob: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
@@ -1158,6 +1159,8 @@ const defaultState = {
   fieldAudits: [],
   trainingCourses: [],
   trainingResults: [],
+  drugTestingRoster: [],
+  drugTestingDraws: [],
   qualityChecks: [],
   reimbursementRequests: [],
   production: [
@@ -1352,6 +1355,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
   next.selectedTrainingTab = next.selectedTrainingTab || "library";
+  next.selectedDrugTestingDepartment = next.selectedDrugTestingDepartment || "Rebar";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
@@ -1378,6 +1382,20 @@ function upgradeState(next, resetToCurrentWeek = false) {
     accredited: result.accredited || false,
     accreditedBy: result.accreditedBy || "",
     accreditedAt: result.accreditedAt || ""
+  }));
+  next.drugTestingRoster = (next.drugTestingRoster || []).map((employee) => ({
+    id: employee.id || `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: String(employee.name || "").trim(),
+    department: ["Rebar", "Solar Piles", "Skids"].includes(employee.department) ? employee.department : "Rebar",
+    active: employee.active !== false,
+    addedAt: employee.addedAt || "",
+    addedBy: employee.addedBy || ""
+  })).filter((employee) => employee.name);
+  next.drugTestingDraws = (next.drugTestingDraws || []).map((draw) => ({
+    ...draw,
+    employees: Array.isArray(draw.employees) ? draw.employees : [],
+    department: draw.department || "All departments",
+    count: Number(draw.count) || draw.employees?.length || 0
   }));
   next.qualityChecks = next.qualityChecks || [];
   next.reimbursementRequests = (next.reimbursementRequests || []).map((request) => ({
@@ -1987,6 +2005,7 @@ function availableTabs() {
       ["training", "Training & Competency", "Capacitacion"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["drugTesting", "Drug Testing", "Pruebas antidopaje"],
       ["documents", "Documents", "Documentos"],
       ["setup", "People / Departments", "Personas / Departamentos"]
     ];
@@ -1995,6 +2014,7 @@ function availableTabs() {
     ["training", "Training & Competency", "Capacitacion"],
     ["audits", "Field Audits", "Auditorias de campo"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
+    ...(state.selectedRole === "Admin" ? [["drugTesting", "Drug Testing", "Pruebas antidopaje"]] : []),
     ["documents", "Documents", "Documentos"],
     ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
     ["jobs", "Jobs / Sites", "Trabajos / sitios"],
@@ -2889,12 +2909,260 @@ function renderActiveTab() {
   if (state.activeTab === "reimbursements") return renderReimbursements();
   if (state.activeTab === "training") return renderTraining();
   if (state.activeTab === "safety") return renderSafetyForms();
+  if (state.activeTab === "drugTesting") return renderDrugTesting();
   if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
   if (state.activeTab === "employeeReports") return renderEmployeeReports();
   if (state.activeTab === "deliverables") return renderDeliverables();
   if (state.activeTab === "setup") return renderSetup();
   return renderDashboard();
+}
+
+const drugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
+
+function drugTestingDepartmentOptions(selected, includeAll = false) {
+  const options = includeAll ? ["All departments", ...drugTestingDepartments] : drugTestingDepartments;
+  return options.map((department) => `<option value="${escapeHtml(department)}" ${department === selected ? "selected" : ""}>${escapeHtml(department)}</option>`).join("");
+}
+
+function renderDrugTesting() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return renderDashboard();
+  const selectedDepartment = state.selectedDrugTestingDepartment || "Rebar";
+  const roster = (state.drugTestingRoster || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const departmentRoster = roster.filter((employee) => employee.department === selectedDepartment);
+  const activeCount = departmentRoster.filter((employee) => employee.active).length;
+  const latestDraw = state.drugTestingDraws?.[0];
+  return `
+    <section class="panel drug-testing-panel">
+      <div class="split">
+        <div>
+          <h2>${t("Drug Testing Selection", "Seleccion para pruebas antidopaje")}</h2>
+          <p class="sub">Maintain the eligible employee roster and create a documented random selection without duplicate names.</p>
+          <p class="sub es">Mantenga la lista de empleados elegibles y cree una seleccion aleatoria documentada sin nombres duplicados.</p>
+        </div>
+        <span class="tag">${roster.filter((employee) => employee.active).length} active / activos</span>
+      </div>
+
+      <div class="drug-testing-grid section-gap">
+        <div class="drug-testing-section">
+          <h3>${t("Employee roster", "Lista de empleados")}</h3>
+          <div class="form-grid drug-roster-controls">
+            <label>Department<span class="es">Departamento</span><select id="drugRosterDepartment" onchange="selectDrugTestingDepartment(this.value)">${drugTestingDepartmentOptions(selectedDepartment)}</select></label>
+            <label>Find employee<span class="es">Buscar empleado</span><input id="drugRosterSearch" type="search" placeholder="Name / Nombre" oninput="filterDrugTestingRoster(this.value)" /></label>
+            <div class="drug-roster-summary"><span>${escapeHtml(selectedDepartment)}</span><strong>${activeCount}</strong><small>eligible / elegibles</small></div>
+          </div>
+          <label>Add employee names<span class="es">Agregar nombres de empleados</span><textarea id="drugEmployeeNames" rows="5" placeholder="Enter one name per line / Escriba un nombre por linea"></textarea></label>
+          <div class="action-row section-gap-small">
+            <button class="primary-action" type="button" onclick="addDrugTestingEmployees()">${t("Add employees", "Agregar empleados")}</button>
+          </div>
+          <div class="table-wrap section-gap drug-roster-table">
+            <table>
+              <thead><tr><th>Name<span class="es">Nombre</span></th><th>Department<span class="es">Departamento</span></th><th>Eligible<span class="es">Elegible</span></th><th>Action<span class="es">Accion</span></th></tr></thead>
+              <tbody>
+                ${departmentRoster.length ? departmentRoster.map((employee) => `
+                  <tr data-drug-roster-row data-search-name="${escapeHtml(employee.name.toLowerCase())}">
+                    <td><strong>${escapeHtml(employee.name)}</strong></td>
+                    <td><select class="table-select" onchange="moveDrugTestingEmployee('${escapeHtml(employee.id)}', this.value)">${drugTestingDepartmentOptions(employee.department)}</select></td>
+                    <td><label class="compact-toggle"><input type="checkbox" ${employee.active ? "checked" : ""} onchange="toggleDrugTestingEmployee('${escapeHtml(employee.id)}', this.checked)" /><span>${employee.active ? "Yes / Si" : "No"}</span></label></td>
+                    <td><button class="danger-action table-action" type="button" onclick="deleteDrugTestingEmployee('${escapeHtml(employee.id)}')">${t("Remove", "Quitar")}</button></td>
+                  </tr>
+                `).join("") : `<tr><td colspan="4"><div class="empty-state">No employees in this department yet.<span class="es">Todavia no hay empleados en este departamento.</span></div></td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="drug-testing-section random-draw-section">
+          <h3>${t("Random selection", "Seleccion aleatoria")}</h3>
+          <div class="form-grid drug-draw-controls">
+            <label>Department pool<span class="es">Grupo de departamento</span><select id="drugDrawDepartment">${drugTestingDepartmentOptions(selectedDepartment, true)}</select></label>
+            <label>Number to select<span class="es">Cantidad a seleccionar</span><input id="drugDrawCount" type="number" min="1" step="1" value="1" /></label>
+            <label>Selection date<span class="es">Fecha de seleccion</span><input id="drugDrawDate" type="date" value="${localDateInputValue()}" /></label>
+            <label>Notes (optional)<span class="es">Notas (opcional)</span><input id="drugDrawNotes" placeholder="Random test / Prueba aleatoria" /></label>
+          </div>
+          <div class="notice">Only employees marked eligible are included. Each employee can be selected only once per draw.<span class="es">Solo se incluyen empleados marcados como elegibles. Cada empleado puede salir solamente una vez por seleccion.</span></div>
+          <button class="secondary-action draw-button section-gap" type="button" onclick="runDrugTestingDraw()">${t("Choose random employees", "Elegir empleados al azar")}</button>
+          ${latestDraw ? renderDrugTestingDraw(latestDraw, true) : `<div class="empty-state section-gap">No selections have been run yet.<span class="es">Todavia no se ha realizado ninguna seleccion.</span></div>`}
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="split"><div><h2>${t("Selection history", "Historial de selecciones")}</h2><p class="sub">Saved records show exactly who was selected, when, and by whom.</p></div></div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Date<span class="es">Fecha</span></th><th>Department<span class="es">Departamento</span></th><th>Selected employees<span class="es">Empleados seleccionados</span></th><th>Run by<span class="es">Realizado por</span></th><th>Record<span class="es">Registro</span></th></tr></thead>
+          <tbody>
+            ${(state.drugTestingDraws || []).length ? state.drugTestingDraws.map((draw) => `
+              <tr>
+                <td><strong>${escapeHtml(draw.date || "")}</strong><small class="table-subtext">${escapeHtml(draw.drawnAt || "")}</small></td>
+                <td>${escapeHtml(draw.department)}</td>
+                <td>${draw.employees.map((employee) => `<span class="selection-name">${escapeHtml(employee.name)}<small>${escapeHtml(employee.department)}</small></span>`).join("")}</td>
+                <td>${escapeHtml(draw.drawnBy || "")}</td>
+                <td><button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print", "Imprimir")}</button></td>
+              </tr>
+            `).join("") : `<tr><td colspan="5"><div class="empty-state">No selection history yet.<span class="es">Todavia no hay historial de selecciones.</span></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderDrugTestingDraw(draw, latest = false) {
+  return `
+    <div class="drug-draw-result section-gap ${latest ? "latest" : ""}">
+      <div class="split">
+        <div><span class="eyebrow">${t("Most recent selection", "Seleccion mas reciente")}</span><h3>${escapeHtml(draw.department)} · ${escapeHtml(draw.date || "")}</h3></div>
+        <button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print record", "Imprimir registro")}</button>
+      </div>
+      <ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)}</span></li>`).join("")}</ol>
+      ${draw.notes ? `<p class="sub"><strong>Notes / Notas:</strong> ${escapeHtml(draw.notes)}</p>` : ""}
+      <small>Selected by / Seleccionado por: ${escapeHtml(draw.drawnBy || "")} · ${escapeHtml(draw.drawnAt || "")}</small>
+    </div>
+  `;
+}
+
+function selectDrugTestingDepartment(department) {
+  if (!drugTestingDepartments.includes(department)) return;
+  state.selectedDrugTestingDepartment = department;
+  saveState();
+  render();
+}
+
+function addDrugTestingEmployees() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const department = $("drugRosterDepartment")?.value || state.selectedDrugTestingDepartment || "Rebar";
+  const names = ($("drugEmployeeNames")?.value || "").split(/\n|;/).map((name) => name.trim()).filter(Boolean);
+  if (!names.length) {
+    showToast("Enter at least one employee name / Escriba por lo menos un nombre");
+    return;
+  }
+  let added = 0;
+  let skipped = 0;
+  names.forEach((name) => {
+    const existing = state.drugTestingRoster.find((employee) => sameName(employee.name, name));
+    if (existing) {
+      skipped += 1;
+      return;
+    }
+    state.drugTestingRoster.push({
+      id: `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      department,
+      active: true,
+      addedAt: timestamp(),
+      addedBy: actorName()
+    });
+    added += 1;
+  });
+  logActivity("Drug testing roster updated", { department, added, skipped });
+  saveState();
+  render();
+  showToast(`${added} employee(s) added${skipped ? `; ${skipped} duplicate(s) skipped` : ""}`);
+}
+
+function moveDrugTestingEmployee(employeeId, department) {
+  if (!["Safety", "Admin"].includes(state.selectedRole) || !drugTestingDepartments.includes(department)) return;
+  const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
+  if (!employee) return;
+  const previous = employee.department;
+  employee.department = department;
+  logActivity("Drug testing department changed", { employee: employee.name, from: previous, to: department });
+  saveState();
+  render();
+}
+
+function toggleDrugTestingEmployee(employeeId, active) {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
+  if (!employee) return;
+  employee.active = Boolean(active);
+  logActivity("Drug testing eligibility changed", { employee: employee.name, department: employee.department, eligible: employee.active ? "Yes" : "No" });
+  saveState();
+  render();
+}
+
+function deleteDrugTestingEmployee(employeeId) {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
+  if (!employee || !confirm(`Remove ${employee.name} from the drug testing roster? / Quitar a ${employee.name} de la lista?`)) return;
+  state.drugTestingRoster = state.drugTestingRoster.filter((entry) => entry.id !== employeeId);
+  logActivity("Employee removed from drug testing roster", { employee: employee.name, department: employee.department });
+  saveState();
+  render();
+}
+
+function filterDrugTestingRoster(query) {
+  const search = String(query || "").trim().toLowerCase();
+  document.querySelectorAll("[data-drug-roster-row]").forEach((row) => {
+    row.hidden = search && !String(row.dataset.searchName || "").includes(search);
+  });
+}
+
+function secureRandomIndex(max) {
+  if (max <= 1) return 0;
+  if (!window.crypto?.getRandomValues) return Math.floor(Math.random() * max);
+  const range = 0x100000000;
+  const limit = range - (range % max);
+  const value = new Uint32Array(1);
+  do window.crypto.getRandomValues(value); while (value[0] >= limit);
+  return value[0] % max;
+}
+
+function runDrugTestingDraw() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const department = $("drugDrawDepartment")?.value || "All departments";
+  const count = Math.floor(Number($("drugDrawCount")?.value) || 0);
+  const date = $("drugDrawDate")?.value || localDateInputValue();
+  const notes = $("drugDrawNotes")?.value.trim() || "";
+  const eligible = (state.drugTestingRoster || []).filter((employee) => employee.active && (department === "All departments" || employee.department === department));
+  if (count < 1) {
+    showToast("Enter how many employees to select / Escriba cuantos empleados desea seleccionar");
+    return;
+  }
+  if (count > eligible.length) {
+    showToast(`Only ${eligible.length} eligible employee(s) are available / Solo hay ${eligible.length} empleado(s) elegibles`);
+    return;
+  }
+  const pool = eligible.slice();
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    const randomIndex = secureRandomIndex(index + 1);
+    [pool[index], pool[randomIndex]] = [pool[randomIndex], pool[index]];
+  }
+  const employees = pool.slice(0, count).map((employee) => ({ id: employee.id, name: employee.name, department: employee.department }));
+  const draw = {
+    id: `drug-draw-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    date,
+    department,
+    count,
+    notes,
+    employees,
+    drawnBy: actorName(),
+    drawnRole: actorRole(),
+    drawnAt: timestamp()
+  };
+  state.drugTestingDraws.unshift(draw);
+  logActivity("Random drug testing selection completed", { department, count, employees: employees.map((employee) => employee.name).join(", ") });
+  saveState();
+  render();
+  showToast(`${count} employee(s) selected and recorded`);
+}
+
+function printDrugTestingDraw(drawId) {
+  const draw = state.drugTestingDraws.find((entry) => entry.id === drawId);
+  if (!draw) return;
+  const win = window.open("", "_blank");
+  if (!win) {
+    showToast("Allow pop-ups to print this record");
+    return;
+  }
+  win.document.write(`<!doctype html><html><head><title>Drug Testing Selection</title><style>
+    body{font-family:Arial,sans-serif;color:#071426;margin:36px}header{border-bottom:3px solid #071426;padding-bottom:14px;margin-bottom:22px}h1{margin:0 0 5px;font-size:25px}p{margin:5px 0}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.meta div{border:1px solid #9da8ae;padding:10px}.meta span{display:block;color:#52606a;font-size:12px;font-weight:bold}.meta strong{display:block;margin-top:5px}ol{padding-left:28px}li{padding:10px 6px;border-bottom:1px solid #ccd3d8}li span{float:right;color:#52606a}.signature{margin-top:48px;border-top:1px solid #071426;width:320px;padding-top:6px}@media print{button{display:none}}
+  </style></head><body><header><h1>Random Drug Testing Selection</h1><p>Seleccion aleatoria para pruebas antidopaje</p></header>
+  <div class="meta"><div><span>Selection date / Fecha</span><strong>${escapeHtml(draw.date)}</strong></div><div><span>Department / Departamento</span><strong>${escapeHtml(draw.department)}</strong></div><div><span>Selected by / Seleccionado por</span><strong>${escapeHtml(draw.drawnBy)}</strong></div><div><span>Recorded / Registrado</span><strong>${escapeHtml(draw.drawnAt)}</strong></div></div>
+  <h2>Selected employees / Empleados seleccionados</h2><ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)}</span></li>`).join("")}</ol>
+  ${draw.notes ? `<p><strong>Notes / Notas:</strong> ${escapeHtml(draw.notes)}</p>` : ""}<div class="signature">Authorized signature / Firma autorizada</div><script>window.addEventListener("load",()=>window.print());<\/script></body></html>`);
+  win.document.close();
 }
 
 function defaultTrainingQuestions() {
