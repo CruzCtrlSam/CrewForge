@@ -63,6 +63,32 @@ const qualityRejectReasons = ["None", "Missed bend", "Wrong size", "Wrong quanti
 const jobStatuses = ["Active", "In Progress", "On Hold", "Complete"];
 const documentTypes = ["Site Safety Plan", "JHA", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Form", "Other"];
 const safetyFormTypes = ["JHA", "Accident Report", "Hot Work Permit", "Fire Extinguisher Inspection", "Rigging Form", "Equipment Inspection", "Client Safety Inspection", "Other"];
+const employeeIncidentCategories = [
+  ["SOP deviation", "Incumplimiento del SOP"],
+  ["Unsafe operation", "Operacion insegura"],
+  ["Equipment misuse or damage", "Uso indebido o dano de equipo"],
+  ["Lockout/tagout violation", "Incumplimiento de bloqueo/etiquetado"],
+  ["PPE violation", "Incumplimiento de EPP"],
+  ["Near miss", "Casi accidente"],
+  ["Property damage", "Dano a propiedad"],
+  ["Other", "Otro"]
+];
+const employeeIncidentActions = [
+  ["Coaching", "Orientacion"],
+  ["Retraining", "Reentrenamiento"],
+  ["Written warning", "Advertencia escrita"],
+  ["Final warning", "Advertencia final"],
+  ["Suspension review", "Revision para suspension"],
+  ["Termination review", "Revision para terminacion"],
+  ["Other", "Otro"]
+];
+const employeeIncidentStatuses = ["Draft", "Under review", "Acknowledged", "Closed"];
+const employeeIncidentStatusLabels = {
+  Draft: "Draft / Borrador",
+  "Under review": "Under review / En revision",
+  Acknowledged: "Acknowledged / Recibido",
+  Closed: "Closed / Cerrado"
+};
 const accidentYesNoFields = [
   ["fatality", "Fatality", "Fatalidad"],
   ["called911", "911 called", "Se llamo al 911"],
@@ -748,7 +774,7 @@ let lastLoginCode = "";
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
 const WORKSPACE_ID = "crewforge-demo";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1165,6 +1191,7 @@ const defaultState = {
   ],
   sheets: {},
   safetyForms: [],
+  employeeIncidents: [],
   fieldAudits: [],
   trainingCourses: [],
   trainingResults: [],
@@ -1373,6 +1400,15 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.safetyForms = next.safetyForms || [];
+  next.employeeIncidents = (next.employeeIncidents || []).map((incident) => ({
+    ...incident,
+    area: incident.area || next.selectedArea || "",
+    employee: incident.employee || "",
+    files: Array.isArray(incident.files) ? incident.files : [],
+    status: employeeIncidentStatuses.includes(incident.status) ? incident.status : "Draft",
+    category: incident.category || "Other",
+    recommendedAction: incident.recommendedAction || "Coaching"
+  }));
   next.fieldAudits = next.fieldAudits || [];
   next.trainingCourses = (next.trainingCourses || []).map((course) => ({
     ...course,
@@ -2017,6 +2053,7 @@ function availableTabs() {
       ["training", "Training & Competency", "Capacitacion"],
       ["audits", "Field Audits", "Auditorias de campo"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
+      ["employeeIncidents", "Employee Incidents", "Incidentes de empleados"],
       ["drugTesting", "Drug Testing", "Pruebas antidopaje"],
       ["documents", "Documents", "Documentos"],
       ["setup", "People / Departments", "Personas / Departamentos"]
@@ -2026,6 +2063,7 @@ function availableTabs() {
     ["training", "Training & Competency", "Capacitacion"],
     ["audits", "Field Audits", "Auditorias de campo"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
+    ...(state.selectedRole === "Admin" ? [["employeeIncidents", "Employee Incidents", "Incidentes de empleados"]] : []),
     ...(state.selectedRole === "Admin" ? [["drugTesting", "Drug Testing", "Pruebas antidopaje"]] : []),
     ["documents", "Documents", "Documentos"],
     ...(canUseQualityControl() ? [["qualityControl", "Quality Control", "Control de calidad"]] : []),
@@ -2921,6 +2959,7 @@ function renderActiveTab() {
   if (state.activeTab === "reimbursements") return renderReimbursements();
   if (state.activeTab === "training") return renderTraining();
   if (state.activeTab === "safety") return renderSafetyForms();
+  if (state.activeTab === "employeeIncidents") return renderEmployeeIncidents();
   if (state.activeTab === "drugTesting") return renderDrugTesting();
   if (state.activeTab === "audits") return renderFieldAudits();
   if (state.activeTab === "documents") return renderDocuments();
@@ -6352,6 +6391,101 @@ function safetyFormCard(form) {
   `;
 }
 
+function renderEmployeeIncidents() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return renderDashboard();
+  const employees = peopleForArea(state.selectedArea).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const incidents = (state.employeeIncidents || [])
+    .filter((incident) => incident.area === state.selectedArea)
+    .slice()
+    .sort((a, b) => String(b.createdIso || b.createdAt || "").localeCompare(String(a.createdIso || a.createdAt || "")));
+  const locationSuggestions = safetyLocationSuggestions();
+  const categoryOptions = employeeIncidentCategories.map(([en, es]) => `<option value="${escapeHtml(en)}">${escapeHtml(en)} / ${escapeHtml(es)}</option>`).join("");
+  const actionOptions = employeeIncidentActions.map(([en, es]) => `<option value="${escapeHtml(en)}">${escapeHtml(en)} / ${escapeHtml(es)}</option>`).join("");
+  return `
+    <section class="panel employee-incident-panel">
+      <div class="split">
+        <div>
+          <h2>${t("Employee Incident Log", "Registro de incidentes de empleados")}</h2>
+          <p class="sub">Document observed conduct, equipment or SOP concerns, statements, evidence, and follow-up without changing the original facts.</p>
+          <p class="sub es">Documente conducta observada, asuntos de equipo o SOP, declaraciones, evidencia y seguimiento sin cambiar los hechos originales.</p>
+        </div>
+        <span class="tag">Safety / Admin</span>
+      </div>
+      <div class="notice section-gap-small">
+        <strong>Use factual language.</strong> Record what was seen, heard, or documented. Recommended action is a review step, not an automatic disciplinary decision.
+        <span class="es">Use lenguaje basado en hechos. Registre lo observado, escuchado o documentado. La accion recomendada requiere revision y no es una decision disciplinaria automatica.</span>
+      </div>
+      <div class="form-grid section-gap">
+        <label>Employee<span class="es">Empleado</span><select id="incidentEmployee"><option value="">Select employee / Seleccione empleado</option>${setOptions(employees, "", (person) => person.name, (person) => person.name)}</select></label>
+        <label>Employee not listed<span class="es">Empleado no listado</span><input id="incidentManualEmployee" placeholder="Type full name / Escriba nombre completo" /></label>
+        <label>Incident date<span class="es">Fecha del incidente</span><input id="incidentDate" type="date" value="${localDateInputValue()}" /></label>
+        <label>Incident time<span class="es">Hora del incidente</span><input id="incidentTime" type="time" /></label>
+        <label class="wide-field">Location / address<span class="es">Ubicacion / direccion</span><input id="incidentLocation" list="incidentLocationSuggestions" placeholder="Exact work area, address, or GPS" /><datalist id="incidentLocationSuggestions">${locationSuggestions.map((location) => `<option value="${escapeHtml(location)}"></option>`).join("")}</datalist></label>
+        <label>Category<span class="es">Categoria</span><select id="incidentCategory">${categoryOptions}</select></label>
+        <label>Machine / equipment<span class="es">Maquina / equipo</span><input id="incidentEquipment" placeholder="Machine name or asset number" /></label>
+        <label class="wide-field">SOP, rule, or policy involved<span class="es">SOP, regla o politica involucrada</span><input id="incidentSop" placeholder="Title, section, or procedure number" /></label>
+        <label>Report status<span class="es">Estado del reporte</span><select id="incidentStatus">${employeeIncidentStatuses.map((status) => `<option value="${status}">${employeeIncidentStatusLabels[status]}</option>`).join("")}</select></label>
+        <label>Recommended action<span class="es">Accion recomendada</span><select id="incidentRecommendedAction">${actionOptions}</select></label>
+        <label class="wide-field">Observed facts<span class="es">Hechos observados</span><textarea id="incidentFacts" rows="5" placeholder="Who, what, when, and where. Avoid assumptions or conclusions."></textarea></label>
+        <label class="wide-field">Immediate response<span class="es">Respuesta inmediata</span><textarea id="incidentImmediateAction" rows="4" placeholder="Stopped work, secured equipment, notified supervision, etc."></textarea></label>
+        <label class="wide-field">Employee statement<span class="es">Declaracion del empleado</span><textarea id="incidentEmployeeStatement" rows="4" placeholder="Record the employee's statement in their own words when possible."></textarea></label>
+        <label class="wide-field">Witness name(s) and statement(s)<span class="es">Nombre(s) y declaracion(es) de testigos</span><textarea id="incidentWitnesses" rows="4" placeholder="Identify each witness and summarize or attach their statement."></textarea></label>
+        <label class="wide-field">Corrective action / retraining required<span class="es">Accion correctiva / reentrenamiento requerido</span><textarea id="incidentCorrectiveAction" rows="4" placeholder="Required follow-up, training, or controls"></textarea></label>
+        <label>Follow-up date<span class="es">Fecha de seguimiento</span><input id="incidentFollowUpDate" type="date" /></label>
+        <label>Supervisor<span class="es">Supervisor</span><input id="incidentSupervisor" placeholder="Full name" /></label>
+        <label>Safety Director<span class="es">Director de seguridad</span><input id="incidentSafetyDirector" value="${escapeHtml(state.selectedRole === "Safety" ? actorName() : "")}" placeholder="Full name" /></label>
+        <label>Pictures / supporting files (25 MB each)<span class="es">Fotos / archivos de apoyo (25 MB cada uno)</span><input id="incidentFiles" type="file" accept="image/*,.pdf,.doc,.docx" multiple /></label>
+        <button class="primary-action form-button" id="saveEmployeeIncident" type="button">${t("Save incident record", "Guardar incidente")}</button>
+      </div>
+      <div class="offline-note">
+        <strong>Offline ready:</strong> the record and pictures remain on this device until CrewForge can sync.
+        <span class="es">Listo sin conexion: el registro y las fotos permanecen en este equipo hasta que CrewForge pueda sincronizar.</span>
+      </div>
+      <div class="section-gap">
+        <h3>${t("Incident history", "Historial de incidentes")}</h3>
+        <div class="document-grid">
+          ${incidents.length ? incidents.map(employeeIncidentCard).join("") : `<div class="empty-state">No employee incidents recorded for this department.<span class="es">No hay incidentes de empleados registrados para este departamento.</span></div>`}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function employeeIncidentCard(incident) {
+  const files = incident.files || [];
+  return `
+    <article class="document-card incident-card">
+      <div>
+        <div class="incident-card-tags">
+          <span class="tag">${escapeHtml(incident.recordNumber || "Incident")}</span>
+          <span class="tag">${escapeHtml(incident.category || "Other")}</span>
+        </div>
+        <h3>${escapeHtml(incident.employee || "Employee not identified")}</h3>
+        <p class="sub">${escapeHtml(incident.date || "")} ${escapeHtml(incident.time || "")} · ${escapeHtml(incident.location || "No location")}</p>
+        <p class="sub">${escapeHtml(incident.equipment || "No equipment listed")} · ${escapeHtml(incident.recommendedAction || "No action listed")} · ${files.length} ${files.length === 1 ? "attachment" : "attachments"}</p>
+        <p class="sub">Created by ${escapeHtml(incident.createdBy || "")} · ${escapeHtml(incident.createdAt || "")}</p>
+      </div>
+      <div class="document-actions incident-actions">
+        <label class="compact-status">Status<span class="es">Estado</span><select class="table-select" data-incident-status="${incident.id}">${employeeIncidentStatuses.map((status) => `<option value="${status}" ${status === incident.status ? "selected" : ""}>${employeeIncidentStatusLabels[status]}</option>`).join("")}</select></label>
+        <button class="primary-action table-action" data-print-incident="${incident.id}" type="button">Print / Save PDF<span class="es">Imprimir / Guardar PDF</span></button>
+      </div>
+      ${files.length ? `<div class="attachment-list">${files.map((file) => incidentAttachmentRow(incident.id, file)).join("")}</div>` : ""}
+    </article>
+  `;
+}
+
+function incidentAttachmentRow(recordId, file) {
+  return `
+    <div class="attachment-row">
+      <span><strong>${escapeHtml(file.name)}</strong> · ${fileSize(file.size)}</span>
+      <span class="attachment-actions">
+        <button class="secondary-action table-action" data-incident-file="${recordId}" data-file-id="${file.id}" type="button">Open<span class="es">Abrir</span></button>
+        <button class="danger-action table-action" data-delete-incident-file="${recordId}" data-file-id="${file.id}" type="button">Delete<span class="es">Borrar</span></button>
+      </span>
+    </div>
+  `;
+}
+
 function renderFieldAudits() {
   const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
@@ -7220,6 +7354,19 @@ function bindTabEvents() {
   });
   document.querySelectorAll("[data-print-safety]").forEach((button) => {
     button.addEventListener("click", () => printSafetyRecord(button.dataset.printSafety));
+  });
+  if ($("saveEmployeeIncident")) $("saveEmployeeIncident").addEventListener("click", saveEmployeeIncident);
+  document.querySelectorAll("[data-incident-status]").forEach((select) => {
+    select.addEventListener("change", () => updateEmployeeIncidentStatus(select.dataset.incidentStatus, select.value));
+  });
+  document.querySelectorAll("[data-print-incident]").forEach((button) => {
+    button.addEventListener("click", () => printEmployeeIncident(button.dataset.printIncident));
+  });
+  document.querySelectorAll("[data-incident-file]").forEach((button) => {
+    button.addEventListener("click", () => openRecordFile("employeeIncidents", button.dataset.incidentFile, button.dataset.fileId));
+  });
+  document.querySelectorAll("[data-delete-incident-file]").forEach((button) => {
+    button.addEventListener("click", () => deleteRecordFile("employeeIncidents", button.dataset.deleteIncidentFile, button.dataset.fileId));
   });
   if ($("auditJobSelect")) {
     $("auditJobSelect").addEventListener("change", (event) => {
@@ -8683,6 +8830,176 @@ async function filesToStoredAttachments(files) {
     });
   }
   return attachments;
+}
+
+function incidentRecordNumber(date) {
+  const compactDate = String(date || localDateInputValue()).replace(/-/g, "");
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `INC-${compactDate}-${suffix}`;
+}
+
+function employeeIncidentOptionLabel(value, options) {
+  const match = options.find(([en]) => en === value);
+  return match ? `${match[0]} / ${match[1]}` : value || "";
+}
+
+async function saveEmployeeIncident() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return showToast("Safety or Admin access required");
+  const employee = $("incidentManualEmployee")?.value.trim() || $("incidentEmployee")?.value || "";
+  const date = $("incidentDate")?.value || localDateInputValue();
+  const location = $("incidentLocation")?.value.trim() || "";
+  const facts = $("incidentFacts")?.value.trim() || "";
+  if (!employee) return showToast("Choose or type the employee name");
+  if (!location) return showToast("Enter the incident location");
+  if (!facts) return showToast("Enter the observed facts");
+  const files = await filesToStoredAttachments($("incidentFiles")?.files);
+  if (!files) return;
+  const record = {
+    id: `employee-incident-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    recordNumber: incidentRecordNumber(date),
+    area: state.selectedArea,
+    employee,
+    date,
+    time: $("incidentTime")?.value || "",
+    location,
+    category: $("incidentCategory")?.value || "Other",
+    equipment: $("incidentEquipment")?.value.trim() || "",
+    sopReference: $("incidentSop")?.value.trim() || "",
+    facts,
+    immediateAction: $("incidentImmediateAction")?.value.trim() || "",
+    employeeStatement: $("incidentEmployeeStatement")?.value.trim() || "",
+    witnesses: $("incidentWitnesses")?.value.trim() || "",
+    correctiveAction: $("incidentCorrectiveAction")?.value.trim() || "",
+    followUpDate: $("incidentFollowUpDate")?.value || "",
+    supervisor: $("incidentSupervisor")?.value.trim() || "",
+    safetyDirector: $("incidentSafetyDirector")?.value.trim() || "",
+    recommendedAction: $("incidentRecommendedAction")?.value || "Coaching",
+    status: $("incidentStatus")?.value || "Draft",
+    files,
+    createdBy: actorName(),
+    createdRole: actorRole(),
+    createdAt: timestamp(),
+    createdIso: new Date().toISOString(),
+    statusHistory: []
+  };
+  state.employeeIncidents.unshift(record);
+  logActivity("Employee incident recorded", {
+    area: record.area,
+    employee: record.employee,
+    field: record.recordNumber,
+    to: record.status
+  });
+  saveState();
+  render();
+  showToast(`${record.recordNumber} saved`);
+}
+
+function updateEmployeeIncidentStatus(id, status) {
+  const incident = state.employeeIncidents?.find((entry) => entry.id === id);
+  if (!incident || !employeeIncidentStatuses.includes(status)) return;
+  const previous = incident.status || "Draft";
+  if (previous === status) return;
+  incident.status = status;
+  incident.statusHistory = incident.statusHistory || [];
+  incident.statusHistory.unshift({ from: previous, to: status, by: actorName(), at: timestamp() });
+  logActivity("Employee incident status changed", {
+    area: incident.area,
+    employee: incident.employee,
+    field: incident.recordNumber,
+    from: previous,
+    to: status
+  });
+  saveState();
+  showToast(`Incident marked ${status}`);
+}
+
+function printEmployeeIncident(id) {
+  const incident = state.employeeIncidents?.find((entry) => entry.id === id);
+  if (!incident) return;
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print this incident record");
+  const areaLabel = areas[incident.area]?.label || incident.area || "";
+  const attachmentList = incident.files?.length
+    ? incident.files.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("")
+    : "<li>No attachments / Sin archivos adjuntos</li>";
+  const photoEvidence = (incident.files || [])
+    .filter((file) => String(file.mime || "").startsWith("image/"))
+    .map((file, index) => `<figure><img src="${file.dataUrl}" alt="Evidence ${index + 1}" /><figcaption>${escapeHtml(file.name)}</figcaption></figure>`)
+    .join("");
+  const statusHistory = incident.statusHistory?.length
+    ? incident.statusHistory.map((entry) => `<li>${escapeHtml(entry.at)} · ${escapeHtml(entry.from)} to ${escapeHtml(entry.to)} · ${escapeHtml(entry.by)}</li>`).join("")
+    : "<li>No status changes / Sin cambios de estado</li>";
+  const box = (en, es, value, className = "box") => `<div class="${className}"><strong>${escapeHtml(en)} / ${escapeHtml(es)}</strong><div>${escapeHtml(value || "")}</div></div>`;
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <title>${escapeHtml(incident.recordNumber)} - ${escapeHtml(incident.employee)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; margin: 24px; color: #0b1828; }
+          header { border-bottom: 3px solid #0b1828; padding-bottom: 12px; margin-bottom: 16px; }
+          h1 { margin: 0; font-size: 25px; }
+          h2 { margin: 20px 0 8px; font-size: 15px; text-transform: uppercase; }
+          p, li, div { font-size: 12px; line-height: 1.42; }
+          .subtitle { margin: 5px 0 0; color: #53606a; font-weight: 700; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+          .box { border: 1px solid #9aa5ad; padding: 9px; min-height: 52px; }
+          .box strong { display: block; margin-bottom: 5px; font-size: 10px; text-transform: uppercase; }
+          .narrative { grid-column: 1 / -1; min-height: 78px; white-space: pre-wrap; }
+          .notice { border: 1px solid #c68716; background: #fff5d8; padding: 9px; margin: 12px 0; }
+          .signatures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 18px; margin-top: 28px; }
+          .signature { min-height: 62px; border-bottom: 1px solid #0b1828; display: flex; align-items: end; justify-content: space-between; gap: 8px; padding-bottom: 4px; }
+          .signature span { font-size: 10px; font-weight: 700; }
+          .photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+          figure { margin: 0; break-inside: avoid; }
+          figure img { display: block; max-width: 100%; max-height: 420px; margin: 0 auto; object-fit: contain; }
+          figcaption { margin-top: 4px; color: #53606a; text-align: center; }
+          @media print { body { margin: 14px; } .photos figure { break-inside: avoid; } }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Employee Incident Record / Registro de incidente del empleado</h1>
+          <p class="subtitle">${escapeHtml(incident.recordNumber)} · ${escapeHtml(employeeIncidentStatusLabels[incident.status] || incident.status)} · ${escapeHtml(areaLabel)}</p>
+        </header>
+        <div class="notice">This document records reported or observed facts and follow-up. Signatures acknowledge receipt and discussion; they do not necessarily indicate agreement.<br><strong>Este documento registra hechos reportados u observados y el seguimiento. Las firmas confirman recibo y conversacion; no necesariamente indican acuerdo.</strong></div>
+        <div class="grid">
+          ${box("Employee", "Empleado", incident.employee)}
+          ${box("Incident date and time", "Fecha y hora del incidente", `${incident.date || ""} ${incident.time || ""}`.trim())}
+          ${box("Location", "Ubicacion", incident.location)}
+          ${box("Category", "Categoria", employeeIncidentOptionLabel(incident.category, employeeIncidentCategories))}
+          ${box("Machine / equipment", "Maquina / equipo", incident.equipment)}
+          ${box("SOP, rule, or policy", "SOP, regla o politica", incident.sopReference)}
+          ${box("Observed facts", "Hechos observados", incident.facts, "box narrative")}
+          ${box("Immediate response", "Respuesta inmediata", incident.immediateAction, "box narrative")}
+          ${box("Employee statement", "Declaracion del empleado", incident.employeeStatement, "box narrative")}
+          ${box("Witnesses and statements", "Testigos y declaraciones", incident.witnesses, "box narrative")}
+          ${box("Corrective action / retraining", "Accion correctiva / reentrenamiento", incident.correctiveAction, "box narrative")}
+          ${box("Recommended action", "Accion recomendada", employeeIncidentOptionLabel(incident.recommendedAction, employeeIncidentActions))}
+          ${box("Follow-up date", "Fecha de seguimiento", incident.followUpDate)}
+          ${box("Supervisor", "Supervisor", incident.supervisor)}
+          ${box("Safety Director", "Director de seguridad", incident.safetyDirector)}
+        </div>
+        <h2>Attachments / Archivos adjuntos</h2>
+        <ul>${attachmentList}</ul>
+        ${photoEvidence ? `<h2>Photo evidence / Evidencia fotografica</h2><div class="photos">${photoEvidence}</div>` : ""}
+        <h2>Status history / Historial de estado</h2>
+        <ul>${statusHistory}</ul>
+        <p>Created by / Creado por: <strong>${escapeHtml(incident.createdBy || "")}</strong> (${escapeHtml(incident.createdRole || "")}) · ${escapeHtml(incident.createdAt || "")}</p>
+        <h2>Acknowledgments / Firmas de recibido</h2>
+        <div class="signatures">
+          <div class="signature"><span>Employee signature / Firma del empleado</span><span>Date / Fecha</span></div>
+          <div class="signature"><span>Witness signature / Firma del testigo</span><span>Date / Fecha</span></div>
+          <div class="signature"><span>Supervisor signature / Firma del supervisor</span><span>Date / Fecha</span></div>
+          <div class="signature"><span>Safety Director signature / Firma del Director de seguridad</span><span>Date / Fecha</span></div>
+        </div>
+        <script>window.addEventListener("load", () => setTimeout(() => window.print(), 250));<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 function addQualityBendRow() {

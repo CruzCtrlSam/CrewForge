@@ -1255,6 +1255,38 @@ textarea {
   justify-content: flex-end;
 }
 
+.employee-incident-panel .wide-field {
+  grid-column: span 2;
+}
+
+.employee-incident-panel textarea {
+  min-height: 104px;
+  resize: vertical;
+}
+
+.incident-card {
+  align-items: start;
+}
+
+.incident-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.incident-card .attachment-list {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.incident-actions {
+  align-items: end;
+}
+
+.compact-status {
+  min-width: 170px;
+}
+
 .sync-tag {
   background: #e0f2fe;
   color: #075985;
@@ -2932,6 +2964,15 @@ tr:last-child td {
 
   .document-actions > * {
     flex: 1 1 140px;
+  }
+
+  .employee-incident-panel .wide-field {
+    grid-column: auto;
+  }
+
+  .incident-actions,
+  .incident-card .attachment-list {
+    width: 100%;
   }
 
   .audit-card header {
