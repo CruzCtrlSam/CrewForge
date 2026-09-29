@@ -3000,7 +3000,10 @@ function renderDrugTesting() {
       </div>
     </section>
     <section class="panel">
-      <div class="split"><div><h2>${t("Selection history", "Historial de selecciones")}</h2><p class="sub">Saved records show exactly who was selected, when, and by whom.</p></div></div>
+      <div class="split">
+        <div><h2>${t("Selection history", "Historial de selecciones")}</h2><p class="sub">Saved records show exactly who was selected, when, and by whom.</p></div>
+        <button class="danger-action" type="button" onclick="clearDrugTestingHistory()" ${(state.drugTestingDraws || []).length ? "" : "disabled"}>${t("Clear all history", "Borrar todo el historial")}</button>
+      </div>
       <div class="table-wrap section-gap">
         <table>
           <thead><tr><th>Date<span class="es">Fecha</span></th><th>Department<span class="es">Departamento</span></th><th>Shift<span class="es">Turno</span></th><th>Selected employees<span class="es">Empleados seleccionados</span></th><th>Run by<span class="es">Realizado por</span></th><th>Record<span class="es">Registro</span></th></tr></thead>
@@ -3012,7 +3015,7 @@ function renderDrugTesting() {
                 <td>${escapeHtml(draw.shift || "All shifts")}</td>
                 <td>${draw.employees.map((employee) => `<span class="selection-name">${escapeHtml(employee.name)}<small>${escapeHtml(employee.department)} · ${escapeHtml(employee.shift || "Day")}</small></span>`).join("")}</td>
                 <td>${escapeHtml(draw.drawnBy || "")}</td>
-                <td><button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print", "Imprimir")}</button></td>
+                <td><div class="history-actions"><button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print", "Imprimir")}</button><button class="danger-action table-action" type="button" onclick="deleteDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Delete", "Borrar")}</button></div></td>
               </tr>
             `).join("") : `<tr><td colspan="6"><div class="empty-state">No selection history yet.<span class="es">Todavia no hay historial de selecciones.</span></div></td></tr>`}
           </tbody>
@@ -3175,6 +3178,31 @@ function runDrugTestingDraw() {
   saveState();
   render();
   showToast(`${count} employee(s) selected and recorded`);
+}
+
+function deleteDrugTestingDraw(drawId) {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const draw = state.drugTestingDraws.find((entry) => entry.id === drawId);
+  if (!draw) return;
+  const employeeCount = draw.employees?.length || 0;
+  if (!confirm(`Delete this selection record for ${draw.date} with ${employeeCount} employee(s)? This cannot be undone. / ¿Borrar este registro de ${draw.date} con ${employeeCount} empleado(s)? Esta accion no se puede deshacer.`)) return;
+  state.drugTestingDraws = state.drugTestingDraws.filter((entry) => entry.id !== drawId);
+  logActivity("Drug testing selection record deleted", { date: draw.date, department: draw.department, shift: draw.shift || "All shifts", count: employeeCount });
+  saveState();
+  render();
+  showToast("Selection record deleted / Registro de seleccion borrado");
+}
+
+function clearDrugTestingHistory() {
+  if (!["Safety", "Admin"].includes(state.selectedRole)) return;
+  const recordCount = state.drugTestingDraws?.length || 0;
+  if (!recordCount) return;
+  if (!confirm(`Delete all ${recordCount} drug testing selection records? This cannot be undone. / ¿Borrar los ${recordCount} registros de seleccion? Esta accion no se puede deshacer.`)) return;
+  state.drugTestingDraws = [];
+  logActivity("Drug testing selection history cleared", { count: recordCount });
+  saveState();
+  render();
+  showToast("Selection history cleared / Historial de selecciones borrado");
 }
 
 function printDrugTestingDraw(drawId) {
