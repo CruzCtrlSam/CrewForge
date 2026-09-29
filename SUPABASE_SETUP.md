@@ -1,53 +1,58 @@
-# CrewForge Shared Trial Setup
+# CrewForge Production Authentication Setup
 
-This adds shared data for the trial so a foreman's phone and the office computer can see the same timesheets, jobs, people, and production.
+CrewForge now uses this entry order:
 
-The cleaned version only syncs company data:
+1. Company code
+2. Email and password
+3. Department filter
 
-- `weeks`
-- `people`
-- `jobs`
-- `sheets`
-- `production`
+The browser never stores a configured password in the application source. Supabase Auth verifies the email and password and stores the authenticated session securely in the browser.
 
-Each device keeps its own local view settings:
+## Create the Owner Account
 
-- signed-in trial user
-- selected operating area
-- current tab
-- selected week
-- selected production filter
+In the Supabase dashboard:
 
-## Supabase Table
+1. Open **Authentication > Users**.
+2. Choose **Add user**.
+3. Enter the owner email address supplied for CrewForge.
+4. Enter the password directly in Supabase. Do not add it to this repository.
+5. Mark the email confirmed if the dashboard asks whether to send a confirmation email.
 
-In Supabase, open SQL Editor and run:
+Then open the SQL Editor and assign the protected company and role metadata:
 
 ```sql
-create table if not exists public.app_state (
-  id text primary key,
-  data jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.app_state disable row level security;
-
-alter publication supabase_realtime add table public.app_state;
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object(
+  'company_code', 'VALOR',
+  'role', 'Admin',
+  'display_name', 'Sam Cruz'
+)
+where lower(email) = lower('sam@raicesadvisors.com');
 ```
 
-If the final line says the table is already a member, that is fine.
+Authorization metadata belongs in `raw_app_meta_data`, not `raw_user_meta_data`, because users cannot edit app metadata themselves.
 
-## Demo Security Note
+## Secure the Shared Workspace
 
-This is acceptable for a short private trial only. Row level security is off, so anyone with the site link can read or change the shared demo data.
+Run [SUPABASE_PRODUCTION_SECURITY.sql](./SUPABASE_PRODUCTION_SECURITY.sql) in the Supabase SQL Editor. It:
 
-Before real company use, CrewForge needs real Supabase Auth accounts, row-level security, and separate records instead of one shared demo state row.
+- enables Row-Level Security on `app_state`
+- removes all anonymous table access
+- permits authenticated reads and writes only
+- limits each account to the workspace assigned through its company code
+- preserves Valor's existing `crewforge-demo` row
 
-## Current Demo Project
+## Add Another Company
 
-The current `script.js` is configured with the Supabase project URL, public publishable key, and workspace id:
+1. Add its code, display name, and workspace ID to `companyDirectory` in `script.js`.
+2. Create its users in Supabase Auth.
+3. Set each user's `company_code`, `role`, and `display_name` in `raw_app_meta_data`.
+4. The workspace ID should use `crewforge-<lowercase-company-code>` unless a legacy mapping is required.
 
-```js
-const WORKSPACE_ID = "crewforge-demo";
-```
+Allowed application roles are `Admin`, `Safety`, and `Quality`.
 
-Everyone using the same deployed app and workspace id shares the same demo dataset.
+## Offline Behavior
+
+The first secure sign-in requires internet. Once a valid Supabase session and the app shell have been saved on the device, CrewForge continues to open during spotty service and keeps changes locally until synchronization is available.
+
+Public employee training links remain intentionally accessible without an account. They expose only the selected training workflow, not the authenticated company workspace.

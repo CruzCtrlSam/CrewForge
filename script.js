@@ -582,10 +582,12 @@ function trialWindFarmJobRecord(job) {
     trialSchedule: true
   };
 }
-const companyAccessCode = "VALOR";
+const companyDirectory = {
+  VALOR: { code: "VALOR", name: "Valor Steel", workspaceId: "crewforge-demo" }
+};
+const ownerEmail = "sam@raicesadvisors.com";
 const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const solarPilesForemen = ["Daniel Medrano", "Hipolito Pereda"];
-const trialForemanNames = [...new Set([...foremanNames, ...rebarFabForemen, ...solarPilesForemen])];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
 const assetVersion = "65";
@@ -764,16 +766,9 @@ const trialWeekHourPatterns = [
 ];
 const trialPerDiems = [175, 225, 275, 325, 350, 400, 450, 500, 525, 575];
 const trialSeedWeek = "2026-07-03";
-const trialAccounts = [
-  { code: "SAFETY", name: "Safety", role: "Safety" },
-  { code: "QUALITY", name: "Quality", role: "Quality" },
-  { code: "ADMIN", name: "Admin", role: "Admin" }
-];
-let lastLoginCode = "";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const WORKSPACE_ID = "crewforge-demo";
 const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
@@ -1140,9 +1135,9 @@ function defaultBundlePlanner() {
 const defaultState = {
   auth: null,
   companyVerified: false,
+  companyCode: "",
   companyName: "",
-  loginCodeDraft: "",
-  loginForemanDraft: "",
+  loginEmailDraft: "",
   selectedArea: "",
   activeTab: "dashboard",
   showIntro: true,
@@ -1215,6 +1210,7 @@ const cloud =
 let cloudSaveTimer = null;
 let lastCloudPush = "";
 let pendingRemoteState = null;
+let cloudChannel = null;
 
 let state = loadState();
 let toastTimer;
@@ -1226,6 +1222,14 @@ function sharedSnapshot(source = state) {
     snapshot[key] = structuredClone(source[key]);
     return snapshot;
   }, {});
+}
+
+function selectedCompany() {
+  return companyDirectory[String(state.companyCode || "").toUpperCase()] || null;
+}
+
+function currentWorkspaceId() {
+  return selectedCompany()?.workspaceId || "";
 }
 
 function mergeSharedState(remoteData) {
@@ -1251,7 +1255,8 @@ function applyRemoteState(remoteData) {
 }
 
 function pushCloud(immediate = false) {
-  if (!cloud) {
+  const workspaceId = currentWorkspaceId();
+  if (!cloud || !state.auth?.uid || !workspaceId) {
     setSyncStatus("local", "Saved on this device. Cloud sync will resume when the connection is available.");
     return;
   }
@@ -1268,11 +1273,12 @@ function pushCloud(immediate = false) {
     }
     lastCloudPush = serialized;
     try {
-      await cloud.from("app_state").upsert({
-        id: WORKSPACE_ID,
+      const { error } = await cloud.from("app_state").upsert({
+        id: workspaceId,
         data: snapshot,
         updated_at: new Date().toISOString()
       });
+      if (error) throw error;
       setSyncStatus("synced", `Synced ${timestamp()}`);
     } catch (error) {
       setSyncStatus("pending", "Sync pending. Saved locally until connection returns.");
@@ -1310,12 +1316,17 @@ function renderSyncBanner() {
 }
 
 async function initCloud() {
-  if (!cloud) {
-    console.warn("Supabase library not available; running local-only.");
+  const workspaceId = currentWorkspaceId();
+  if (!cloud || !state.auth?.uid || !workspaceId) {
+    console.warn("Authenticated company sync is not available; running local-only.");
     return;
   }
+  if (cloudChannel) {
+    await cloud.removeChannel(cloudChannel);
+    cloudChannel = null;
+  }
   try {
-    const { data, error } = await cloud.from("app_state").select("data").eq("id", WORKSPACE_ID).maybeSingle();
+    const { data, error } = await cloud.from("app_state").select("data").eq("id", workspaceId).maybeSingle();
     if (error) throw error;
     if (data?.data) applyRemoteState(data.data);
     else pushCloud(true);
@@ -1323,11 +1334,11 @@ async function initCloud() {
     console.warn("Cloud load failed; running from local demo data.", error);
   }
 
-  cloud
-    .channel(`app_state_${WORKSPACE_ID}`)
+  cloudChannel = cloud
+    .channel(`app_state_${workspaceId}`)
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "app_state", filter: `id=eq.${WORKSPACE_ID}` },
+      { event: "*", schema: "public", table: "app_state", filter: `id=eq.${workspaceId}` },
       (payload) => {
         const incoming = payload.new?.data;
         if (!incoming) return;
@@ -1359,10 +1370,12 @@ function loadState() {
 function upgradeState(next, resetToCurrentWeek = false) {
   if (resetToCurrentWeek) next.selectedWeek = currentWeekEnding();
   if (next.auth === undefined) next.auth = null;
+  if (next.auth && !next.auth.uid) next.auth = null;
   if (next.companyVerified === undefined) next.companyVerified = Boolean(next.auth);
-  next.companyName = next.companyName || (next.companyVerified ? "Valor" : "");
-  next.loginCodeDraft = next.loginCodeDraft || "";
-  next.loginForemanDraft = next.loginForemanDraft || "";
+  next.companyCode = String(next.companyCode || "").toUpperCase();
+  if (!next.companyCode || !companyDirectory[next.companyCode]) next.companyVerified = false;
+  next.companyName = next.companyName || companyDirectory[next.companyCode]?.name || "";
+  next.loginEmailDraft = next.loginEmailDraft || "";
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
   next.hiddenForemen = next.hiddenForemen || [];
@@ -2179,19 +2192,6 @@ function foremenForArea(areaId = state.selectedArea) {
   return peopleForArea(areaId).filter((person) => person.role === "Foreman");
 }
 
-function loginForemanOptions(areaId = state.selectedArea) {
-  const savedForemen =
-    state.people
-      ?.filter((person) => person.role === "Foreman" && (!areaId || person.area === areaId))
-      .map((person) => person.name) || [];
-  const hiddenForemen = new Set((state.hiddenForemen || []).map((name) => normalizeForemanName(name)));
-  const trialForemanPool = areaId === "rebarInstall" ? foremanNames : areaId === "rebarFab" || areaId === "bundleLab" ? rebarFabForemen : areaId === "solarPiles" ? solarPilesForemen : trialForemanNames;
-  const aliasedTrialForemen = trialForemanPool
-    .filter((name) => !hiddenForemen.has(normalizeForemanName(name)))
-    .map((name) => state.foremanAliases?.[name] || name);
-  return [...new Set([...aliasedTrialForemen, ...savedForemen])];
-}
-
 function groupOptions() {
   if (area().mode === "shift") return shifts;
   return [...new Set(peopleForArea().map((person) => person.group).filter(Boolean))];
@@ -2532,7 +2532,7 @@ function changeTab(tab) {
 
 function routeFromState() {
   if (!state.companyVerified) return "company";
-  if (!state.auth) return state.selectedArea ? "login" : "areas";
+  if (!state.auth) return "login";
   if (state.showIntro) return "intro";
   if (!state.selectedArea) return "areas";
   return `${state.selectedArea}/${state.activeTab || "dashboard"}`;
@@ -2553,6 +2553,7 @@ function applyRoute(route = "") {
   suppressHistorySync = true;
   if (route === "company") {
     state.companyVerified = false;
+    state.companyCode = "";
     state.companyName = "";
     state.auth = null;
     state.selectedArea = "";
@@ -2565,7 +2566,7 @@ function applyRoute(route = "") {
   } else if (route === "intro" && state.auth) {
     state.showIntro = true;
     state.selectedArea = "";
-  } else if (route === "areas" && state.companyVerified) {
+  } else if (route === "areas" && state.companyVerified && state.auth) {
     state.showIntro = false;
     state.selectedArea = "";
   } else {
@@ -2594,30 +2595,39 @@ function renderCompanyLogin() {
         <div>
           <p class="eyebrow">Company access</p>
           <h1>${t("Choose company", "Escoja compania")}</h1>
-          <p class="sub">Enter the company code first. Then CrewForge will show the operating areas for that company.</p>
+          <p class="sub">Enter your company code first. Your sign-in and records will stay inside that company's workspace.</p>
+          <p class="sub es">Ingrese primero el codigo de su compania. Su acceso y registros permaneceran dentro del espacio de esa compania.</p>
         </div>
-        <label>Company code<span class="es">Codigo de compania</span><input id="companyCode" autocomplete="organization" placeholder="VALOR" /></label>
+        <label>Company code<span class="es">Codigo de compania</span><input id="companyCode" autocomplete="organization" value="${escapeHtml(state.companyCode || "")}" placeholder="Company code / Codigo" /></label>
         <button class="primary-action" id="companyButton" type="button">${t("Continue", "Continuar")}</button>
-        <div class="trial-note">
-          <strong>Trial company</strong>
-          <span>Code: VALOR</span>
-          <span class="es">Codigo de prueba: VALOR</span>
-        </div>
       </section>
     </main>
   `;
-  const submitCompany = () => {
+  const submitCompany = async () => {
     const code = $("companyCode").value.trim().toUpperCase();
-    if (code !== companyAccessCode) {
+    const company = companyDirectory[code];
+    if (!company) {
       showToast("Company code not recognized");
       return;
     }
     state.companyVerified = true;
-    state.companyName = "Valor";
+    state.companyCode = company.code;
+    state.companyName = company.name;
     state.auth = null;
     state.selectedArea = "";
     state.showIntro = false;
-    saveState();
+    if (cloud) {
+      const { data } = await cloud.auth.getSession();
+      if (data.session?.user) {
+        const account = authFromSupabaseUser(data.session.user);
+        if (account.companyCode === company.code) {
+          state.auth = account;
+          state.selectedRole = account.role;
+        }
+      }
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (state.auth) await initCloud();
     render();
     syncHistory();
   };
@@ -2633,11 +2643,6 @@ function setOptions(values, selected, labeler = (value) => value, valueGetter = 
 }
 
 function renderLogin() {
-  const selectedAreaLabel = state.selectedArea ? areas[state.selectedArea]?.label : "All departments";
-  const foremanOptions = loginForemanOptions();
-  const loginCode = (state.loginCodeDraft || "").trim().toUpperCase();
-  const selectedLoginForeman = foremanOptions.includes(state.loginForemanDraft) ? state.loginForemanDraft : foremanOptions[0] || "";
-  const showForemen = loginCode === "FOREMAN";
   $("app").innerHTML = `
     <main class="login-screen">
       <section class="login-card">
@@ -2646,123 +2651,114 @@ function renderLogin() {
           <img class="login-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
         </div>
         <div>
-          <p class="eyebrow">${state.companyName || "Valor"} · ${selectedAreaLabel}</p>
+          <p class="eyebrow">${escapeHtml(state.companyName || "CrewForge")}</p>
           <h1>${t("Sign in", "Iniciar sesion")}</h1>
-          <p class="sub">Use SAFETY, QUALITY, or ADMIN. The department is used as a record filter, not a separate app.</p>
+          <p class="sub">Use the email and password assigned by your company administrator.</p>
+          <p class="sub es">Use el correo y la contrasena asignados por el administrador de su compania.</p>
         </div>
-        <label>Access code<span class="es">Codigo de acceso</span><input id="accessCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" value="${escapeHtml(loginCode)}" placeholder="SAFETY, QUALITY, or ADMIN" /></label>
-        <label id="foremanLoginField" class="login-select-field ${showForemen ? "" : "hidden"}">Foreman<span class="es">Capataz</span><select id="loginForeman">${setOptions(foremanOptions, selectedLoginForeman)}</select></label>
-        <button class="primary-action" id="loginButton" type="button">${t("Open CrewForge", "Abrir CrewForge")}</button>
-        <div class="trial-note">
-          <strong>Trial codes</strong>
-          <span>Safety: SAFETY</span>
-          <span>Quality: QUALITY</span>
-          <span>Admin: ADMIN</span>
-          <span class="es">Codigos de prueba para esta demo.</span>
-        </div>
-        <button class="text-button" id="loginChangeArea" type="button">Change department filter<span class="es">Cambiar departamento</span></button>
-        <p class="sub login-limit">Works offline after the app has loaded once. Records save on this device and sync when internet returns.</p>
+        <label>Email / username<span class="es">Correo / usuario</span><input id="loginEmail" type="email" autocomplete="username" value="${escapeHtml(state.loginEmailDraft || "")}" placeholder="name@company.com" /></label>
+        <label>Password<span class="es">Contrasena</span><input id="loginPassword" type="password" autocomplete="current-password" /></label>
+        <button class="primary-action" id="loginButton" type="button">${t("Sign in securely", "Iniciar sesion segura")}</button>
+        <button class="text-button" id="loginChangeCompany" type="button">Change company<span class="es">Cambiar compania</span></button>
+        <p class="sub login-limit">The first secure sign-in needs internet. Afterward, an existing session and saved records remain available during spotty service.</p>
       </section>
     </main>
   `;
-  $("loginButton").addEventListener("click", loginWithCode);
-  $("accessCode").addEventListener("input", updateForemanLoginVisibility);
-  $("accessCode").addEventListener("change", normalizeLoginCodeInput);
-  $("accessCode").addEventListener("blur", normalizeLoginCodeInput);
-  $("accessCode").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") loginWithCode();
+  $("loginButton").addEventListener("click", loginWithPassword);
+  $("loginEmail").addEventListener("input", (event) => {
+    state.loginEmailDraft = event.target.value.trim();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   });
-  $("foremanLoginField").addEventListener("click", openLoginForemanPicker);
-  $("loginForeman").addEventListener("change", (event) => {
-    state.loginForemanDraft = event.target.value;
-    saveState();
+  $("loginPassword").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") loginWithPassword();
   });
-  $("loginChangeArea").addEventListener("click", () => {
-    state.selectedArea = "";
-    saveState();
-    render();
-    syncHistory();
-  });
-  updateForemanLoginVisibility();
-  $("accessCode").focus();
+  $("loginChangeCompany").addEventListener("click", changeCompany);
+  $("loginEmail").focus();
 }
 
-function openLoginForemanPicker(event) {
-  if (event?.target?.id === "loginForeman") return;
-  const picker = $("loginForeman");
-  if (!picker || picker.disabled) return;
-  picker.focus();
-  if (typeof picker.showPicker !== "function") return;
-  try {
-    picker.showPicker();
-  } catch {
-    // Some browsers only allow showPicker from direct user taps.
-  }
+function authFromSupabaseUser(user) {
+  const appMetadata = user?.app_metadata || {};
+  const email = String(user?.email || "").toLowerCase();
+  const companyCode = String(appMetadata.company_code || (email === ownerEmail ? "VALOR" : "")).toUpperCase();
+  const role = ["Admin", "Safety", "Quality"].includes(appMetadata.role)
+    ? appMetadata.role
+    : email === ownerEmail ? "Admin" : "Safety";
+  return {
+    uid: user.id,
+    email,
+    name: appMetadata.display_name || email,
+    role,
+    companyCode
+  };
 }
 
-function normalizeLoginCodeInput() {
-  const input = $("accessCode");
-  if (!input) return;
-  const code = input.value.trim().toUpperCase();
-  if (trialAccounts.some((entry) => entry.code === code)) {
-    input.value = code;
-    state.loginCodeDraft = code;
-    lastLoginCode = code;
-    updateForemanLoginVisibility();
+async function loginWithPassword() {
+  const email = $("loginEmail")?.value.trim().toLowerCase() || "";
+  const password = $("loginPassword")?.value || "";
+  if (!email || !password) return showToast("Enter your email and password");
+  if (!cloud || !navigator.onLine) return showToast("Connect to the internet for the first secure sign-in");
+  const button = $("loginButton");
+  button.disabled = true;
+  button.textContent = "Signing in...";
+  const { data, error } = await cloud.auth.signInWithPassword({ email, password });
+  if (error || !data.user) {
+    button.disabled = false;
+    button.innerHTML = t("Sign in securely", "Iniciar sesion segura");
+    showToast("Email or password not recognized");
     return;
   }
-  state.loginCodeDraft = input.value.trim().toUpperCase();
-  saveState();
-}
-
-function updateForemanLoginVisibility() {
-  const code = $("accessCode")?.value.trim().toUpperCase();
-  state.loginCodeDraft = code || "";
-  if (trialAccounts.some((entry) => entry.code === code)) {
-    lastLoginCode = code;
-    if (code !== "FOREMAN") state.loginForemanDraft = "";
-  }
-  if (code === "FOREMAN" && !$("loginForeman")?.value) {
-    state.loginForemanDraft = loginForemanOptions()[0] || "";
-  }
-  const showForemen = code === "FOREMAN";
-  $("foremanLoginField")?.classList.toggle("hidden", !showForemen);
-  saveState();
-}
-
-function loginWithCode() {
-  normalizeLoginCodeInput();
-  const code = ($("accessCode")?.value || state.loginCodeDraft || "").trim().toUpperCase();
-  const account = trialAccounts.find((entry) => entry.code === code);
-  if (!account) {
-    showToast("Code not recognized");
+  const account = authFromSupabaseUser(data.user);
+  if (!account.companyCode || account.companyCode !== state.companyCode) {
+    await cloud.auth.signOut();
+    button.disabled = false;
+    button.innerHTML = t("Sign in securely", "Iniciar sesion segura");
+    showToast("This account does not belong to the selected company");
     return;
   }
-  if (!state.selectedArea && !canAccessSelectedArea(account)) {
-    showToast("Choose a department first");
-    return;
-  }
-  if (!canAccessSelectedArea(account)) {
-    showToast(`${account.name} belongs in ${areas[account.area]?.label || account.area}`);
-    return;
-  }
-  updateForemanLoginVisibility();
-  const selectedForeman = account.needsForeman ? $("loginForeman")?.value : account.foreman;
-  const displayName = account.needsForeman ? selectedForeman : account.name;
-  state.auth = { name: displayName, role: account.role, code: account.code };
-  state.loginCodeDraft = "";
-  state.loginForemanDraft = "";
+  state.auth = account;
+  state.loginEmailDraft = email;
   state.selectedRole = account.role;
-  state.currentForeman = selectedForeman || state.currentForeman;
-  state.setupForeman = selectedForeman || state.setupForeman;
-  state.selectedArea = account.area || state.selectedArea || "";
+  state.selectedArea = "";
   state.showIntro = false;
   state.activeTab = account.role === "Quality" ? "qualityControl" : "training";
-  if (state.selectedArea === "bundleLab") state.activeTab = "bundlePlanner";
-  if (state.selectedRole === "Quality") state.activeTab = ["rebarFab", "rebarInstall"].includes(state.selectedArea) ? "qualityControl" : "audits";
-  saveState();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  await initCloud();
   render();
-  syncHistory();
+  syncHistory(true);
+}
+
+async function endCloudSession() {
+  clearTimeout(cloudSaveTimer);
+  if (cloudChannel && cloud) {
+    await cloud.removeChannel(cloudChannel);
+    cloudChannel = null;
+  }
+  if (cloud) await cloud.auth.signOut();
+}
+
+async function logoutUser() {
+  await endCloudSession();
+  state.auth = null;
+  state.selectedArea = "";
+  state.showIntro = false;
+  state.activeTab = "dashboard";
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+  syncHistory(true);
+}
+
+async function changeCompany() {
+  await endCloudSession();
+  state.auth = null;
+  state.companyVerified = false;
+  state.companyCode = "";
+  state.companyName = "";
+  state.selectedArea = "";
+  state.showIntro = false;
+  state.activeTab = "dashboard";
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  render();
+  syncHistory(true);
 }
 
 function renderIntro() {
@@ -2796,14 +2792,7 @@ function renderIntro() {
     render();
     syncHistory();
   });
-  $("introLogout").addEventListener("click", () => {
-    state.auth = null;
-    state.selectedArea = "";
-    state.showIntro = true;
-    saveState();
-    render();
-    syncHistory();
-  });
+  $("introLogout").addEventListener("click", logoutUser);
 }
 
 function renderGate() {
@@ -2843,16 +2832,7 @@ function renderGate() {
     </main>
   `;
   document.querySelectorAll("[data-area]").forEach((button) => button.addEventListener("click", () => setArea(button.dataset.area)));
-  $("gateLogout").addEventListener("click", () => {
-    state.companyVerified = false;
-    state.companyName = "";
-    state.auth = null;
-    state.selectedArea = "";
-    state.showIntro = false;
-    saveState();
-    render();
-    syncHistory();
-  });
+  $("gateLogout").addEventListener("click", changeCompany);
 }
 
 function renderShell() {
@@ -2922,25 +2902,21 @@ function renderShell() {
     render();
     syncHistory();
   });
-  $("logout").addEventListener("click", () => {
-    state.auth = null;
-    state.selectedArea = "";
-    state.showIntro = true;
-    saveState();
-    render();
-    syncHistory();
-  });
+  $("logout").addEventListener("click", logoutUser);
   $("resetDemo").addEventListener("click", () => {
     const auth = state.auth;
+    const companyCode = state.companyCode;
+    const companyName = state.companyName;
+    const loginEmailDraft = state.loginEmailDraft;
     state = structuredClone(defaultState);
     state.auth = auth;
-    state.showIntro = true;
+    state.companyVerified = Boolean(auth);
+    state.companyCode = companyCode;
+    state.companyName = companyName;
+    state.loginEmailDraft = loginEmailDraft;
+    state.showIntro = false;
     if (auth) {
-      const account = trialAccounts.find((entry) => entry.code === auth.code);
       state.selectedRole = auth.role;
-      const foreman = auth.role === "Foreman" ? auth.name : account?.foreman;
-      state.currentForeman = foreman || state.currentForeman;
-      state.setupForeman = foreman || state.setupForeman;
     }
     saveState();
     render();
@@ -9732,7 +9708,6 @@ function updateProductionItem(event) {
 function render() {
   if (publicTrainingId) renderPublicTraining();
   else if (!state.companyVerified) renderCompanyLogin();
-  else if (!state.auth && !state.selectedArea) renderGate();
   else if (!state.auth) renderLogin();
   else if (state.showIntro) renderIntro();
   else if (!state.selectedArea) renderGate();
@@ -9744,9 +9719,28 @@ window.addEventListener("popstate", (event) => {
   applyRoute(route);
 });
 
-render();
-syncHistory(true);
-initCloud();
+async function bootstrapApp() {
+  if (!publicTrainingId && cloud && state.companyVerified) {
+    const { data } = await cloud.auth.getSession();
+    if (data.session?.user) {
+      const account = authFromSupabaseUser(data.session.user);
+      if (account.companyCode === state.companyCode) {
+        state.auth = account;
+        state.selectedRole = account.role;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } else {
+        state.auth = null;
+      }
+    } else if (navigator.onLine) {
+      state.auth = null;
+    }
+  }
+  render();
+  syncHistory(true);
+  if (state.auth?.uid) await initCloud();
+}
+
+bootstrapApp();
 
 window.addEventListener("online", () => {
   setSyncStatus("pending", "Back online. Syncing saved CrewForge changes...");
