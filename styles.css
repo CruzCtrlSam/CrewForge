@@ -917,6 +917,21 @@ textarea {
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(130px, 0.65fr);
 }
 
+.drug-add-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.35fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.drug-add-controls select {
+  margin-bottom: 1px;
+}
+
+.shift-select {
+  width: 120px;
+}
+
 .drug-roster-summary {
   min-height: 67px;
   border: 2px solid var(--line);
@@ -1026,6 +1041,10 @@ textarea {
 
   .drug-testing-section {
     padding: 12px;
+  }
+
+  .drug-add-controls {
+    grid-template-columns: 1fr;
   }
 
   .drug-draw-result li span {

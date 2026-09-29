@@ -1387,6 +1387,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
     id: employee.id || `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: String(employee.name || "").trim(),
     department: ["Rebar", "Solar Piles", "Skids"].includes(employee.department) ? employee.department : "Rebar",
+    shift: ["Day", "Night"].includes(employee.shift) ? employee.shift : "Day",
     active: employee.active !== false,
     addedAt: employee.addedAt || "",
     addedBy: employee.addedBy || ""
@@ -1395,6 +1396,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
     ...draw,
     employees: Array.isArray(draw.employees) ? draw.employees : [],
     department: draw.department || "All departments",
+    shift: draw.shift || "All shifts",
     count: Number(draw.count) || draw.employees?.length || 0
   }));
   next.qualityChecks = next.qualityChecks || [];
@@ -2919,10 +2921,16 @@ function renderActiveTab() {
 }
 
 const drugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
+const drugTestingShifts = ["Day", "Night"];
 
 function drugTestingDepartmentOptions(selected, includeAll = false) {
   const options = includeAll ? ["All departments", ...drugTestingDepartments] : drugTestingDepartments;
   return options.map((department) => `<option value="${escapeHtml(department)}" ${department === selected ? "selected" : ""}>${escapeHtml(department)}</option>`).join("");
+}
+
+function drugTestingShiftOptions(selected, includeAll = false) {
+  const options = includeAll ? ["All shifts", ...drugTestingShifts] : drugTestingShifts;
+  return options.map((shift) => `<option value="${escapeHtml(shift)}" ${shift === selected ? "selected" : ""}>${shift === "Day" ? "Day / Dia" : shift === "Night" ? "Night / Noche" : "All shifts / Todos los turnos"}</option>`).join("");
 }
 
 function renderDrugTesting() {
@@ -2951,22 +2959,26 @@ function renderDrugTesting() {
             <label>Find employee<span class="es">Buscar empleado</span><input id="drugRosterSearch" type="search" placeholder="Name / Nombre" oninput="filterDrugTestingRoster(this.value)" /></label>
             <div class="drug-roster-summary"><span>${escapeHtml(selectedDepartment)}</span><strong>${activeCount}</strong><small>eligible / elegibles</small></div>
           </div>
-          <label>Add employee names<span class="es">Agregar nombres de empleados</span><textarea id="drugEmployeeNames" rows="5" placeholder="Enter one name per line / Escriba un nombre por linea"></textarea></label>
+          <div class="drug-add-controls">
+            <label>Add employee names<span class="es">Agregar nombres de empleados</span><textarea id="drugEmployeeNames" rows="5" placeholder="Enter one name per line / Escriba un nombre por linea"></textarea></label>
+            <label>Shift for these employees<span class="es">Turno de estos empleados</span><select id="drugEmployeeShift">${drugTestingShiftOptions("Day")}</select></label>
+          </div>
           <div class="action-row section-gap-small">
             <button class="primary-action" type="button" onclick="addDrugTestingEmployees()">${t("Add employees", "Agregar empleados")}</button>
           </div>
           <div class="table-wrap section-gap drug-roster-table">
             <table>
-              <thead><tr><th>Name<span class="es">Nombre</span></th><th>Department<span class="es">Departamento</span></th><th>Eligible<span class="es">Elegible</span></th><th>Action<span class="es">Accion</span></th></tr></thead>
+              <thead><tr><th>Name<span class="es">Nombre</span></th><th>Department<span class="es">Departamento</span></th><th>Shift<span class="es">Turno</span></th><th>Eligible<span class="es">Elegible</span></th><th>Action<span class="es">Accion</span></th></tr></thead>
               <tbody>
                 ${departmentRoster.length ? departmentRoster.map((employee) => `
                   <tr data-drug-roster-row data-search-name="${escapeHtml(employee.name.toLowerCase())}">
                     <td><strong>${escapeHtml(employee.name)}</strong></td>
                     <td><select class="table-select" onchange="moveDrugTestingEmployee('${escapeHtml(employee.id)}', this.value)">${drugTestingDepartmentOptions(employee.department)}</select></td>
+                    <td><select class="table-select shift-select" onchange="changeDrugTestingEmployeeShift('${escapeHtml(employee.id)}', this.value)">${drugTestingShiftOptions(employee.shift)}</select></td>
                     <td><label class="compact-toggle"><input type="checkbox" ${employee.active ? "checked" : ""} onchange="toggleDrugTestingEmployee('${escapeHtml(employee.id)}', this.checked)" /><span>${employee.active ? "Yes / Si" : "No"}</span></label></td>
                     <td><button class="danger-action table-action" type="button" onclick="deleteDrugTestingEmployee('${escapeHtml(employee.id)}')">${t("Remove", "Quitar")}</button></td>
                   </tr>
-                `).join("") : `<tr><td colspan="4"><div class="empty-state">No employees in this department yet.<span class="es">Todavia no hay empleados en este departamento.</span></div></td></tr>`}
+                `).join("") : `<tr><td colspan="5"><div class="empty-state">No employees in this department yet.<span class="es">Todavia no hay empleados en este departamento.</span></div></td></tr>`}
               </tbody>
             </table>
           </div>
@@ -2976,11 +2988,12 @@ function renderDrugTesting() {
           <h3>${t("Random selection", "Seleccion aleatoria")}</h3>
           <div class="form-grid drug-draw-controls">
             <label>Department pool<span class="es">Grupo de departamento</span><select id="drugDrawDepartment">${drugTestingDepartmentOptions(selectedDepartment, true)}</select></label>
+            <label>Shift pool<span class="es">Grupo de turno</span><select id="drugDrawShift">${drugTestingShiftOptions("All shifts", true)}</select></label>
             <label>Number to select<span class="es">Cantidad a seleccionar</span><input id="drugDrawCount" type="number" min="1" step="1" value="1" /></label>
             <label>Selection date<span class="es">Fecha de seleccion</span><input id="drugDrawDate" type="date" value="${localDateInputValue()}" /></label>
             <label>Notes (optional)<span class="es">Notas (opcional)</span><input id="drugDrawNotes" placeholder="Random test / Prueba aleatoria" /></label>
           </div>
-          <div class="notice">Only employees marked eligible are included. Each employee can be selected only once per draw.<span class="es">Solo se incluyen empleados marcados como elegibles. Cada empleado puede salir solamente una vez por seleccion.</span></div>
+          <div class="notice">Only eligible employees in the chosen department and shift are included. Each employee can be selected only once per draw.<span class="es">Solo se incluyen empleados elegibles del departamento y turno seleccionados. Cada empleado puede salir solamente una vez por seleccion.</span></div>
           <button class="secondary-action draw-button section-gap" type="button" onclick="runDrugTestingDraw()">${t("Choose random employees", "Elegir empleados al azar")}</button>
           ${latestDraw ? renderDrugTestingDraw(latestDraw, true) : `<div class="empty-state section-gap">No selections have been run yet.<span class="es">Todavia no se ha realizado ninguna seleccion.</span></div>`}
         </div>
@@ -2990,17 +3003,18 @@ function renderDrugTesting() {
       <div class="split"><div><h2>${t("Selection history", "Historial de selecciones")}</h2><p class="sub">Saved records show exactly who was selected, when, and by whom.</p></div></div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Date<span class="es">Fecha</span></th><th>Department<span class="es">Departamento</span></th><th>Selected employees<span class="es">Empleados seleccionados</span></th><th>Run by<span class="es">Realizado por</span></th><th>Record<span class="es">Registro</span></th></tr></thead>
+          <thead><tr><th>Date<span class="es">Fecha</span></th><th>Department<span class="es">Departamento</span></th><th>Shift<span class="es">Turno</span></th><th>Selected employees<span class="es">Empleados seleccionados</span></th><th>Run by<span class="es">Realizado por</span></th><th>Record<span class="es">Registro</span></th></tr></thead>
           <tbody>
             ${(state.drugTestingDraws || []).length ? state.drugTestingDraws.map((draw) => `
               <tr>
                 <td><strong>${escapeHtml(draw.date || "")}</strong><small class="table-subtext">${escapeHtml(draw.drawnAt || "")}</small></td>
                 <td>${escapeHtml(draw.department)}</td>
-                <td>${draw.employees.map((employee) => `<span class="selection-name">${escapeHtml(employee.name)}<small>${escapeHtml(employee.department)}</small></span>`).join("")}</td>
+                <td>${escapeHtml(draw.shift || "All shifts")}</td>
+                <td>${draw.employees.map((employee) => `<span class="selection-name">${escapeHtml(employee.name)}<small>${escapeHtml(employee.department)} · ${escapeHtml(employee.shift || "Day")}</small></span>`).join("")}</td>
                 <td>${escapeHtml(draw.drawnBy || "")}</td>
                 <td><button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print", "Imprimir")}</button></td>
               </tr>
-            `).join("") : `<tr><td colspan="5"><div class="empty-state">No selection history yet.<span class="es">Todavia no hay historial de selecciones.</span></div></td></tr>`}
+            `).join("") : `<tr><td colspan="6"><div class="empty-state">No selection history yet.<span class="es">Todavia no hay historial de selecciones.</span></div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -3012,10 +3026,10 @@ function renderDrugTestingDraw(draw, latest = false) {
   return `
     <div class="drug-draw-result section-gap ${latest ? "latest" : ""}">
       <div class="split">
-        <div><span class="eyebrow">${t("Most recent selection", "Seleccion mas reciente")}</span><h3>${escapeHtml(draw.department)} · ${escapeHtml(draw.date || "")}</h3></div>
+        <div><span class="eyebrow">${t("Most recent selection", "Seleccion mas reciente")}</span><h3>${escapeHtml(draw.department)} · ${escapeHtml(draw.shift || "All shifts")} · ${escapeHtml(draw.date || "")}</h3></div>
         <button class="table-button" type="button" onclick="printDrugTestingDraw('${escapeHtml(draw.id)}')">${t("Print record", "Imprimir registro")}</button>
       </div>
-      <ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)}</span></li>`).join("")}</ol>
+      <ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)} · ${escapeHtml(employee.shift || "Day")}</span></li>`).join("")}</ol>
       ${draw.notes ? `<p class="sub"><strong>Notes / Notas:</strong> ${escapeHtml(draw.notes)}</p>` : ""}
       <small>Selected by / Seleccionado por: ${escapeHtml(draw.drawnBy || "")} · ${escapeHtml(draw.drawnAt || "")}</small>
     </div>
@@ -3032,6 +3046,7 @@ function selectDrugTestingDepartment(department) {
 function addDrugTestingEmployees() {
   if (!["Safety", "Admin"].includes(state.selectedRole)) return;
   const department = $("drugRosterDepartment")?.value || state.selectedDrugTestingDepartment || "Rebar";
+  const shift = $("drugEmployeeShift")?.value || "Day";
   const names = ($("drugEmployeeNames")?.value || "").split(/\n|;/).map((name) => name.trim()).filter(Boolean);
   if (!names.length) {
     showToast("Enter at least one employee name / Escriba por lo menos un nombre");
@@ -3049,13 +3064,14 @@ function addDrugTestingEmployees() {
       id: `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       department,
+      shift,
       active: true,
       addedAt: timestamp(),
       addedBy: actorName()
     });
     added += 1;
   });
-  logActivity("Drug testing roster updated", { department, added, skipped });
+  logActivity("Drug testing roster updated", { department, shift, added, skipped });
   saveState();
   render();
   showToast(`${added} employee(s) added${skipped ? `; ${skipped} duplicate(s) skipped` : ""}`);
@@ -3068,6 +3084,17 @@ function moveDrugTestingEmployee(employeeId, department) {
   const previous = employee.department;
   employee.department = department;
   logActivity("Drug testing department changed", { employee: employee.name, from: previous, to: department });
+  saveState();
+  render();
+}
+
+function changeDrugTestingEmployeeShift(employeeId, shift) {
+  if (!["Safety", "Admin"].includes(state.selectedRole) || !drugTestingShifts.includes(shift)) return;
+  const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
+  if (!employee) return;
+  const previous = employee.shift;
+  employee.shift = shift;
+  logActivity("Drug testing shift changed", { employee: employee.name, department: employee.department, from: previous, to: shift });
   saveState();
   render();
 }
@@ -3112,10 +3139,11 @@ function secureRandomIndex(max) {
 function runDrugTestingDraw() {
   if (!["Safety", "Admin"].includes(state.selectedRole)) return;
   const department = $("drugDrawDepartment")?.value || "All departments";
+  const shift = $("drugDrawShift")?.value || "All shifts";
   const count = Math.floor(Number($("drugDrawCount")?.value) || 0);
   const date = $("drugDrawDate")?.value || localDateInputValue();
   const notes = $("drugDrawNotes")?.value.trim() || "";
-  const eligible = (state.drugTestingRoster || []).filter((employee) => employee.active && (department === "All departments" || employee.department === department));
+  const eligible = (state.drugTestingRoster || []).filter((employee) => employee.active && (department === "All departments" || employee.department === department) && (shift === "All shifts" || employee.shift === shift));
   if (count < 1) {
     showToast("Enter how many employees to select / Escriba cuantos empleados desea seleccionar");
     return;
@@ -3129,11 +3157,12 @@ function runDrugTestingDraw() {
     const randomIndex = secureRandomIndex(index + 1);
     [pool[index], pool[randomIndex]] = [pool[randomIndex], pool[index]];
   }
-  const employees = pool.slice(0, count).map((employee) => ({ id: employee.id, name: employee.name, department: employee.department }));
+  const employees = pool.slice(0, count).map((employee) => ({ id: employee.id, name: employee.name, department: employee.department, shift: employee.shift }));
   const draw = {
     id: `drug-draw-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     date,
     department,
+    shift,
     count,
     notes,
     employees,
@@ -3142,7 +3171,7 @@ function runDrugTestingDraw() {
     drawnAt: timestamp()
   };
   state.drugTestingDraws.unshift(draw);
-  logActivity("Random drug testing selection completed", { department, count, employees: employees.map((employee) => employee.name).join(", ") });
+  logActivity("Random drug testing selection completed", { department, shift, count, employees: employees.map((employee) => employee.name).join(", ") });
   saveState();
   render();
   showToast(`${count} employee(s) selected and recorded`);
@@ -3159,8 +3188,8 @@ function printDrugTestingDraw(drawId) {
   win.document.write(`<!doctype html><html><head><title>Drug Testing Selection</title><style>
     body{font-family:Arial,sans-serif;color:#071426;margin:36px}header{border-bottom:3px solid #071426;padding-bottom:14px;margin-bottom:22px}h1{margin:0 0 5px;font-size:25px}p{margin:5px 0}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.meta div{border:1px solid #9da8ae;padding:10px}.meta span{display:block;color:#52606a;font-size:12px;font-weight:bold}.meta strong{display:block;margin-top:5px}ol{padding-left:28px}li{padding:10px 6px;border-bottom:1px solid #ccd3d8}li span{float:right;color:#52606a}.signature{margin-top:48px;border-top:1px solid #071426;width:320px;padding-top:6px}@media print{button{display:none}}
   </style></head><body><header><h1>Random Drug Testing Selection</h1><p>Seleccion aleatoria para pruebas antidopaje</p></header>
-  <div class="meta"><div><span>Selection date / Fecha</span><strong>${escapeHtml(draw.date)}</strong></div><div><span>Department / Departamento</span><strong>${escapeHtml(draw.department)}</strong></div><div><span>Selected by / Seleccionado por</span><strong>${escapeHtml(draw.drawnBy)}</strong></div><div><span>Recorded / Registrado</span><strong>${escapeHtml(draw.drawnAt)}</strong></div></div>
-  <h2>Selected employees / Empleados seleccionados</h2><ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)}</span></li>`).join("")}</ol>
+  <div class="meta"><div><span>Selection date / Fecha</span><strong>${escapeHtml(draw.date)}</strong></div><div><span>Department / Departamento</span><strong>${escapeHtml(draw.department)}</strong></div><div><span>Shift / Turno</span><strong>${escapeHtml(draw.shift || "All shifts")}</strong></div><div><span>Selected by / Seleccionado por</span><strong>${escapeHtml(draw.drawnBy)}</strong></div><div><span>Recorded / Registrado</span><strong>${escapeHtml(draw.drawnAt)}</strong></div></div>
+  <h2>Selected employees / Empleados seleccionados</h2><ol>${draw.employees.map((employee) => `<li><strong>${escapeHtml(employee.name)}</strong><span>${escapeHtml(employee.department)} · ${escapeHtml(employee.shift || "Day")}</span></li>`).join("")}</ol>
   ${draw.notes ? `<p><strong>Notes / Notas:</strong> ${escapeHtml(draw.notes)}</p>` : ""}<div class="signature">Authorized signature / Firma autorizada</div><script>window.addEventListener("load",()=>window.print());<\/script></body></html>`);
   win.document.close();
 }
