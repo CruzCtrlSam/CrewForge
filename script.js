@@ -96,6 +96,15 @@ const accidentInjuryTypes = [
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
 const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
 const employeeMachineOptions = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender", "Shear", "Forklift", "Loader", "Telehandler"];
+const machineBadgeCatalog = [
+  { id: "automatic-bender", title: "Automatic Bender", image: "./assets/badge-auto-bender.png", matches: ["automatic bender", "auto bender"] },
+  { id: "overhead-crane", title: "Overhead Crane", image: "./assets/badge-overhead-crane.png", matches: ["overhead crane", "crane"] },
+  { id: "double-bender", title: "Double Bender", image: "./assets/badge-double-bender.png", matches: ["double bender"] },
+  { id: "radius-bender", title: "Radius Bender", image: "./assets/badge-radius-bender.png", matches: ["radius bender"] },
+  { id: "rebar-bender", title: "Rebar Bender", image: "./assets/badge-rebar-bender.png", matches: ["rebar bender", "bender", "press brake"] },
+  { id: "shear-line", title: "Shear Line", image: "./assets/badge-shear-line.png", matches: ["shear line"] },
+  { id: "spiral-bender", title: "Spiral Bender", image: "./assets/badge-spiral-bender.png", matches: ["spiral bender"] }
+];
 const trainingQuestionTypes = [
   { id: "multiple_choice", label: "Multiple choice", es: "Opcion multiple" },
   { id: "yes_no_na", label: "Yes / No / N/A", es: "Si / No / N/A" },
@@ -1534,7 +1543,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
     group: aliasCrew(person.group),
     hourlyRate: Number(person.hourlyRate) || 0,
     certs: Array.isArray(person.certs) ? person.certs : [],
-    machines: Array.isArray(person.machines) ? person.machines : []
+    machines: Array.isArray(person.machines) ? person.machines : [],
+    manualBadges: Array.isArray(person.manualBadges) ? person.manualBadges : []
   }));
   next.people = next.people.filter((person) => !isFictitiousEmployeeName(person.name));
   next.people = next.people.filter((person) => {
@@ -3637,9 +3647,58 @@ function accreditedTrainingBadges(employeeName) {
     .map((result) => ({
       id: result.id,
       title: result.courseTitle,
+      equipment: result.equipment || "",
       accreditedAt: result.accreditedAt,
-      accreditedBy: result.accreditedBy
+      accreditedBy: result.accreditedBy,
+      source: "training"
     }));
+}
+
+function machineBadgeFor(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return machineBadgeCatalog.find((badge) => badge.id === normalized || badge.title.toLowerCase() === normalized || badge.matches.some((match) => normalized.includes(match))) || null;
+}
+
+function employeeBadges(person) {
+  if (!person) return [];
+  const trainingBadges = accreditedTrainingBadges(person.name).map((badge) => {
+    const catalogBadge = machineBadgeFor(badge.equipment) || machineBadgeFor(badge.title);
+    return {
+      ...badge,
+      badgeId: catalogBadge?.id || "",
+      title: catalogBadge?.title || badge.title,
+      image: catalogBadge?.image || "",
+      qualificationDate: badge.accreditedAt || "",
+      evaluator: badge.accreditedBy || "Safety"
+    };
+  });
+  const manualBadges = (person.manualBadges || []).map((badge) => {
+    const catalogBadge = machineBadgeCatalog.find((entry) => entry.id === badge.badgeId);
+    return {
+      ...badge,
+      title: catalogBadge?.title || badge.title || badge.badgeId,
+      image: catalogBadge?.image || "",
+      source: "manual"
+    };
+  });
+  return [...trainingBadges, ...manualBadges].sort((a, b) => String(b.qualificationDate || b.accreditedAt || "").localeCompare(String(a.qualificationDate || a.accreditedAt || "")));
+}
+
+function renderEmployeeBadgeCards(person, canManageManual = false) {
+  const badges = employeeBadges(person);
+  if (!badges.length) return `<span class="empty-state">No accredited training yet.<span class="es">Todavia no hay capacitacion acreditada.</span></span>`;
+  return badges.map((badge) => `
+    <article class="training-badge ${badge.image ? "visual-badge" : ""}">
+      ${badge.image ? `<img src="${asset(badge.image)}" alt="${escapeHtml(badge.title)} badge" />` : ""}
+      <span>${escapeHtml(badge.title)}</span>
+      <small>${escapeHtml(badge.qualificationDate || badge.accreditedAt || "")}</small>
+      <small>${badge.source === "manual" ? "Verified prior evaluation / Evaluacion previa verificada" : "CrewForge assessment / Evaluacion CrewForge"}</small>
+      ${badge.evaluator ? `<small>Evaluator / Evaluador: ${escapeHtml(badge.evaluator)}</small>` : ""}
+      ${badge.note ? `<small>Note / Nota: ${escapeHtml(badge.note)}</small>` : ""}
+      ${canManageManual && badge.source === "manual" ? `<button class="danger-action badge-remove" type="button" onclick="removeManualEmployeeBadge('${escapeHtml(person.name)}', '${escapeHtml(badge.id)}')">${t("Remove", "Quitar")}</button>` : ""}
+    </article>
+  `).join("");
 }
 
 function trainingShareUrl(courseId) {
@@ -6417,7 +6476,6 @@ function renderEmployeeReports() {
   const normalCrew = person.group || employeeRecords.find((record) => record.group)?.group || "Not assigned";
   const normalRole = person.role || employeeRecords.find((record) => record.role)?.role || "Not set";
   const areaLabel = person.area ? areas[person.area]?.label : "All areas";
-  const trainingBadges = accreditedTrainingBadges(selectedEmployee);
   return `
     <section class="panel printable-report employee-report-page">
       ${reportHeader("Employee Reports", dateRangeLabel(fromDate, toDate))}
@@ -6454,7 +6512,7 @@ function renderEmployeeReports() {
       <div class="section-gap">
         <h3>Training badges<span class="es">Insignias de capacitacion</span></h3>
         <div class="badge-row">
-          ${trainingBadges.length ? trainingBadges.map((badge) => `<span class="training-badge">${escapeHtml(badge.title)}<small>${escapeHtml(badge.accreditedAt || "")}</small></span>`).join("") : `<span class="empty-state">No accredited training yet.<span class="es">Todavia no hay capacitacion acreditada.</span></span>`}
+          ${renderEmployeeBadgeCards(person)}
         </div>
       </div>
       <div class="table-wrap section-gap employee-report-table">${employeeReportTable(employeeRecords)}</div>
@@ -6593,7 +6651,7 @@ function renderEmployeeProfilePanel(canEditProfiles) {
   const disabled = !canEditProfiles ? "disabled" : "";
   const certs = new Set(person.certs || []);
   const machines = new Set(person.machines || []);
-  const trainingBadges = accreditedTrainingBadges(person.name);
+  const canManageManualBadges = canAccreditTraining();
   const checkboxTiles = (values, field, selectedSet) => values
     .map((value) => `
       <label class="checkbox-tile">
@@ -6629,10 +6687,28 @@ function renderEmployeeProfilePanel(canEditProfiles) {
         </div>
       </div>
       <div class="section-gap">
-        <h4>${t("Training badges", "Insignias de capacitacion")}</h4>
-        <div class="badge-row">
-          ${trainingBadges.length ? trainingBadges.map((badge) => `<span class="training-badge">${escapeHtml(badge.title)}<small>${escapeHtml(badge.accreditedAt || "")}</small></span>`).join("") : `<span class="empty-state">No accredited training yet.<span class="es">Todavia no hay capacitacion acreditada.</span></span>`}
+        <div class="split">
+          <div><h4>${t("Operator badges", "Insignias de operador")}</h4><p class="sub">Badges may come from a completed CrewForge assessment or a verified evaluation completed before CrewForge.</p></div>
+          ${canManageManualBadges ? `<span class="tag">Safety controlled / Controlado por Seguridad</span>` : ""}
         </div>
+        <div class="badge-row">
+          ${renderEmployeeBadgeCards(person, canManageManualBadges)}
+        </div>
+        ${canManageManualBadges ? `
+          <div class="manual-badge-form section-gap">
+            <div>
+              <h4>${t("Award an existing qualification", "Otorgar una calificacion existente")}</h4>
+              <p class="sub">Use this for an operator you already trained and evaluated outside CrewForge.</p>
+            </div>
+            <div class="form-grid manual-badge-fields">
+              <label>Machine badge<span class="es">Insignia de maquina</span><select id="manualBadgeType">${machineBadgeCatalog.map((badge) => `<option value="${badge.id}">${escapeHtml(badge.title)}</option>`).join("")}</select></label>
+              <label>Qualification date<span class="es">Fecha de calificacion</span><input id="manualBadgeDate" type="date" value="${localDateInputValue()}" /></label>
+              <label>Evaluator<span class="es">Evaluador</span><input id="manualBadgeEvaluator" value="${escapeHtml(actorName())}" /></label>
+              <label>Record note<span class="es">Nota del registro</span><input id="manualBadgeNote" placeholder="Prior practical evaluation / Evaluacion practica previa" /></label>
+            </div>
+            <button class="primary-action" type="button" onclick="awardManualEmployeeBadge()">${t("Award badge", "Otorgar insignia")}</button>
+          </div>
+        ` : ""}
       </div>
     </div>
   `;
@@ -8391,6 +8467,55 @@ function updateEmployeeProfileList(field, value, checked) {
   });
   saveState();
   showToast(`${person.name} profile updated`);
+}
+
+function awardManualEmployeeBadge() {
+  if (!canAccreditTraining()) return;
+  const person = selectedEmployeeProfile();
+  const badgeId = $("manualBadgeType")?.value || "";
+  const catalogBadge = machineBadgeCatalog.find((badge) => badge.id === badgeId);
+  const qualificationDate = $("manualBadgeDate")?.value || localDateInputValue();
+  const evaluator = $("manualBadgeEvaluator")?.value.trim() || actorName();
+  const note = $("manualBadgeNote")?.value.trim() || "Prior practical evaluation verified by Safety";
+  if (!person || !catalogBadge) return;
+  person.manualBadges = person.manualBadges || [];
+  if (employeeBadges(person).some((badge) => badge.badgeId === badgeId)) {
+    showToast(`${person.name} already has this badge`);
+    return;
+  }
+  const badge = {
+    id: `manual-badge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    badgeId,
+    title: catalogBadge.title,
+    qualificationDate,
+    evaluator,
+    note,
+    issuedBy: actorName(),
+    issuedAt: timestamp()
+  };
+  person.manualBadges.unshift(badge);
+  const machines = new Set(person.machines || []);
+  machines.add(catalogBadge.title);
+  person.machines = [...machines].sort((a, b) => a.localeCompare(b));
+  logActivity("Existing operator qualification awarded", { employee: person.name, badge: catalogBadge.title, qualificationDate, evaluator });
+  saveState();
+  render();
+  showToast(`${catalogBadge.title} badge awarded to ${person.name}`);
+}
+
+function removeManualEmployeeBadge(employeeName, badgeRecordId) {
+  if (!canAccreditTraining()) return;
+  const person = personForCurrentArea(employeeName);
+  const badge = person?.manualBadges?.find((entry) => entry.id === badgeRecordId);
+  if (!person || !badge) return;
+  const catalogBadge = machineBadgeCatalog.find((entry) => entry.id === badge.badgeId);
+  const title = catalogBadge?.title || badge.title || "badge";
+  if (!confirm(`Remove the ${title} badge from ${person.name}? / ¿Quitar la insignia ${title} de ${person.name}?`)) return;
+  person.manualBadges = person.manualBadges.filter((entry) => entry.id !== badgeRecordId);
+  logActivity("Manual operator badge removed", { employee: person.name, badge: title });
+  saveState();
+  render();
+  showToast(`${title} badge removed from ${person.name}`);
 }
 
 function submitReimbursementRequest() {

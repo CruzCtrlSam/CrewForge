@@ -1,4 +1,4 @@
-const CACHE_NAME = "crewforge-v137";
+const CACHE_NAME = "crewforge-v138";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,7 +7,14 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./assets/crewforge-app-icon.png",
   "./assets/crewforge-logo-lockup.png",
-  "./assets/crewforge-favicon.png"
+  "./assets/crewforge-favicon.png",
+  "./assets/badge-auto-bender.png",
+  "./assets/badge-overhead-crane.png",
+  "./assets/badge-double-bender.png",
+  "./assets/badge-radius-bender.png",
+  "./assets/badge-rebar-bender.png",
+  "./assets/badge-shear-line.png",
+  "./assets/badge-spiral-bender.png"
 ];
 
 self.addEventListener("install", (event) => {

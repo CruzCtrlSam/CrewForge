@@ -1569,6 +1569,59 @@ textarea {
   font-size: 0.72rem;
 }
 
+.training-badge.visual-badge {
+  width: 178px;
+  min-height: 238px;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+}
+
+.training-badge.visual-badge img {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  margin-bottom: 5px;
+}
+
+.training-badge.visual-badge > span {
+  font-size: 0.92rem;
+}
+
+.badge-remove {
+  width: 100%;
+  min-height: 32px;
+  margin-top: auto;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+
+.manual-badge-form {
+  border: 2px solid rgba(167, 123, 34, 0.45);
+  border-radius: 8px;
+  background: #fff8e5;
+  padding: 16px;
+}
+
+.manual-badge-form h4 {
+  margin-bottom: 3px;
+}
+
+.manual-badge-fields {
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .training-badge.visual-badge {
+    width: 100%;
+    min-height: 0;
+  }
+
+  .manual-badge-form {
+    padding: 12px;
+  }
+}
+
 .public-training-screen {
   align-items: start;
   padding-top: 36px;
