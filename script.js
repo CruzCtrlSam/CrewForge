@@ -2,6 +2,8 @@ const STORAGE_KEY = "valor-ops-demo-v7";
 
 const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const coreDrugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
+const drugTestingShifts = ["Day", "Night"];
 
 const areas = {
   rebarFab: {
@@ -56,6 +58,35 @@ const areas = {
     adminOnly: true
   }
 };
+const builtInDepartmentIds = ["rebarFab", "solarPiles", "rebarInstall", "skids"];
+
+function hydrateCustomDepartments(target) {
+  Object.keys(areas).forEach((id) => {
+    if (areas[id]?.custom) delete areas[id];
+  });
+  target.customDepartments = (target.customDepartments || []).map((department) => ({
+    id: String(department.id || "").trim(),
+    label: String(department.label || "").trim(),
+    es: String(department.es || department.label || "").trim(),
+    archived: Boolean(department.archived),
+    createdAt: department.createdAt || "",
+    createdBy: department.createdBy || ""
+  })).filter((department) => department.id && department.label);
+  target.customDepartments.forEach((department) => {
+    areas[department.id] = {
+      label: department.label,
+      es: department.es || department.label,
+      mode: "shift",
+      roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning", "Unassigned"],
+      pto: true,
+      sick: true,
+      perDiem: false,
+      dol: false,
+      custom: true,
+      archived: department.archived
+    };
+  });
+}
 
 const delayReasons = ["No delay", "Weather", "Accident", "Illness", "Job site shut down", "Material delay", "Equipment issue", "Inspection hold", "Drawing/RFI issue", "Other"];
 const bundleStatuses = ["Cut", "In production", "Staged", "Loaded", "Shipped", "Delivered"];
@@ -609,7 +640,7 @@ const areaArtwork = {
   bundleLab: asset("./assets/crewforge-bundle-tracking.svg")
 };
 function visibleAreaEntries() {
-  return Object.entries(areas).filter(([id]) => id !== "bundleLab");
+  return Object.entries(areas).filter(([id, details]) => id !== "bundleLab" && !details.archived);
 }
 const mockTrialCrews = [
   {
@@ -779,7 +810,7 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
+const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1182,6 +1213,7 @@ const defaultState = {
   currentForeman: "Lidio Barron",
   weeks: ["2026-07-03", "2026-07-10", "2026-07-17", "2026-07-24"],
   people: defaultPeople,
+  customDepartments: [],
   jobLists: {
     solarClients: ["Solar"],
     solarJobNames: ["Solar Piles Demo Job"]
@@ -1380,6 +1412,8 @@ function loadState() {
 
 function upgradeState(next, resetToCurrentWeek = false) {
   if (resetToCurrentWeek) next.selectedWeek = currentWeekEnding();
+  hydrateCustomDepartments(next);
+  if (next.selectedArea && (!areas[next.selectedArea] || areas[next.selectedArea].archived)) next.selectedArea = "";
   if (next.auth === undefined) next.auth = null;
   if (next.auth && !next.auth.uid) next.auth = null;
   if (next.companyVerified === undefined) next.companyVerified = Boolean(next.auth);
@@ -1416,6 +1450,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
   next.selectedTrainingTab = next.selectedTrainingTab || "library";
   next.selectedDrugTestingDepartment = next.selectedDrugTestingDepartment || "Rebar";
+  if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
@@ -1455,7 +1490,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.drugTestingRoster = (next.drugTestingRoster || []).map((employee) => ({
     id: employee.id || `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: String(employee.name || "").trim(),
-    department: ["Rebar", "Solar Piles", "Skids"].includes(employee.department) ? employee.department : "Rebar",
+    department: drugTestingDepartmentNames(next, true).includes(employee.department) ? employee.department : "Rebar",
     shift: ["Day", "Night"].includes(employee.shift) ? employee.shift : "Day",
     active: employee.active !== false,
     addedAt: employee.addedAt || "",
@@ -2961,20 +2996,25 @@ function renderActiveTab() {
   return renderDashboard();
 }
 
-const drugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
-const drugTestingShifts = ["Day", "Night"];
+function drugTestingDepartmentNames(target = state, includeArchived = false) {
+  const custom = (target.customDepartments || []).filter((department) => includeArchived || !department.archived).map((department) => department.label);
+  return [...new Set([...coreDrugTestingDepartments, ...custom])];
+}
 
 function drugDepartmentForArea(areaId) {
   if (["rebarFab", "rebarInstall"].includes(areaId)) return "Rebar";
   if (areaId === "solarPiles") return "Solar Piles";
   if (areaId === "skids") return "Skids";
+  if (areas[areaId]?.custom) return areas[areaId].label;
   return "";
 }
 
-function peopleAreaForDrugDepartment(department) {
+function peopleAreaForDrugDepartment(department, target = state) {
   if (department === "Rebar") return "rebarFab";
   if (department === "Solar Piles") return "solarPiles";
   if (department === "Skids") return "skids";
+  const custom = (target.customDepartments || []).find((entry) => !entry.archived && entry.label === department);
+  if (custom) return custom.id;
   return "";
 }
 
@@ -2990,7 +3030,7 @@ function peopleGroupForDrugShift(shift) {
 
 function syncDrugEmployeeToPeople(employee, target = state) {
   if (!employee?.name) return null;
-  const targetArea = peopleAreaForDrugDepartment(employee.department);
+  const targetArea = peopleAreaForDrugDepartment(employee.department, target);
   if (!targetArea) return null;
   let person = (target.people || []).find((entry) => entry.drugTestingId === employee.id || sameName(entry.name, employee.name));
   if (!person) {
@@ -3006,7 +3046,7 @@ function syncDrugEmployeeToPeople(employee, target = state) {
       manualBadges: []
     };
     target.people.push(person);
-  } else if (["rebarFab", "solarPiles", "skids"].includes(person.area)) {
+  } else if (areas[person.area]?.mode === "shift") {
     person.area = targetArea;
     person.group = peopleGroupForDrugShift(employee.shift);
   }
@@ -3063,7 +3103,8 @@ function unlinkDrugEmployeeFromPerson(employee, target = state) {
 }
 
 function drugTestingDepartmentOptions(selected, includeAll = false) {
-  const options = includeAll ? ["All departments", ...drugTestingDepartments] : drugTestingDepartments;
+  const departments = drugTestingDepartmentNames();
+  const options = includeAll ? ["All departments", ...departments] : departments;
   return options.map((department) => `<option value="${escapeHtml(department)}" ${department === selected ? "selected" : ""}>${escapeHtml(department)}</option>`).join("");
 }
 
@@ -3180,7 +3221,7 @@ function renderDrugTestingDraw(draw, latest = false) {
 }
 
 function selectDrugTestingDepartment(department) {
-  if (!drugTestingDepartments.includes(department)) return;
+  if (!drugTestingDepartmentNames().includes(department)) return;
   state.selectedDrugTestingDepartment = department;
   saveState();
   render();
@@ -3227,7 +3268,7 @@ function addDrugTestingEmployees() {
 }
 
 function moveDrugTestingEmployee(employeeId, department) {
-  if (!["Safety", "Admin"].includes(state.selectedRole) || !drugTestingDepartments.includes(department)) return;
+  if (!["Safety", "Admin"].includes(state.selectedRole) || !drugTestingDepartmentNames().includes(department)) return;
   const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
   if (!employee) return;
   const previous = employee.department;
@@ -6835,8 +6876,158 @@ function renderDeliverables() {
 function renderSetup() {
   const canManage = canManagePeopleSetup();
   const canEditRates = canEditPayRates();
-  if (area().mode === "crew") return renderCrewSetup(canManage, canEditRates);
-  return renderShiftSetup(canManage, canEditRates);
+  const departmentManager = canManage ? renderDepartmentManager() : "";
+  const peopleSetup = area().mode === "crew" ? renderCrewSetup(canManage, canEditRates) : renderShiftSetup(canManage, canEditRates);
+  return `${departmentManager}${peopleSetup}`;
+}
+
+function renderDepartmentManager() {
+  const customDepartments = (state.customDepartments || []).slice().sort((a, b) => a.label.localeCompare(b.label));
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Departments", "Departamentos")}</h2>
+          <p class="sub">Add departments here once. They will appear in People, Drug Testing, Training, Audits, Safety Forms, Documents, and Incident records.</p>
+          <p class="sub es">Agregue departamentos aqui una sola vez. Apareceran en Personas, Pruebas antidopaje, Capacitacion, Auditorias, Formularios de seguridad, Documentos e Incidentes.</p>
+        </div>
+        <span class="tag">Admin</span>
+      </div>
+      <div class="form-grid section-gap">
+        <label>Department name<span class="es">Nombre del departamento</span><input id="newDepartmentName" placeholder="Example: Structural Steel" /></label>
+        <label>Spanish name (optional)<span class="es">Nombre en espanol (opcional)</span><input id="newDepartmentNameEs" placeholder="Ejemplo: Acero estructural" /></label>
+        <button class="primary-action" type="button" onclick="addCustomDepartment()">${t("Add department", "Agregar departamento")}</button>
+      </div>
+      <div class="notice section-gap">Departments with records are archived instead of deleted so historical safety documentation remains intact.<span class="es">Los departamentos con registros se archivan en vez de borrarse para conservar la documentacion historica de seguridad.</span></div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Department<span class="es">Departamento</span></th><th>Spanish name<span class="es">Nombre en espanol</span></th><th>Status<span class="es">Estado</span></th><th>Actions<span class="es">Acciones</span></th></tr></thead>
+          <tbody>
+            ${builtInDepartmentIds.map((id) => `<tr><td><strong>${escapeHtml(areas[id].label)}</strong></td><td>${escapeHtml(areas[id].es)}</td><td><span class="tag">Built in / Incluido</span></td><td><button class="table-button" type="button" onclick="openDepartment('${id}')">${t("Open", "Abrir")}</button></td></tr>`).join("")}
+            ${customDepartments.map((department) => `
+              <tr>
+                <td><input id="department-name-${department.id}" value="${escapeHtml(department.label)}" ${department.archived ? "disabled" : ""} /></td>
+                <td><input id="department-es-${department.id}" value="${escapeHtml(department.es || department.label)}" ${department.archived ? "disabled" : ""} /></td>
+                <td><span class="tag">${department.archived ? "Archived / Archivado" : "Active / Activo"}</span></td>
+                <td><div class="history-actions">
+                  ${department.archived
+                    ? `<button class="secondary-action table-action" type="button" onclick="setCustomDepartmentArchived('${department.id}', false)">${t("Restore", "Restaurar")}</button>`
+                    : `<button class="table-button" type="button" onclick="openDepartment('${department.id}')">${t("Open", "Abrir")}</button><button class="secondary-action table-action" type="button" onclick="renameCustomDepartment('${department.id}')">${t("Save name", "Guardar nombre")}</button><button class="danger-action table-action" type="button" onclick="setCustomDepartmentArchived('${department.id}', true)">${t("Archive", "Archivar")}</button>`}
+                </div></td>
+              </tr>
+            `).join("") || `<tr><td colspan="4"><div class="empty-state">No custom departments yet.<span class="es">Todavia no hay departamentos personalizados.</span></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function departmentNameExists(name, excludedId = "") {
+  const normalized = String(name || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (coreDrugTestingDepartments.some((department) => department.toLowerCase() === normalized)) return true;
+  return Object.entries(areas).some(([id, details]) => id !== excludedId && id !== "bundleLab" && details.label.toLowerCase() === normalized);
+}
+
+function customDepartmentId(name) {
+  const base = String(name || "department").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "department";
+  let id = `department-${base}`;
+  let suffix = 2;
+  while (areas[id] || (state.customDepartments || []).some((department) => department.id === id)) {
+    id = `department-${base}-${suffix}`;
+    suffix += 1;
+  }
+  return id;
+}
+
+function addCustomDepartment() {
+  if (!canManagePeopleSetup()) return;
+  const label = $("newDepartmentName")?.value.trim() || "";
+  const labelEs = $("newDepartmentNameEs")?.value.trim() || label;
+  if (!label) return showToast("Enter a department name / Escriba el nombre del departamento");
+  if (departmentNameExists(label)) return showToast("That department already exists / Ese departamento ya existe");
+  const department = {
+    id: customDepartmentId(label),
+    label,
+    es: labelEs,
+    archived: false,
+    createdAt: timestamp(),
+    createdBy: actorName()
+  };
+  state.customDepartments = state.customDepartments || [];
+  state.customDepartments.push(department);
+  hydrateCustomDepartments(state);
+  state.selectedArea = department.id;
+  state.activeTab = "setup";
+  state.selectedEmployeeProfile = "";
+  logActivity("Department added", { department: label });
+  saveState();
+  render();
+  syncHistory(true);
+  showToast(`${label} added`);
+}
+
+function renameCustomDepartment(departmentId) {
+  if (!canManagePeopleSetup()) return;
+  const department = (state.customDepartments || []).find((entry) => entry.id === departmentId);
+  if (!department || department.archived) return;
+  const label = $(`department-name-${departmentId}`)?.value.trim() || "";
+  const labelEs = $(`department-es-${departmentId}`)?.value.trim() || label;
+  if (!label) return showToast("Enter a department name / Escriba el nombre del departamento");
+  if (departmentNameExists(label, departmentId)) return showToast("That department already exists / Ese departamento ya existe");
+  const previous = department.label;
+  department.label = label;
+  department.es = labelEs;
+  state.drugTestingRoster.forEach((employee) => {
+    if (employee.department === previous) employee.department = label;
+  });
+  state.people.forEach((person) => {
+    if (person.area === departmentId) person.drugTestingDepartment = label;
+  });
+  if (state.selectedDrugTestingDepartment === previous) state.selectedDrugTestingDepartment = label;
+  hydrateCustomDepartments(state);
+  logActivity("Department renamed", { from: previous, to: label });
+  saveState();
+  render();
+  showToast(`${previous} renamed to ${label}`);
+}
+
+function setCustomDepartmentArchived(departmentId, archived) {
+  if (!canManagePeopleSetup()) return;
+  const department = (state.customDepartments || []).find((entry) => entry.id === departmentId);
+  if (!department || department.archived === archived) return;
+  if (archived && !confirm(`Archive ${department.label}? Existing records will remain available in history, and its employees will be removed from active drug-test selections.`)) return;
+  department.archived = archived;
+  if (archived) {
+    state.drugTestingRoster.forEach((employee) => {
+      if (employee.department === department.label) employee.active = false;
+    });
+    state.people.forEach((person) => {
+      if (person.area === departmentId) person.drugTestingEligible = false;
+    });
+    if (state.selectedDrugTestingDepartment === department.label) state.selectedDrugTestingDepartment = "Rebar";
+    if (state.selectedArea === departmentId) {
+      state.selectedArea = "";
+      state.activeTab = "training";
+    }
+  }
+  hydrateCustomDepartments(state);
+  logActivity(archived ? "Department archived" : "Department restored", { department: department.label });
+  saveState();
+  render();
+  syncHistory(true);
+  showToast(`${department.label} ${archived ? "archived" : "restored"}`);
+}
+
+function openDepartment(departmentId) {
+  if (!areas[departmentId] || areas[departmentId].archived) return;
+  state.selectedArea = departmentId;
+  state.activeTab = "setup";
+  state.selectedEmployeeProfile = "";
+  saveState();
+  render();
+  syncHistory(true);
 }
 
 function renderForemanRenameTool(foreman) {
