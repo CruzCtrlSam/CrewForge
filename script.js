@@ -1652,11 +1652,9 @@ function upgradeState(next, resetToCurrentWeek = false) {
     next.selectedEmployeeProfile = "";
     next.employeeRosterClearedV126 = true;
   }
-  if (!next.employeeDirectoryLinkedV141) {
-    (next.drugTestingRoster || []).forEach((employee) => syncDrugEmployeeToPeople(employee, next));
-    (next.people || []).forEach((person) => syncPersonToDrugTesting(person, next));
-    next.employeeDirectoryLinkedV141 = true;
-  }
+  (next.drugTestingRoster || []).forEach((employee) => syncDrugEmployeeToPeople(employee, next));
+  (next.people || []).forEach((person) => syncPersonToDrugTesting(person, next));
+  next.employeeDirectoryLinkedV141 = true;
   next.sheets = next.sheets || {};
   Object.entries(next.sheets).forEach(([key, sheet]) => {
     const parts = key.split(":");
