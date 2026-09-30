@@ -8,7 +8,7 @@ const areas = {
     label: "Rebar Fabrication",
     es: "Fabricacion de varilla",
     mode: "shift",
-    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning"],
+    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning", "Unassigned"],
     pto: true,
     sick: true,
     perDiem: false,
@@ -18,7 +18,7 @@ const areas = {
     label: "Solar Piles Fabrication",
     es: "Fabricacion de pilotes solares",
     mode: "shift",
-    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning"],
+    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning", "Unassigned"],
     pto: true,
     sick: true,
     perDiem: false,
@@ -28,11 +28,21 @@ const areas = {
     label: "Rebar Installation",
     es: "Instalacion de varilla",
     mode: "crew",
-    roles: ["Foreman", "Ironworker", "Rodbuster"],
+    roles: ["Foreman", "Ironworker", "Rodbuster", "Unassigned"],
     pto: true,
     sick: true,
     perDiem: true,
     dol: true
+  },
+  skids: {
+    label: "Skids",
+    es: "Skids",
+    mode: "shift",
+    roles: ["Foreman", "Machine Operator", "Helper", "Quality Control", "Cleaning", "Unassigned"],
+    pto: true,
+    sick: true,
+    perDiem: false,
+    dol: false
   },
   bundleLab: {
     label: "Rebar Fabrication Tracking",
@@ -590,7 +600,7 @@ const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const solarPilesForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
-const assetVersion = "65";
+const assetVersion = "66";
 const asset = (path) => `${path}?v=${assetVersion}`;
 const areaArtwork = {
   rebarFab: asset("./assets/crewforge-rebar-fabrication.png"),
@@ -769,7 +779,7 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126"];
+const SHARED_STATE_KEYS = ["weeks", "people", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1192,6 +1202,7 @@ const defaultState = {
   trainingResults: [],
   drugTestingRoster: [],
   drugTestingDraws: [],
+  employeeDirectoryLinkedV141: false,
   qualityChecks: [],
   reimbursementRequests: [],
   production: [
@@ -1605,6 +1616,11 @@ function upgradeState(next, resetToCurrentWeek = false) {
     next.people = [];
     next.selectedEmployeeProfile = "";
     next.employeeRosterClearedV126 = true;
+  }
+  if (!next.employeeDirectoryLinkedV141) {
+    (next.drugTestingRoster || []).forEach((employee) => syncDrugEmployeeToPeople(employee, next));
+    (next.people || []).forEach((person) => syncPersonToDrugTesting(person, next));
+    next.employeeDirectoryLinkedV141 = true;
   }
   next.sheets = next.sheets || {};
   Object.entries(next.sheets).forEach(([key, sheet]) => {
@@ -2948,6 +2964,104 @@ function renderActiveTab() {
 const drugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
 const drugTestingShifts = ["Day", "Night"];
 
+function drugDepartmentForArea(areaId) {
+  if (["rebarFab", "rebarInstall"].includes(areaId)) return "Rebar";
+  if (areaId === "solarPiles") return "Solar Piles";
+  if (areaId === "skids") return "Skids";
+  return "";
+}
+
+function peopleAreaForDrugDepartment(department) {
+  if (department === "Rebar") return "rebarFab";
+  if (department === "Solar Piles") return "solarPiles";
+  if (department === "Skids") return "skids";
+  return "";
+}
+
+function drugShiftForPerson(person) {
+  if (String(person?.group || "").toLowerCase().includes("night")) return "Night";
+  if (String(person?.group || "").toLowerCase().includes("day")) return "Day";
+  return drugTestingShifts.includes(person?.drugTestingShift) ? person.drugTestingShift : "Day";
+}
+
+function peopleGroupForDrugShift(shift) {
+  return shift === "Night" ? "Night Shift" : "Day Shift";
+}
+
+function syncDrugEmployeeToPeople(employee, target = state) {
+  if (!employee?.name) return null;
+  const targetArea = peopleAreaForDrugDepartment(employee.department);
+  if (!targetArea) return null;
+  let person = (target.people || []).find((entry) => entry.drugTestingId === employee.id || sameName(entry.name, employee.name));
+  if (!person) {
+    person = {
+      name: employee.name,
+      role: "Unassigned",
+      area: targetArea,
+      group: peopleGroupForDrugShift(employee.shift),
+      dol: false,
+      hourlyRate: 0,
+      certs: [],
+      machines: [],
+      manualBadges: []
+    };
+    target.people.push(person);
+  } else if (["rebarFab", "solarPiles", "skids"].includes(person.area)) {
+    person.area = targetArea;
+    person.group = peopleGroupForDrugShift(employee.shift);
+  }
+  person.drugTestingId = employee.id;
+  person.drugTestingEligible = employee.active !== false;
+  person.drugTestingExcluded = false;
+  person.drugTestingDepartment = employee.department;
+  person.drugTestingShift = employee.shift;
+  return person;
+}
+
+function syncPersonToDrugTesting(person, target = state) {
+  if (!person?.name) return null;
+  if (person.drugTestingExcluded) return null;
+  const department = drugDepartmentForArea(person.area) || person.drugTestingDepartment || "";
+  if (!department) return null;
+  const shift = drugShiftForPerson(person);
+  let employee = (target.drugTestingRoster || []).find((entry) => entry.id === person.drugTestingId || sameName(entry.name, person.name));
+  if (!employee) {
+    employee = {
+      id: `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: person.name,
+      department,
+      shift,
+      active: person.drugTestingEligible !== false,
+      addedAt: new Date().toLocaleString("en-US"),
+      addedBy: target.auth?.name || "People / Departments sync"
+    };
+    target.drugTestingRoster.push(employee);
+  } else {
+    employee.name = person.name;
+    employee.department = department;
+    employee.shift = shift;
+    if (person.drugTestingEligible !== undefined) employee.active = person.drugTestingEligible !== false;
+  }
+  person.drugTestingId = employee.id;
+  person.drugTestingEligible = employee.active !== false;
+  person.drugTestingDepartment = employee.department;
+  person.drugTestingShift = employee.shift;
+  return employee;
+}
+
+function removePersonFromDrugTesting(person, target = state) {
+  if (!person?.name) return;
+  target.drugTestingRoster = (target.drugTestingRoster || []).filter((employee) => employee.id !== person.drugTestingId && !sameName(employee.name, person.name));
+}
+
+function unlinkDrugEmployeeFromPerson(employee, target = state) {
+  const person = (target.people || []).find((entry) => entry.drugTestingId === employee?.id || sameName(entry.name, employee?.name));
+  if (!person) return;
+  person.drugTestingEligible = false;
+  person.drugTestingExcluded = true;
+  person.drugTestingId = "";
+}
+
 function drugTestingDepartmentOptions(selected, includeAll = false) {
   const options = includeAll ? ["All departments", ...drugTestingDepartments] : drugTestingDepartments;
   return options.map((department) => `<option value="${escapeHtml(department)}" ${department === selected ? "selected" : ""}>${escapeHtml(department)}</option>`).join("");
@@ -2979,6 +3093,7 @@ function renderDrugTesting() {
       <div class="drug-testing-grid section-gap">
         <div class="drug-testing-section">
           <h3>${t("Employee roster", "Lista de empleados")}</h3>
+          <div class="notice">This roster is linked to People / Departments. Adding or updating an employee here also updates the matching department and shift there.<span class="es">Esta lista esta conectada con Personas / Departamentos. Agregar o actualizar un empleado aqui tambien actualiza su departamento y turno alla.</span></div>
           <div class="form-grid drug-roster-controls">
             <label>Department<span class="es">Departamento</span><select id="drugRosterDepartment" onchange="selectDrugTestingDepartment(this.value)">${drugTestingDepartmentOptions(selectedDepartment)}</select></label>
             <label>Find employee<span class="es">Buscar empleado</span><input id="drugRosterSearch" type="search" placeholder="Name / Nombre" oninput="filterDrugTestingRoster(this.value)" /></label>
@@ -3081,14 +3196,18 @@ function addDrugTestingEmployees() {
     return;
   }
   let added = 0;
-  let skipped = 0;
+  let updated = 0;
   names.forEach((name) => {
     const existing = state.drugTestingRoster.find((employee) => sameName(employee.name, name));
     if (existing) {
-      skipped += 1;
+      existing.department = department;
+      existing.shift = shift;
+      existing.active = true;
+      syncDrugEmployeeToPeople(existing);
+      updated += 1;
       return;
     }
-    state.drugTestingRoster.push({
+    const employee = {
       id: `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
       department,
@@ -3096,13 +3215,15 @@ function addDrugTestingEmployees() {
       active: true,
       addedAt: timestamp(),
       addedBy: actorName()
-    });
+    };
+    state.drugTestingRoster.push(employee);
+    syncDrugEmployeeToPeople(employee);
     added += 1;
   });
-  logActivity("Drug testing roster updated", { department, shift, added, skipped });
+  logActivity("Drug testing roster updated", { department, shift, added, updated });
   saveState();
   render();
-  showToast(`${added} employee(s) added${skipped ? `; ${skipped} duplicate(s) skipped` : ""}`);
+  showToast(`${added} employee(s) added${updated ? `; ${updated} updated` : ""}`);
 }
 
 function moveDrugTestingEmployee(employeeId, department) {
@@ -3111,6 +3232,7 @@ function moveDrugTestingEmployee(employeeId, department) {
   if (!employee) return;
   const previous = employee.department;
   employee.department = department;
+  syncDrugEmployeeToPeople(employee);
   logActivity("Drug testing department changed", { employee: employee.name, from: previous, to: department });
   saveState();
   render();
@@ -3122,6 +3244,7 @@ function changeDrugTestingEmployeeShift(employeeId, shift) {
   if (!employee) return;
   const previous = employee.shift;
   employee.shift = shift;
+  syncDrugEmployeeToPeople(employee);
   logActivity("Drug testing shift changed", { employee: employee.name, department: employee.department, from: previous, to: shift });
   saveState();
   render();
@@ -3132,6 +3255,7 @@ function toggleDrugTestingEmployee(employeeId, active) {
   const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
   if (!employee) return;
   employee.active = Boolean(active);
+  syncDrugEmployeeToPeople(employee);
   logActivity("Drug testing eligibility changed", { employee: employee.name, department: employee.department, eligible: employee.active ? "Yes" : "No" });
   saveState();
   render();
@@ -3141,6 +3265,7 @@ function deleteDrugTestingEmployee(employeeId) {
   if (!["Safety", "Admin"].includes(state.selectedRole)) return;
   const employee = state.drugTestingRoster.find((entry) => entry.id === employeeId);
   if (!employee || !confirm(`Remove ${employee.name} from the drug testing roster? / Quitar a ${employee.name} de la lista?`)) return;
+  unlinkDrugEmployeeFromPerson(employee);
   state.drugTestingRoster = state.drugTestingRoster.filter((entry) => entry.id !== employeeId);
   logActivity("Employee removed from drug testing roster", { employee: employee.name, department: employee.department });
   saveState();
@@ -6854,13 +6979,14 @@ function renderCrewSetup(canManage, canEditRates) {
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>Hourly rate</th><th>DOL</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>Drug testing<span class="es">Prueba antidopaje</span></th><th>Hourly rate</th><th>DOL</th><th>Actions</th></tr></thead>
           <tbody>
             ${crewMembers
               .map((person) => `<tr>
                 <td><strong>${person.name}</strong></td>
                 <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
                 <td>${person.group}</td>
+                <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
                 <td>${person.dol ? "Yes" : "No"}</td>
                 <td>${person.role === "Foreman" ? '<span class="tag">Foreman</span>' : `<button class="danger-action table-action" data-remove-crew-person="${person.name}" type="button" ${!canManage ? "disabled" : ""}>Remove<span class="es">Quitar</span></button>`}</td>
@@ -6886,20 +7012,21 @@ function renderShiftSetup(canManage, canEditRates) {
       ${renderEmployeeProfilePanel(canEditProfiles)}
       <div class="people-form section-gap">
         <label>Name<span class="es">Nombre</span><input id="personName" ${!canManage ? "disabled" : ""} /></label>
-        <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
+        <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles, area().roles.includes("Unassigned") ? "Unassigned" : area().roles[1] || area().roles[0])}</select></label>
         <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
         <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="personHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!canManage ? "disabled" : ""} /></div></label>
         <button class="primary-action" id="savePerson" type="button" ${!canManage ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
       </div>
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Hourly rate</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Drug testing<span class="es">Prueba antidopaje</span></th><th>Hourly rate</th><th>Actions</th></tr></thead>
           <tbody>
             ${peopleForArea()
               .map((person) => `<tr>
                 <td><strong>${person.name}</strong></td>
                 <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
                 <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
+                <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
                 <td><button class="danger-action table-action" data-remove-person="${person.name}" type="button" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
@@ -8178,6 +8305,7 @@ function addWorkerToWeek() {
     const sheet = currentSheet();
     person = { name: manualName, role: $("manualRole").value, area: state.selectedArea, group: area().mode === "crew" ? sheet.group : $("manualGroup").value, dol: $("manualDol")?.checked || false, hourlyRate: 0 };
     state.people.push(person);
+    syncPersonToDrugTesting(person);
   }
   if (!person) {
     showToast("Select or type a worker");
@@ -8238,6 +8366,7 @@ function addCrewPerson() {
     return;
   }
 
+  syncPersonToDrugTesting(person);
   syncSheetsForCrew(state.selectedArea, crew);
   logActivity("Worker assigned to crew", { foreman, employee: person.name, field: crew });
   saveState();
@@ -8259,14 +8388,16 @@ function addForemanCrew() {
   }
 
   state.hiddenForemen = (state.hiddenForemen || []).filter((entry) => !sameName(entry, name));
-  state.people.push({
+  const person = {
     name,
     role: "Foreman",
     area: state.selectedArea,
     group: crewNameForForeman(name),
     dol: false,
     hourlyRate: 0
-  });
+  };
+  state.people.push(person);
+  syncPersonToDrugTesting(person);
   state.setupForeman = name;
   if (state.selectedRole !== "Foreman") state.currentForeman = name;
   logActivity("Foreman / crew added", { foreman: name });
@@ -8289,6 +8420,8 @@ function deleteSelectedForemanCrew() {
   if (!confirm(warning)) return;
 
   state.hiddenForemen = [...new Set([...(state.hiddenForemen || []), foreman])];
+  const foremanPerson = state.people.find((person) => person.area === state.selectedArea && sameName(person.name, foreman) && person.role === "Foreman");
+  if (foremanPerson) removePersonFromDrugTesting(foremanPerson);
   state.people = state.people.filter((person) => !(person.area === state.selectedArea && sameName(person.name, foreman) && person.role === "Foreman"));
   state.people.forEach((person) => {
     if (person.area === state.selectedArea && person.group === crew) person.group = "";
@@ -8340,6 +8473,8 @@ function renameSelectedForeman() {
     if (sameName(person.name, oldName)) person.name = newName;
     if (person.group === oldCrew) person.group = newCrew;
   });
+  const drugEmployee = state.drugTestingRoster.find((employee) => sameName(employee.name, oldName));
+  if (drugEmployee) drugEmployee.name = newName;
 
   Object.entries(state.sheets || {}).forEach(([key, sheet]) => {
     const wasForeman = sameName(sheet.foreman, oldName);
@@ -8391,6 +8526,7 @@ function updatePersonField(event) {
   if (field !== "hourlyRate" && !canManagePeopleSetup()) return;
   const oldValue = person[field];
   person[field] = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
+  if (["group", "role"].includes(field)) syncPersonToDrugTesting(person);
   logActivity("Person updated", { employee: person.name, field, from: oldValue, to: person[field] });
   saveState();
   showToast(`${person.name} updated`);
@@ -8401,6 +8537,7 @@ function removePerson(name) {
   const person = personByName(name);
   if (!person || person.role === "Foreman") return;
   if (!confirm(`Delete ${name}?`)) return;
+  removePersonFromDrugTesting(person);
   state.people = state.people.filter((entry) => entry.name !== name || entry.area !== state.selectedArea);
   logActivity("Person deleted", { employee: name });
   saveState();
@@ -8570,6 +8707,8 @@ function savePerson() {
   const next = { name, role: $("personRole").value, area: state.selectedArea, group: $("personGroup").value, dol: $("personDol")?.checked || false, hourlyRate: Number($("personHourlyRate")?.value) || 0 };
   if (existing) Object.assign(existing, next);
   else state.people.push(next);
+  syncPersonToDrugTesting(existing || next);
+  logActivity("Person saved", { employee: name, department: drugDepartmentForArea(state.selectedArea), shift: drugShiftForPerson(existing || next) });
   saveState();
   render();
   showToast(`${name} saved`);
