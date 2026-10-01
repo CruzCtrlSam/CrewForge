@@ -25,7 +25,8 @@ update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object(
   'company_code', 'VALOR',
   'role', 'Admin',
-  'display_name', 'Sam Cruz'
+  'display_name', 'Sam Cruz',
+  'is_owner', true
 )
 where lower(email) = lower('sam@raicesadvisors.com');
 ```
@@ -44,10 +45,7 @@ Run [SUPABASE_PRODUCTION_SECURITY.sql](./SUPABASE_PRODUCTION_SECURITY.sql) in th
 
 ## Add Another Company
 
-1. Add its code, display name, and workspace ID to `companyDirectory` in `script.js`.
-2. Create its users in Supabase Auth.
-3. Set each user's `company_code`, `role`, and `display_name` in `raw_app_meta_data`.
-4. The workspace ID should use `crewforge-<lowercase-company-code>` unless a legacy mapping is required.
+After the owner tools are deployed, sign in with the owner account and open **Companies & Accounts / Companias y cuentas**. Create the company first, then create its Admin, Safety, or Quality accounts. Company codes are resolved from Supabase and no longer need to be added to `script.js`.
 
 Allowed application roles are `Admin`, `Safety`, and `Quality`.
 
@@ -56,3 +54,12 @@ Allowed application roles are `Admin`, `Safety`, and `Quality`.
 The first secure sign-in requires internet. Once a valid Supabase session and the app shell have been saved on the device, CrewForge continues to open during spotty service and keeps changes locally until synchronization is available.
 
 Public employee training links remain intentionally accessible without an account. They expose only the selected training workflow, not the authenticated company workspace.
+
+## Deploy Owner Administration
+
+1. Run [SUPABASE_OWNER_ADMIN.sql](./SUPABASE_OWNER_ADMIN.sql) in the Supabase SQL Editor. This creates the protected company directory and exact-code lookup.
+2. Deploy `supabase/functions/owner-admin/index.ts` as the `owner-admin` Edge Function with JWT verification enabled.
+3. Set the Edge Function secret `CREWFORGE_OWNER_EMAIL` to the CrewForge owner's email address.
+4. Re-run the owner metadata SQL above so `is_owner` is stored in protected app metadata.
+
+The Edge Function is the only part of CrewForge permitted to use the Supabase service-role credential. That credential must never be copied into `script.js`, GitHub, or a browser setting.

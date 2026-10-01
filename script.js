@@ -1,4 +1,6 @@
 const STORAGE_KEY = "valor-ops-demo-v7";
+const COMPANY_DIRECTORY_KEY = "crewforge-company-directory-v1";
+const COMPANY_STATE_PREFIX = `${STORAGE_KEY}:company:`;
 
 const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -623,10 +625,28 @@ function trialWindFarmJobRecord(job) {
     trialSchedule: true
   };
 }
+function cachedCompanyDirectory() {
+  try {
+    return JSON.parse(localStorage.getItem(COMPANY_DIRECTORY_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
 const companyDirectory = {
-  VALOR: { code: "VALOR", name: "Valor Steel", workspaceId: "crewforge-demo" }
+  VALOR: { code: "VALOR", name: "Valor Steel", workspaceId: "crewforge-demo" },
+  ...cachedCompanyDirectory()
 };
 const ownerEmail = "sam@raicesadvisors.com";
+
+function rememberCompany(company) {
+  if (!company?.code || !company?.workspaceId) return;
+  const code = String(company.code).toUpperCase();
+  companyDirectory[code] = { code, name: company.name, workspaceId: company.workspaceId };
+  const cached = cachedCompanyDirectory();
+  cached[code] = companyDirectory[code];
+  localStorage.setItem(COMPANY_DIRECTORY_KEY, JSON.stringify(cached));
+}
 const rebarFabForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const solarPilesForemen = ["Daniel Medrano", "Hipolito Pereda"];
 const appName = "CrewForge";
@@ -1254,6 +1274,11 @@ let cloudSaveTimer = null;
 let lastCloudPush = "";
 let pendingRemoteState = null;
 let cloudChannel = null;
+let ownerAdminData = { companies: [], users: [] };
+let ownerAdminLoaded = false;
+let ownerAdminLoading = false;
+let ownerAdminAttempted = false;
+let ownerAdminError = "";
 
 let state = loadState();
 let toastTimer;
@@ -1275,6 +1300,71 @@ function currentWorkspaceId() {
   return selectedCompany()?.workspaceId || "";
 }
 
+function companyStateKey(companyCode) {
+  return `${COMPANY_STATE_PREFIX}${String(companyCode || "").toUpperCase()}`;
+}
+
+function persistLocalState(target = state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(target));
+  if (target.companyCode) localStorage.setItem(companyStateKey(target.companyCode), JSON.stringify(target));
+}
+
+function cleanCompanyState(company) {
+  const next = structuredClone(defaultState);
+  next.companyVerified = true;
+  next.companyCode = company.code;
+  next.companyName = company.name;
+  next.showIntro = false;
+  next.selectedArea = "";
+  next.activeTab = "training";
+  next.weeks = [currentWeekEnding()];
+  next.people = [];
+  next.customDepartments = [];
+  next.jobs = [];
+  next.sheets = {};
+  next.production = [];
+  next.jobLists = { solarClients: [], solarJobNames: [] };
+  next.safetyForms = [];
+  next.employeeIncidents = [];
+  next.fieldAudits = [];
+  next.qualityChecks = [];
+  next.trainingCourses = [];
+  next.trainingResults = [];
+  next.drugTestingRoster = [];
+  next.drugTestingDraws = [];
+  next.reimbursementRequests = [];
+  next.foremanAliases = {};
+  next.hiddenForemen = [];
+  next.activityLog = [];
+  next.deletedSeedIds = [];
+  next.employeeRosterClearedV126 = true;
+  next.employeeDirectoryLinkedV141 = true;
+  return upgradeState(next, true);
+}
+
+function stateForCompany(company) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(companyStateKey(company.code)) || "null");
+    if (saved) {
+      return upgradeState({ ...structuredClone(defaultState), ...saved, companyCode: company.code, companyName: company.name, companyVerified: true, selectedArea: "", showIntro: false }, true);
+    }
+  } catch {
+    // Start with an isolated empty workspace when a company cache is unreadable.
+  }
+  if (company.code === "VALOR") {
+    try {
+      const legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (legacy && (!legacy.companyCode || legacy.companyCode === "VALOR")) {
+        return upgradeState({ ...structuredClone(defaultState), ...legacy, companyCode: company.code, companyName: company.name, companyVerified: true, selectedArea: "", showIntro: false }, true);
+      }
+    } catch {
+      // Fall through to the default Valor workspace.
+    }
+    return upgradeState({ ...structuredClone(defaultState), companyCode: company.code, companyName: company.name, companyVerified: true, selectedArea: "", showIntro: false }, true);
+  }
+  return cleanCompanyState(company);
+}
+
 function mergeSharedState(remoteData) {
   const shared = {};
   SHARED_STATE_KEYS.forEach((key) => {
@@ -1293,7 +1383,7 @@ function applyRemoteState(remoteData) {
     return;
   }
   state = next;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   render();
 }
 
@@ -1396,13 +1486,16 @@ document.addEventListener("focusout", () => {
   if (!pendingRemoteState) return;
   state = pendingRemoteState;
   pendingRemoteState = null;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   render();
 });
 
 function loadState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    const shell = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    const saved = shell?.companyCode
+      ? JSON.parse(localStorage.getItem(companyStateKey(shell.companyCode)) || "null") || shell
+      : shell;
     if (!saved) return upgradeState(structuredClone(defaultState), true);
     return upgradeState({ ...structuredClone(defaultState), ...saved, selectedArea: "", showIntro: false }, true);
   } catch {
@@ -1420,6 +1513,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.companyCode = String(next.companyCode || "").toUpperCase();
   if (!next.companyCode || !companyDirectory[next.companyCode]) next.companyVerified = false;
   next.companyName = next.companyName || companyDirectory[next.companyCode]?.name || "";
+  const seedTrialData = !next.companyCode || next.companyCode === "VALOR";
   next.loginEmailDraft = next.loginEmailDraft || "";
   if (next.showIntro === undefined) next.showIntro = true;
   next.foremanAliases = next.foremanAliases || {};
@@ -1619,8 +1713,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
     next.bundlePlanner.selectedSectionId = next.bundlePlanner.bundles[0]?.id || "";
   }
   next.jobLists = {
-    solarClients: next.jobLists?.solarClients?.length ? next.jobLists.solarClients : structuredClone(defaultState.jobLists.solarClients),
-    solarJobNames: next.jobLists?.solarJobNames?.length ? next.jobLists.solarJobNames : structuredClone(defaultState.jobLists.solarJobNames)
+    solarClients: next.jobLists?.solarClients?.length || !seedTrialData ? next.jobLists?.solarClients || [] : structuredClone(defaultState.jobLists.solarClients),
+    solarJobNames: next.jobLists?.solarJobNames?.length || !seedTrialData ? next.jobLists?.solarJobNames || [] : structuredClone(defaultState.jobLists.solarJobNames)
   };
   next.currentForeman = aliasName(next.currentForeman);
   next.setupForeman = aliasName(next.setupForeman);
@@ -1631,7 +1725,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
     customTracking: job.customTracking || [],
     documents: job.documents || []
   }));
-  seedTrialWindFarmJobs(next);
+  if (seedTrialData) seedTrialWindFarmJobs(next);
   next.people = (next.people || []).map((person) => ({
     ...person,
     name: aliasName(person.name),
@@ -1675,17 +1769,17 @@ function upgradeState(next, resetToCurrentWeek = false) {
       lightDuty: row.lightDuty || {}
     })).filter((row) => !isFictitiousEmployeeName(row.employee));
   });
-  seedCurrentWeekInstallationTrialData(next);
-  bakersfieldControlCodes.forEach((seedItem) => {
+  if (seedTrialData) seedCurrentWeekInstallationTrialData(next);
+  if (seedTrialData) bakersfieldControlCodes.forEach((seedItem) => {
     if (next.deletedSeedIds.includes(seedItem.id) || next.deletedSeedIds.includes(seedItem.jobId)) return;
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
   });
   next.jobs = next.jobs || [];
-  if (!next.deletedSeedIds.includes(fourHorizonsJob.id) && !next.jobs.some((job) => job.id === fourHorizonsJob.id || job.number === fourHorizonsJob.number)) {
+  if (seedTrialData && !next.deletedSeedIds.includes(fourHorizonsJob.id) && !next.jobs.some((job) => job.id === fourHorizonsJob.id || job.number === fourHorizonsJob.number)) {
     next.jobs.push(structuredClone(fourHorizonsJob));
   }
-  fourHorizonsControlCodes.forEach((seedItem) => {
+  if (seedTrialData) fourHorizonsControlCodes.forEach((seedItem) => {
     if (next.deletedSeedIds.includes(seedItem.id) || next.deletedSeedIds.includes(seedItem.jobId)) return;
     const exists = next.production.some((item) => item.jobId === seedItem.jobId && item.code === seedItem.code);
     if (!exists) next.production.push(structuredClone(seedItem));
@@ -1861,7 +1955,7 @@ function trialTimesheetRow(person, foremanIndex, rowIndex, seedHours = true) {
 
 function saveState() {
   pendingRemoteState = null;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   setSyncStatus(navigator.onLine ? "pending" : "offline", navigator.onLine ? "Saved on this device. Syncing when connection is available." : "Offline. Changes are saved on this device.");
   pushCloud();
 }
@@ -2122,6 +2216,7 @@ function availableTabs() {
     ];
   }
   return [
+    ...(isOwnerAccount() ? [["ownerAdmin", "Companies & Accounts", "Companias y cuentas"]] : []),
     ["training", "Training & Competency", "Capacitacion"],
     ["audits", "Field Audits", "Auditorias de campo"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
@@ -2633,6 +2728,25 @@ function applyRoute(route = "") {
   suppressHistorySync = false;
 }
 
+async function resolveCompanyCode(code) {
+  const normalized = String(code || "").trim().toUpperCase();
+  if (!normalized) return null;
+  if (companyDirectory[normalized]) return companyDirectory[normalized];
+  if (!cloud || !navigator.onLine) return null;
+  try {
+    const { data, error } = await cloud.rpc("resolve_company_code", { requested_code: normalized });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.code || !row?.workspace_id) return null;
+    const company = { code: String(row.code).toUpperCase(), name: row.name, workspaceId: row.workspace_id };
+    rememberCompany(company);
+    return company;
+  } catch (error) {
+    console.warn("Company lookup failed.", error);
+    return null;
+  }
+}
+
 function renderCompanyLogin() {
   $("app").innerHTML = `
     <main class="login-screen">
@@ -2649,19 +2763,23 @@ function renderCompanyLogin() {
         </div>
         <label>Company code<span class="es">Codigo de compania</span><input id="companyCode" autocomplete="organization" value="${escapeHtml(state.companyCode || "")}" placeholder="Company code / Codigo" /></label>
         <button class="primary-action" id="companyButton" type="button">${t("Continue", "Continuar")}</button>
+        <button class="secondary-action" id="ownerSignInButton" type="button">${t("Owner sign in", "Acceso del propietario")}</button>
       </section>
     </main>
   `;
-  const submitCompany = async () => {
-    const code = $("companyCode").value.trim().toUpperCase();
-    const company = companyDirectory[code];
+  const submitCompany = async (requestedCode = "") => {
+    const code = String(requestedCode || $("companyCode").value).trim().toUpperCase();
+    const button = $("companyButton");
+    button.disabled = true;
+    button.innerHTML = t("Checking company...", "Verificando compania...");
+    const company = await resolveCompanyCode(code);
     if (!company) {
+      button.disabled = false;
+      button.innerHTML = t("Continue", "Continuar");
       showToast("Company code not recognized");
       return;
     }
-    state.companyVerified = true;
-    state.companyCode = company.code;
-    state.companyName = company.name;
+    state = stateForCompany(company);
     state.auth = null;
     state.selectedArea = "";
     state.showIntro = false;
@@ -2675,12 +2793,16 @@ function renderCompanyLogin() {
         }
       }
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    persistLocalState();
     if (state.auth) await initCloud();
     render();
     syncHistory();
   };
-  $("companyButton").addEventListener("click", submitCompany);
+  $("companyButton").addEventListener("click", () => submitCompany());
+  $("ownerSignInButton").addEventListener("click", () => {
+    $("companyCode").value = "VALOR";
+    submitCompany("VALOR");
+  });
   $("companyCode").addEventListener("keydown", (event) => {
     if (event.key === "Enter") submitCompany();
   });
@@ -2716,7 +2838,7 @@ function renderLogin() {
   $("loginButton").addEventListener("click", loginWithPassword);
   $("loginEmail").addEventListener("input", (event) => {
     state.loginEmailDraft = event.target.value.trim();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    persistLocalState();
   });
   $("loginPassword").addEventListener("keydown", (event) => {
     if (event.key === "Enter") loginWithPassword();
@@ -2737,8 +2859,13 @@ function authFromSupabaseUser(user) {
     email,
     name: appMetadata.display_name || email,
     role,
-    companyCode
+    companyCode,
+    isOwner: appMetadata.is_owner === true || email === ownerEmail
   };
+}
+
+function isOwnerAccount() {
+  return Boolean(state.auth?.isOwner || String(state.auth?.email || "").toLowerCase() === ownerEmail);
 }
 
 async function loginWithPassword() {
@@ -2770,7 +2897,7 @@ async function loginWithPassword() {
   state.selectedArea = "";
   state.showIntro = false;
   state.activeTab = account.role === "Quality" ? "qualityControl" : "training";
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   await initCloud();
   render();
   syncHistory(true);
@@ -2791,7 +2918,7 @@ async function logoutUser() {
   state.selectedArea = "";
   state.showIntro = false;
   state.activeTab = "dashboard";
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   render();
   syncHistory(true);
 }
@@ -2805,7 +2932,7 @@ async function changeCompany() {
   state.selectedArea = "";
   state.showIntro = false;
   state.activeTab = "dashboard";
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  persistLocalState();
   render();
   syncHistory(true);
 }
@@ -2975,7 +3102,131 @@ function renderShell() {
   bindTabEvents();
 }
 
+async function ownerAdminRequest(action, payload = {}) {
+  if (!isOwnerAccount()) throw new Error("Owner access required");
+  if (!cloud || !navigator.onLine) throw new Error("Connect to the internet to manage companies and accounts");
+  const { data, error } = await cloud.functions.invoke("owner-admin", { body: { action, ...payload } });
+  if (error) throw error;
+  if (!data?.ok) throw new Error(data?.error || "The owner request could not be completed");
+  return data;
+}
+
+async function loadOwnerAdmin(force = false) {
+  if (!isOwnerAccount() || ownerAdminLoading || ((ownerAdminLoaded || ownerAdminAttempted) && !force)) return;
+  ownerAdminAttempted = true;
+  ownerAdminError = "";
+  ownerAdminLoading = true;
+  if (state.activeTab === "ownerAdmin") render();
+  try {
+    const data = await ownerAdminRequest("list");
+    ownerAdminData = { companies: data.companies || [], users: data.users || [] };
+    ownerAdminData.companies.forEach((company) => rememberCompany({
+      code: company.code,
+      name: company.name,
+      workspaceId: company.workspace_id
+    }));
+    ownerAdminLoaded = true;
+  } catch (error) {
+    console.warn("Owner console load failed.", error);
+    ownerAdminError = error.message || "Owner console could not load";
+    showToast(error.message || "Owner console could not load");
+  } finally {
+    ownerAdminLoading = false;
+    if (state.activeTab === "ownerAdmin") render();
+  }
+}
+
+async function createOwnerCompany() {
+  const name = $("ownerCompanyName")?.value.trim() || "";
+  const code = $("ownerCompanyCode")?.value.trim().toUpperCase() || "";
+  if (!name || !code) return showToast("Enter the company name and code");
+  const button = $("createOwnerCompanyButton");
+  button.disabled = true;
+  try {
+    const data = await ownerAdminRequest("create_company", { company: { name, code } });
+    rememberCompany({ code: data.company.code, name: data.company.name, workspaceId: data.company.workspace_id });
+    showToast(`${data.company.name} created`);
+    await loadOwnerAdmin(true);
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message || "Company could not be created");
+  }
+}
+
+async function createOwnerAccount() {
+  const companyCode = $("ownerAccountCompany")?.value || "";
+  const displayName = $("ownerAccountName")?.value.trim() || "";
+  const email = $("ownerAccountEmail")?.value.trim().toLowerCase() || "";
+  const role = $("ownerAccountRole")?.value || "Safety";
+  const password = $("ownerAccountPassword")?.value || "";
+  if (!companyCode || !displayName || !email || !password) return showToast("Complete every account field");
+  if (password.length < 10) return showToast("Initial password must be at least 10 characters");
+  const button = $("createOwnerAccountButton");
+  button.disabled = true;
+  try {
+    await ownerAdminRequest("create_user", { user: { companyCode, displayName, email, role, password } });
+    showToast(`${displayName} account created`);
+    await loadOwnerAdmin(true);
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message || "Account could not be created");
+  }
+}
+
+function renderOwnerAdmin() {
+  if (!isOwnerAccount()) return renderDashboard();
+  if (!ownerAdminLoaded && !ownerAdminLoading && !ownerAdminAttempted) setTimeout(() => loadOwnerAdmin(), 0);
+  const companies = ownerAdminData.companies.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const users = ownerAdminData.users.slice().sort((a, b) => (a.company_code || "").localeCompare(b.company_code || "") || (a.display_name || a.email).localeCompare(b.display_name || b.email));
+  return `
+    <section class="panel owner-admin-panel">
+      <div class="split">
+        <div>
+          <h2>${t("Owner administration", "Administracion del propietario")}</h2>
+          <p class="sub">Create company workspaces and secure accounts inside each company. Only the CrewForge owner can use these controls.</p>
+          <p class="sub es">Cree espacios de compania y cuentas seguras dentro de cada compania. Solo el propietario de CrewForge puede usar estos controles.</p>
+        </div>
+        <button class="secondary-action" type="button" onclick="loadOwnerAdmin(true)" ${ownerAdminLoading ? "disabled" : ""}>${t("Refresh", "Actualizar")}</button>
+      </div>
+      ${ownerAdminLoading ? `<div class="notice section-gap">Loading companies and accounts...<span class="es">Cargando companias y cuentas...</span></div>` : ""}
+      ${ownerAdminError ? `<div class="notice warning section-gap">${escapeHtml(ownerAdminError)}<span class="es">No se pudo cargar la administracion. Use Actualizar para intentar de nuevo.</span></div>` : ""}
+      <div class="owner-admin-grid section-gap">
+        <article class="owner-admin-section">
+          <h3>${t("Create company", "Crear compania")}</h3>
+          <p class="sub">The company code is entered before sign-in and cannot contain spaces.</p>
+          <label>Company name<span class="es">Nombre de compania</span><input id="ownerCompanyName" autocomplete="organization" placeholder="Example: Acme Steel" /></label>
+          <label>Company code<span class="es">Codigo de compania</span><input id="ownerCompanyCode" maxlength="20" placeholder="Example: ACME" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g, '')" /></label>
+          <button class="primary-action" id="createOwnerCompanyButton" type="button" onclick="createOwnerCompany()">${t("Create company", "Crear compania")}</button>
+        </article>
+        <article class="owner-admin-section">
+          <h3>${t("Create company account", "Crear cuenta de compania")}</h3>
+          <p class="sub">Give the person their company code, email, and initial password privately.</p>
+          <label>Company<span class="es">Compania</span><select id="ownerAccountCompany">${companies.map((company) => `<option value="${escapeHtml(company.code)}">${escapeHtml(company.name)} (${escapeHtml(company.code)})</option>`).join("")}</select></label>
+          <label>Person's name<span class="es">Nombre de la persona</span><input id="ownerAccountName" autocomplete="name" /></label>
+          <label>Email<span class="es">Correo</span><input id="ownerAccountEmail" type="email" autocomplete="off" /></label>
+          <label>Role<span class="es">Puesto</span><select id="ownerAccountRole"><option>Admin</option><option selected>Safety</option><option>Quality</option></select></label>
+          <label>Initial password<span class="es">Contrasena inicial</span><input id="ownerAccountPassword" type="password" autocomplete="new-password" minlength="10" /></label>
+          <button class="primary-action" id="createOwnerAccountButton" type="button" onclick="createOwnerAccount()" ${companies.length ? "" : "disabled"}>${t("Create account", "Crear cuenta")}</button>
+        </article>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="split"><div><h2>${t("Companies", "Companias")}</h2><p class="sub">${companies.length} active company workspace(s).</p></div></div>
+      <div class="table-wrap section-gap"><table><thead><tr><th>Company<span class="es">Compania</span></th><th>Code<span class="es">Codigo</span></th><th>Workspace<span class="es">Espacio</span></th><th>Accounts<span class="es">Cuentas</span></th></tr></thead><tbody>
+        ${companies.map((company) => `<tr><td><strong>${escapeHtml(company.name)}</strong></td><td><span class="tag">${escapeHtml(company.code)}</span></td><td>${escapeHtml(company.workspace_id)}</td><td>${users.filter((user) => user.company_code === company.code).length}</td></tr>`).join("") || `<tr><td colspan="4"><div class="empty-state">No companies loaded.<span class="es">No hay companias cargadas.</span></div></td></tr>`}
+      </tbody></table></div>
+    </section>
+    <section class="panel">
+      <div><h2>${t("Company accounts", "Cuentas de compania")}</h2><p class="sub">Passwords are never displayed or stored in this list.</p></div>
+      <div class="table-wrap section-gap"><table><thead><tr><th>Name<span class="es">Nombre</span></th><th>Email<span class="es">Correo</span></th><th>Company<span class="es">Compania</span></th><th>Role<span class="es">Puesto</span></th><th>Status<span class="es">Estado</span></th></tr></thead><tbody>
+        ${users.map((user) => `<tr><td><strong>${escapeHtml(user.display_name || user.email)}</strong></td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.company_code || "Unassigned")}</td><td>${escapeHtml(user.role || "Safety")}</td><td><span class="tag">${user.banned_until ? "Disabled / Desactivada" : "Active / Activa"}</span></td></tr>`).join("") || `<tr><td colspan="5"><div class="empty-state">No accounts loaded.<span class="es">No hay cuentas cargadas.</span></div></td></tr>`}
+      </tbody></table></div>
+    </section>
+  `;
+}
+
 function renderActiveTab() {
+  if (state.activeTab === "ownerAdmin") return renderOwnerAdmin();
   if (state.activeTab === "bundlePlanner") return renderBundlePlanner();
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
@@ -10087,7 +10338,7 @@ async function bootstrapApp() {
       if (account.companyCode === state.companyCode) {
         state.auth = account;
         state.selectedRole = account.role;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        persistLocalState();
       } else {
         state.auth = null;
       }

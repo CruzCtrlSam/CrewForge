@@ -42,17 +42,20 @@ Tagline: Crew time and job progress, forged into one.
 - Production job filter also controls the default job for new production entries
 - Production entries can be submitted for office review
 - Admin/payroll can update job status or delete trial jobs from the Jobs table
-- Optional Supabase-backed shared trial data so phone and office views can sync
+- Supabase-backed company workspaces so phone and office views can sync
+- Owner-only company and account administration
+- Separate offline browser storage for every company
 - Bilingual English/Spanish labels
 - Local demo data saved in the browser with `localStorage`
 - PDF-style export using the browser print dialog
 
-## Trial Access Codes
+## Secure Access
 
-- `FOREMAN` - choose the foreman name after entering the code
-- `PAYROLL` - payroll review view
-- `MANAGER` - management read/review view
-- `ADMIN` - admin setup view
+1. Enter the company code or choose **Owner sign in**.
+2. Sign in with the email and password assigned to the account.
+3. Supabase Auth and Row-Level Security limit the account to its assigned company workspace.
+
+The CrewForge owner can use **Companies & Accounts / Companias y cuentas** to create company workspaces and Admin, Safety, or Quality accounts. See `SUPABASE_SETUP.md` for deployment details.
 
 ## Files
 
@@ -106,6 +109,6 @@ Increment `NN` by one (e.g. `109` -> `110`) in all three spots, commit, and push
 The new URLs force browsers to fetch fresh files, and the new cache name forces
 the service worker to re-install and drop the old cache.
 
-## Current Demo Limits
+## Deployment Notes
 
-This is still a trial prototype. Supabase sync can share demo data across devices, but the trial codes are not true secure logins and the demo setup is not production-grade permission control. For real company use, CrewForge would need hosted authentication, row-level security, and server-side records for payroll and management reporting.
+The static application is published through GitHub Pages, while authentication, company lookup, tenant-isolated records, and privileged account creation use Supabase. Run both SQL setup files and deploy the `owner-admin` Edge Function before using the owner console in production. Never place a Supabase secret or service-role key in the browser application.
