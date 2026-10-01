@@ -6876,7 +6876,7 @@ function renderSetup() {
   const canEditRates = canEditPayRates();
   const departmentManager = canManage ? renderDepartmentManager() : "";
   const peopleSetup = area().mode === "crew" ? renderCrewSetup(canManage, canEditRates) : renderShiftSetup(canManage, canEditRates);
-  return `${departmentManager}${peopleSetup}`;
+  return `${peopleSetup}${departmentManager}`;
 }
 
 function renderDepartmentManager() {
@@ -7028,6 +7028,35 @@ function openDepartment(departmentId) {
   syncHistory(true);
 }
 
+function selectPeopleDepartment(departmentId) {
+  if (!visibleAreaEntries().some(([id]) => id === departmentId)) return;
+  state.selectedArea = departmentId;
+  state.activeTab = "setup";
+  state.selectedEmployeeProfile = "";
+  saveState();
+  render();
+  syncHistory(true);
+}
+
+function filterPeopleDirectory(value) {
+  const query = String(value || "").trim().toLowerCase();
+  let visible = 0;
+  document.querySelectorAll("[data-person-directory-row]").forEach((row) => {
+    const match = !query || String(row.dataset.searchName || "").includes(query);
+    row.hidden = !match;
+    if (match) visible += 1;
+  });
+  if ($("peopleSearchCount")) $("peopleSearchCount").textContent = visible;
+}
+
+function selectEmployeeFromSearch(value) {
+  const person = peopleForArea().find((entry) => sameName(entry.name, value));
+  if (!person) return;
+  state.selectedEmployeeProfile = person.name;
+  saveState();
+  render();
+}
+
 function renderForemanRenameTool(foreman) {
   return `
     <div class="foreman-rename section-gap">
@@ -7064,10 +7093,20 @@ function renderForemanCrewAdminTool(foreman, crewMembers) {
 function renderEmployeeProfilePanel(canEditProfiles) {
   const person = selectedEmployeeProfile();
   const people = peopleForArea().slice().sort((a, b) => a.name.localeCompare(b.name));
+  const directoryControls = `
+    <div class="form-grid compact-form-grid employee-directory-filters">
+      <label>1. Department<span class="es">1. Departamento</span><select id="peopleDepartmentFilter" onchange="selectPeopleDepartment(this.value)">${visibleAreaEntries().map(([id, details]) => `<option value="${id}" ${id === state.selectedArea ? "selected" : ""}>${escapeHtml(details.label)}</option>`).join("")}</select></label>
+      <label>2. Search employee<span class="es">2. Buscar empleado</span><input id="peopleEmployeeSearch" type="search" list="peopleEmployeeSuggestions" placeholder="Start typing a name / Escriba un nombre" oninput="filterPeopleDirectory(this.value)" onchange="selectEmployeeFromSearch(this.value)" /></label>
+      <datalist id="peopleEmployeeSuggestions">${people.map((entry) => `<option value="${escapeHtml(entry.name)}">${escapeHtml(entry.role || "Unassigned")}</option>`).join("")}</datalist>
+      <label>Selected employee<span class="es">Empleado seleccionado</span><input value="${escapeHtml(person?.name || "")}" placeholder="No employee selected" disabled /></label>
+      <div class="drug-roster-summary"><span>${escapeHtml(area().label)}</span><strong id="peopleSearchCount">${people.length}</strong><small>employee(s) / empleado(s)</small></div>
+    </div>
+  `;
   if (!person) {
     return `
       <div class="employee-profile-panel section-gap">
         <h3>${t("Employee profile", "Perfil del trabajador")}</h3>
+        ${directoryControls}
         <div class="empty-state">Add employees first, then certifications and machine training can be tracked here.<span class="es">Agregue empleados primero para registrar certificaciones y entrenamiento.</span></div>
       </div>
     `;
@@ -7094,8 +7133,8 @@ function renderEmployeeProfilePanel(canEditProfiles) {
         </div>
         ${!canEditProfiles ? `<span class="tag">View only</span>` : ""}
       </div>
+      ${directoryControls}
       <div class="form-grid compact-form-grid">
-        <label>Employee<span class="es">Trabajador</span><select id="employeeProfileSelect">${setOptions(people, person.name, (entry) => `${entry.name} - ${entry.role}`, (entry) => entry.name)}</select></label>
         <label>Normal crew / shift<span class="es">Cuadrilla / turno</span><input value="${escapeHtml(person.group || "")}" disabled /></label>
         <label>Role<span class="es">Puesto</span><input value="${escapeHtml(person.role || "")}" disabled /></label>
         <label>Hourly rate<span class="es">Pago por hora</span><input value="${money(person.hourlyRate || 0)}" disabled /></label>
@@ -7171,7 +7210,7 @@ function renderCrewSetup(canManage, canEditRates) {
           <thead><tr><th>Name</th><th>Role</th><th>Crew</th><th>Drug testing<span class="es">Prueba antidopaje</span></th><th>Hourly rate</th><th>DOL</th><th>Actions</th></tr></thead>
           <tbody>
             ${crewMembers
-              .map((person) => `<tr>
+              .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
                 <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
                 <td>${person.group}</td>
@@ -7211,7 +7250,7 @@ function renderShiftSetup(canManage, canEditRates) {
           <thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Drug testing<span class="es">Prueba antidopaje</span></th><th>Hourly rate</th><th>Actions</th></tr></thead>
           <tbody>
             ${peopleForArea()
-              .map((person) => `<tr>
+              .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
                 <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
                 <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
@@ -7731,13 +7770,6 @@ function bindTabEvents() {
   if ($("setupForemanSelect")) {
     $("setupForemanSelect").addEventListener("change", (event) => {
       state.setupForeman = event.target.value;
-      saveState();
-      render();
-    });
-  }
-  if ($("employeeProfileSelect")) {
-    $("employeeProfileSelect").addEventListener("change", (event) => {
-      state.selectedEmployeeProfile = event.target.value;
       saveState();
       render();
     });
