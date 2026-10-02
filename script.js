@@ -622,11 +622,11 @@ const foundationStatusMeta = {
   Completed: { short: "✓", label: "Completed", es: "Completado" }
 };
 const laurelFoundationCoordinates = [
-  ["1", 0.126, 0.895], ["2", 0.145, 0.856], ["3", 0.165, 0.817], ["4", 0.184, 0.783],
-  ["5", 0.215, 0.755], ["6", 0.279, 0.744], ["7", 0.303, 0.727], ["8", 0.335, 0.716],
-  ["9", 0.366, 0.696], ["10", 0.403, 0.679], ["11", 0.409, 0.649], ["12", 0.445, 0.636],
-  ["13", 0.471, 0.623], ["14", 0.501, 0.608], ["15", 0.524, 0.594], ["16", 0.549, 0.583],
-  ["17", 0.621, 0.559], ["18", 0.645, 0.540], ["19", 0.655, 0.511], ["20", 0.688, 0.509]
+  ["1", 0.1252, 0.9041], ["2", 0.1512, 0.8852], ["3", 0.1657, 0.8625], ["4", 0.1838, 0.8422],
+  ["5", 0.2221, 0.8238], ["6", 0.2699, 0.8455], ["7", 0.2931, 0.8309], ["8", 0.3256, 0.8266],
+  ["9", 0.3524, 0.8125], ["10", 0.3857, 0.8035], ["11", 0.4059, 0.7837], ["12", 0.4385, 0.7770],
+  ["13", 0.4631, 0.7610], ["14", 0.4993, 0.7530], ["15", 0.5239, 0.7435], ["16", 0.5557, 0.7322],
+  ["17", 0.5854, 0.7232], ["18", 0.6179, 0.7119], ["19", 0.6151, 0.6830], ["20", 0.6606, 0.6821]
 ];
 
 function defaultLaurelFoundationMap() {
@@ -638,6 +638,7 @@ function defaultLaurelFoundationMap() {
     imageName: "Laurel Wind.jpg.jpeg",
     imageWidth: 1382,
     imageHeight: 2117,
+    coordinateRevision: 2,
     published: true,
     createdAt: "2026-10-02T00:00:00.000Z",
     createdBy: "CrewForge prototype",
@@ -1486,9 +1487,11 @@ function applyRemoteState(remoteData) {
     pendingRemoteState = next;
     return;
   }
+  const foundationView = state.activeTab === "foundationProgress" ? captureFoundationView() : null;
   state = next;
   persistLocalState();
   render();
+  restoreFoundationView(foundationView);
 }
 
 function pushCloud(immediate = false) {
@@ -1875,6 +1878,17 @@ function upgradeState(next, resetToCurrentWeek = false) {
   })).filter((map) => map.jobId);
   if (seedTrialData && !next.foundationMaps.some((map) => map.jobId === "wind-laurel")) {
     next.foundationMaps.push(defaultLaurelFoundationMap());
+  }
+  const laurelMap = next.foundationMaps.find((map) => map.id === "foundation-map-laurel-1126");
+  if (laurelMap && Number(laurelMap.coordinateRevision || 0) < 2) {
+    const correctedCoordinates = new Map(laurelFoundationCoordinates.map(([foundationId, x, y]) => [foundationId, { x, y }]));
+    laurelMap.hotspots.forEach((hotspot) => {
+      const corrected = correctedCoordinates.get(String(hotspot.foundationId));
+      if (!corrected) return;
+      hotspot.x = corrected.x;
+      hotspot.y = corrected.y;
+    });
+    laurelMap.coordinateRevision = 2;
   }
   if (!next.jobs.some((job) => job.id === next.selectedFoundationMapJob && job.jobType === "Wind Farm")) {
     next.selectedFoundationMapJob = next.foundationMaps[0]?.jobId || next.jobs.find((job) => job.jobType === "Wind Farm")?.id || "";
@@ -6697,7 +6711,35 @@ function createFoundationMapForSelectedJob() {
   render();
 }
 
+function captureFoundationView() {
+  const viewport = $("foundationMapViewport");
+  return {
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+    mapLeft: viewport?.scrollLeft || 0,
+    mapTop: viewport?.scrollTop || 0
+  };
+}
+
+function restoreFoundationView(view) {
+  if (!view) return;
+  const restore = () => {
+    const viewport = $("foundationMapViewport");
+    if (viewport) {
+      viewport.scrollLeft = view.mapLeft;
+      viewport.scrollTop = view.mapTop;
+    }
+    window.scrollTo(view.pageX, view.pageY);
+  };
+  restore();
+  requestAnimationFrame(() => {
+    restore();
+    requestAnimationFrame(restore);
+  });
+}
+
 function setFoundationStatus(foundationId, requestedStatus, correction = false) {
+  const view = captureFoundationView();
   const map = foundationMapForJob();
   const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
   if (!map || !foundation) return;
@@ -6720,6 +6762,7 @@ function setFoundationStatus(foundationId, requestedStatus, correction = false) 
   logActivity(correction ? "Foundation status corrected" : "Foundation advanced", { job: jobName(map.jobId), foundation: foundation.foundationId, from: result.historyEntry.previousStatus, to: result.historyEntry.newStatus });
   saveState();
   render();
+  restoreFoundationView(view);
   showToast(`${foundation.foundationId}: ${foundation.status}`);
 }
 
