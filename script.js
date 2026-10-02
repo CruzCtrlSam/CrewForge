@@ -703,7 +703,11 @@ const areaArtwork = {
   bundleLab: asset("./assets/crewforge-bundle-tracking.svg")
 };
 function visibleAreaEntries() {
-  return Object.entries(areas).filter(([id, details]) => id !== "bundleLab" && !details.archived);
+  return Object.entries(areas).filter(([id, details]) => {
+    if (id === "bundleLab" || details.archived) return false;
+    if (state?.auth?.role === "Foreman") return id === state.auth.area;
+    return true;
+  });
 }
 const mockTrialCrews = [
   {
@@ -2344,6 +2348,7 @@ function roleIsProductionVisible() {
 
 function canAccessSelectedArea(account) {
   if (!account) return false;
+  if (account.role === "Foreman") return Boolean(account.area) && account.area === state.selectedArea;
   if (state.selectedArea === "bundleLab") {
     return ["Admin", "Quality", "Safety"].includes(account.role);
   }
@@ -2403,6 +2408,9 @@ function availableTabs() {
       ["documents", "Documents", "Documentos"],
       ["setup", "People / Departments", "Personas / Departamentos"]
     ];
+  }
+  if (state.selectedRole === "Foreman") {
+    return [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]];
   }
   return [
     ...(isOwnerAccount() ? [["ownerAdmin", "Companies & Accounts", "Companias y cuentas"]] : []),
@@ -2842,9 +2850,10 @@ function showToast(message) {
 }
 
 function setArea(areaId) {
+  if (state.auth?.role === "Foreman" && areaId !== state.auth.area) return showToast("This department is not assigned to this account");
   state.selectedArea = areaId;
   state.showIntro = false;
-  state.activeTab = state.auth ? (isFieldEntryMode() ? "timesheet" : "dashboard") : "dashboard";
+  state.activeTab = state.auth?.role === "Foreman" ? "foundationProgress" : state.auth ? (isFieldEntryMode() ? "timesheet" : "dashboard") : "dashboard";
   if (state.auth?.role === "Quality" && ["rebarFab", "rebarInstall"].includes(areaId)) state.activeTab = "qualityControl";
   state.selectedProductionJob = "";
   state.selectedDocumentJob = "";
@@ -2905,7 +2914,7 @@ function applyRoute(route = "") {
     state.selectedArea = "";
   } else {
     const [areaId, tab = "dashboard"] = route.split("/");
-    if (state.auth && areas[areaId]) {
+    if (state.auth && areas[areaId] && (state.auth.role !== "Foreman" || state.auth.area === areaId)) {
       state.showIntro = false;
       state.selectedArea = areaId;
       state.activeTab = tab;
@@ -3041,14 +3050,20 @@ function authFromSupabaseUser(user) {
   const appMetadata = user?.app_metadata || {};
   const email = String(user?.email || "").toLowerCase();
   const companyCode = String(appMetadata.company_code || (email === ownerEmail ? "VALOR" : "")).toUpperCase();
-  const role = ["Admin", "Safety", "Quality"].includes(appMetadata.role)
+  const role = ["Admin", "Safety", "Quality", "Foreman"].includes(appMetadata.role)
     ? appMetadata.role
     : email === ownerEmail ? "Admin" : "Safety";
+  const area = role === "Foreman" && areas[appMetadata.area] ? appMetadata.area : "";
+  const jobIds = role === "Foreman" && Array.isArray(appMetadata.job_ids)
+    ? [...new Set(appMetadata.job_ids.map((jobId) => String(jobId || "").trim()).filter(Boolean))]
+    : [];
   return {
     uid: user.id,
     email,
     name: appMetadata.display_name || email,
     role,
+    area,
+    jobIds,
     companyCode,
     isOwner: appMetadata.is_owner === true || email === ownerEmail
   };
@@ -3084,9 +3099,9 @@ async function loginWithPassword() {
   state.auth = account;
   state.loginEmailDraft = email;
   state.selectedRole = account.role;
-  state.selectedArea = "";
+  state.selectedArea = account.role === "Foreman" ? account.area : "";
   state.showIntro = false;
-  state.activeTab = account.role === "Quality" ? "qualityControl" : "training";
+  state.activeTab = account.role === "Foreman" ? "foundationProgress" : account.role === "Quality" ? "qualityControl" : "training";
   persistLocalState();
   await initCloud();
   render();
@@ -3232,7 +3247,7 @@ function renderShell() {
           </div>
           <button class="text-button" id="changeArea" type="button">Change area<span class="es">Cambiar area</span></button>
           <button class="text-button" id="logout" type="button">Log out<span class="es">Salir</span></button>
-          <button class="text-button" id="resetDemo" type="button">Reset demo<span class="es">Reiniciar demo</span></button>
+          ${state.selectedRole === "Foreman" ? "" : `<button class="text-button" id="resetDemo" type="button">Reset demo<span class="es">Reiniciar demo</span></button>`}
         </div>
       </aside>
       <main class="workspace">
@@ -3245,14 +3260,14 @@ function renderShell() {
             </div>
             <p class="eyebrow">Safety recordkeeping · ${area().label}</p>
             <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
-            ${isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
+            ${state.selectedRole === "Foreman" ? `<p class="sub">${escapeHtml(state.auth?.name || "Foreman")} · ${t("Foundation progress", "Avance de cimentaciones")}</p>` : isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
             <div class="login-pill">Department<span class="es">Departamento</span><strong>${area().label}</strong><small>Record filter</small></div>
-            <label class="select-label">Week starting<span class="es">Semana empieza</span><input id="weekStartSelect" type="date" value="${selectedWeekStart()}" /></label>
+            ${state.selectedRole === "Foreman" ? "" : `<label class="select-label">Week starting<span class="es">Semana empieza</span><input id="weekStartSelect" type="date" value="${selectedWeekStart()}" /></label>
             <div class="login-pill date-pill">Week ending<span class="es">Semana termina</span><strong>${state.selectedWeek}</strong></div>
-            ${dateShiftControls("selectedWeek", "Back one week", "Forward one week")}
+            ${dateShiftControls("selectedWeek", "Back one week", "Forward one week")}`}
           </div>
         </header>
         ${renderActiveTab()}
@@ -3269,7 +3284,7 @@ function renderShell() {
     syncHistory();
   });
   $("logout").addEventListener("click", logoutUser);
-  $("resetDemo").addEventListener("click", () => {
+  $("resetDemo")?.addEventListener("click", () => {
     const auth = state.auth;
     const companyCode = state.companyCode;
     const companyName = state.companyName;
@@ -3288,7 +3303,7 @@ function renderShell() {
     render();
     syncHistory(true);
   });
-  $("weekStartSelect").addEventListener("change", (event) => setSelectedWeekStart(event.target.value));
+  $("weekStartSelect")?.addEventListener("change", (event) => setSelectedWeekStart(event.target.value));
   bindTabEvents();
 }
 
@@ -3348,13 +3363,19 @@ async function createOwnerAccount() {
   const displayName = $("ownerAccountName")?.value.trim() || "";
   const email = $("ownerAccountEmail")?.value.trim().toLowerCase() || "";
   const role = $("ownerAccountRole")?.value || "Safety";
+  const area = role === "Foreman" ? ($("ownerAccountArea")?.value || "") : "";
+  const jobIds = role === "Foreman"
+    ? [...document.querySelectorAll('[name="ownerAccountJob"]:checked')].map((input) => input.value)
+    : [];
   const password = $("ownerAccountPassword")?.value || "";
   if (!companyCode || !displayName || !email || !password) return showToast("Complete every account field");
   if (password.length < 10) return showToast("Initial password must be at least 10 characters");
+  if (role === "Foreman" && (!area || !jobIds.length)) return showToast("Choose the foreman's department and at least one job");
+  if (role === "Foreman" && jobIds.some((jobId) => jobById(jobId)?.area !== area)) return showToast("Every assigned job must belong to the selected department");
   const button = $("createOwnerAccountButton");
   button.disabled = true;
   try {
-    await ownerAdminRequest("create_user", { user: { companyCode, displayName, email, role, password } });
+    await ownerAdminRequest("create_user", { user: { companyCode, displayName, email, role, password, area, jobIds } });
     showToast(`${displayName} account created`);
     await loadOwnerAdmin(true);
   } catch (error) {
@@ -3363,11 +3384,18 @@ async function createOwnerAccount() {
   }
 }
 
+function toggleOwnerForemanScope(role) {
+  const scope = $("ownerForemanScope");
+  if (scope) scope.hidden = role !== "Foreman";
+}
+
 function renderOwnerAdmin() {
   if (!isOwnerAccount()) return renderDashboard();
   if (!ownerAdminLoaded && !ownerAdminLoading && !ownerAdminAttempted) setTimeout(() => loadOwnerAdmin(), 0);
   const companies = ownerAdminData.companies.slice().sort((a, b) => a.name.localeCompare(b.name));
   const users = ownerAdminData.users.slice().sort((a, b) => (a.company_code || "").localeCompare(b.company_code || "") || (a.display_name || a.email).localeCompare(b.display_name || b.email));
+  const accountAreas = Object.entries(areas).filter(([id, details]) => id !== "bundleLab" && !details.archived);
+  const accountJobs = state.jobs.filter((job) => job.jobType === "Wind Farm" && (job.status || "Active") === "Active").sort((a, b) => a.name.localeCompare(b.name));
   return `
     <section class="panel owner-admin-panel">
       <div class="split">
@@ -3394,7 +3422,12 @@ function renderOwnerAdmin() {
           <label>Company<span class="es">Compania</span><select id="ownerAccountCompany">${companies.map((company) => `<option value="${escapeHtml(company.code)}">${escapeHtml(company.name)} (${escapeHtml(company.code)})</option>`).join("")}</select></label>
           <label>Person's name<span class="es">Nombre de la persona</span><input id="ownerAccountName" autocomplete="name" /></label>
           <label>Email<span class="es">Correo</span><input id="ownerAccountEmail" type="email" autocomplete="off" /></label>
-          <label>Role<span class="es">Puesto</span><select id="ownerAccountRole"><option>Admin</option><option selected>Safety</option><option>Quality</option></select></label>
+          <label>Role<span class="es">Puesto</span><select id="ownerAccountRole" onchange="toggleOwnerForemanScope(this.value)"><option>Admin</option><option selected>Safety</option><option>Quality</option><option>Foreman</option></select></label>
+          <div id="ownerForemanScope" hidden>
+            <label>Foreman department<span class="es">Departamento del capataz</span><select id="ownerAccountArea"><option value="">Select department / Seleccione</option>${accountAreas.map(([id, details]) => `<option value="${escapeHtml(id)}">${escapeHtml(details.label)} / ${escapeHtml(details.es)}</option>`).join("")}</select></label>
+            <fieldset><legend>Foreman job access<span class="es">Trabajos permitidos</span></legend><div class="profile-check-grid">${accountJobs.map((job) => `<label class="checkbox-tile"><input type="checkbox" name="ownerAccountJob" value="${escapeHtml(job.id)}" /><span>${escapeHtml(job.name)}<small>${escapeHtml(areas[job.area]?.label || "")}</small></span></label>`).join("") || `<span class="sub">No active Wind Farm jobs are available.</span>`}</div></fieldset>
+            <p class="sub">Foremen can advance published foundations but cannot configure maps or correct history.</p>
+          </div>
           <label>Initial password<span class="es">Contrasena inicial</span><input id="ownerAccountPassword" type="password" autocomplete="new-password" minlength="10" /></label>
           <button class="primary-action" id="createOwnerAccountButton" type="button" onclick="createOwnerAccount()" ${companies.length ? "" : "disabled"}>${t("Create account", "Crear cuenta")}</button>
         </article>
@@ -3409,7 +3442,7 @@ function renderOwnerAdmin() {
     <section class="panel">
       <div><h2>${t("Company accounts", "Cuentas de compania")}</h2><p class="sub">Passwords are never displayed or stored in this list.</p></div>
       <div class="table-wrap section-gap"><table><thead><tr><th>Name<span class="es">Nombre</span></th><th>Email<span class="es">Correo</span></th><th>Company<span class="es">Compania</span></th><th>Role<span class="es">Puesto</span></th><th>Status<span class="es">Estado</span></th></tr></thead><tbody>
-        ${users.map((user) => `<tr><td><strong>${escapeHtml(user.display_name || user.email)}</strong></td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.company_code || "Unassigned")}</td><td>${escapeHtml(user.role || "Safety")}</td><td><span class="tag">${user.banned_until ? "Disabled / Desactivada" : "Active / Activa"}</span></td></tr>`).join("") || `<tr><td colspan="5"><div class="empty-state">No accounts loaded.<span class="es">No hay cuentas cargadas.</span></div></td></tr>`}
+        ${users.map((user) => `<tr><td><strong>${escapeHtml(user.display_name || user.email)}</strong>${user.area ? `<small>${escapeHtml(areas[user.area]?.label || user.area)} · ${(user.job_ids || []).map((jobId) => escapeHtml(jobName(jobId) || jobId)).join(", ")}</small>` : ""}</td><td>${escapeHtml(user.email)}</td><td>${escapeHtml(user.company_code || "Unassigned")}</td><td>${escapeHtml(user.role || "Safety")}</td><td><span class="tag">${user.banned_until ? "Disabled / Desactivada" : "Active / Activa"}</span></td></tr>`).join("") || `<tr><td colspan="5"><div class="empty-state">No accounts loaded.<span class="es">No hay cuentas cargadas.</span></div></td></tr>`}
       </tbody></table></div>
     </section>
   `;
@@ -6485,6 +6518,7 @@ function foundationMapJobs() {
   return state.jobs
     .filter((job) => {
       if (job.area !== state.selectedArea || job.jobType !== "Wind Farm" || (job.status || "Active") !== "Active") return false;
+      if (!window.FoundationProgress.canAccessJob(state.selectedRole, job.id, state.auth?.jobIds || [])) return false;
       if (canManage) return true;
       return Boolean((state.foundationMaps || []).find((map) => map.jobId === job.id && map.published));
     })

@@ -40,6 +40,9 @@ assert.deepEqual(FoundationProgress.permissions("Foreman", true), { view: true, 
 assert.deepEqual(FoundationProgress.permissions("Admin", true), { view: true, update: true, manage: true });
 assert.deepEqual(FoundationProgress.permissions("Safety", true), { view: true, update: false, manage: false });
 assert.deepEqual(FoundationProgress.permissions("Admin", false), { view: false, update: false, manage: false });
+assert.equal(FoundationProgress.canAccessJob("Foreman", "longspur", ["longspur"]), true);
+assert.equal(FoundationProgress.canAccessJob("Foreman", "other-job", ["longspur"]), false);
+assert.equal(FoundationProgress.canAccessJob("Admin", "other-job", []), true);
 
 const reloaded = JSON.parse(JSON.stringify(foundations));
 assert.equal(reloaded[0].status, "Started");

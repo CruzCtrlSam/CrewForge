@@ -6,7 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
-const allowedRoles = new Set(["Admin", "Safety", "Quality"]);
+const allowedRoles = new Set(["Admin", "Safety", "Quality", "Foreman"]);
+const allowedAreas = new Set(["rebarFab", "solarPiles", "rebarInstall"]);
+
+function cleanJobIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((jobId) => String(jobId || "").trim()).filter(Boolean))].slice(0, 100);
+}
 
 function response(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -69,6 +75,8 @@ Deno.serve(async (req) => {
           display_name: user.app_metadata?.display_name || user.email || "",
           company_code: cleanCode(user.app_metadata?.company_code),
           role: allowedRoles.has(user.app_metadata?.role) ? user.app_metadata.role : "Safety",
+          area: allowedAreas.has(user.app_metadata?.area) ? user.app_metadata.area : "",
+          job_ids: cleanJobIds(user.app_metadata?.job_ids),
           banned_until: user.banned_until || null,
           created_at: user.created_at
         }));
@@ -99,8 +107,13 @@ Deno.serve(async (req) => {
       const email = String(body?.user?.email || "").trim().toLowerCase();
       const password = String(body?.user?.password || "");
       const role = String(body?.user?.role || "Safety");
+      const area = role === "Foreman" ? String(body?.user?.area || "") : "";
+      const jobIds = role === "Foreman" ? cleanJobIds(body?.user?.jobIds) : [];
       if (!companyCode || !displayName || !email.includes("@") || password.length < 10 || !allowedRoles.has(role)) {
         return response({ ok: false, error: "Complete the company, name, valid email, role, and a 10-character initial password" }, 400);
+      }
+      if (role === "Foreman" && (!allowedAreas.has(area) || !jobIds.length)) {
+        return response({ ok: false, error: "Foreman accounts require a valid department and at least one assigned job" }, 400);
       }
       const { data: company, error: companyError } = await admin
         .from("companies")
@@ -115,7 +128,7 @@ Deno.serve(async (req) => {
         email,
         password,
         email_confirm: true,
-        app_metadata: { company_code: companyCode, role, display_name: displayName }
+        app_metadata: { company_code: companyCode, role, display_name: displayName, area, job_ids: jobIds }
       });
       if (createError || !created.user) return response({ ok: false, error: createError?.message || "Account could not be created" }, 400);
 
@@ -131,7 +144,7 @@ Deno.serve(async (req) => {
         await admin.auth.admin.deleteUser(created.user.id);
         throw memberError;
       }
-      return response({ ok: true, user: { id: created.user.id, email, display_name: displayName, company_code: companyCode, role } }, 201);
+      return response({ ok: true, user: { id: created.user.id, email, display_name: displayName, company_code: companyCode, role, area, job_ids: jobIds } }, 201);
     }
 
     return response({ ok: false, error: "Unknown owner action" }, 400);

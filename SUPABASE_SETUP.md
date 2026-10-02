@@ -45,9 +45,9 @@ Run [SUPABASE_PRODUCTION_SECURITY.sql](./SUPABASE_PRODUCTION_SECURITY.sql) in th
 
 ## Add Another Company
 
-After the owner tools are deployed, sign in with the owner account and open **Companies & Accounts / Companias y cuentas**. Create the company first, then create its Admin, Safety, or Quality accounts. Company codes are resolved from Supabase and no longer need to be added to `script.js`.
+After the owner tools are deployed, sign in with the owner account and open **Companies & Accounts / Companias y cuentas**. Create the company first, then create its Admin, Safety, Quality, or Foreman accounts. Company codes are resolved from Supabase and no longer need to be added to `script.js`.
 
-Allowed application roles are `Admin`, `Safety`, and `Quality`.
+Allowed application roles are `Admin`, `Safety`, `Quality`, and `Foreman`. Foreman accounts also require a department and at least one assigned job in protected Auth app metadata.
 
 ## Offline Behavior
 

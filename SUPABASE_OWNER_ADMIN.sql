@@ -14,7 +14,7 @@ create table if not exists public.company_members (
   company_code text not null references public.companies(code),
   email text not null,
   display_name text not null,
-  role text not null check (role in ('Admin', 'Safety', 'Quality')),
+  role text not null check (role in ('Admin', 'Safety', 'Quality', 'Foreman')),
   active boolean not null default true,
   created_at timestamptz not null default now(),
   created_by uuid

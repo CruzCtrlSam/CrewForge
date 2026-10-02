@@ -55,7 +55,7 @@ Tagline: Crew time and job progress, forged into one.
 2. Sign in with the email and password assigned to the account.
 3. Supabase Auth and Row-Level Security limit the account to its assigned company workspace.
 
-The CrewForge owner can use **Companies & Accounts / Companias y cuentas** to create company workspaces and Admin, Safety, or Quality accounts. See `SUPABASE_SETUP.md` for deployment details.
+The CrewForge owner can use **Companies & Accounts / Companias y cuentas** to create company workspaces and Admin, Safety, Quality, or job-restricted Foreman accounts. See `SUPABASE_SETUP.md` for deployment details.
 
 ## Files
 

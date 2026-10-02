@@ -77,6 +77,12 @@
     };
   }
 
+  function canAccessJob(role, jobId, assignedJobIds = []) {
+    if (role !== "Foreman") return true;
+    const allowed = Array.isArray(assignedJobIds) ? assignedJobIds.map(String) : [];
+    return allowed.includes(String(jobId || ""));
+  }
+
   function historyRows(foundations = []) {
     return foundations
       .slice()
@@ -129,5 +135,5 @@
     return errors;
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, historyRows, generateMapIds, validateMapping };
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, generateMapIds, validateMapping };
 });
