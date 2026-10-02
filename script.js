@@ -830,7 +830,7 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
+const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1234,6 +1234,7 @@ const defaultState = {
   weeks: ["2026-07-03", "2026-07-10", "2026-07-17", "2026-07-24"],
   people: defaultPeople,
   customDepartments: [],
+  workerPositions: [],
   jobLists: {
     solarClients: ["Solar"],
     solarJobNames: ["Solar Piles Demo Job"]
@@ -1320,6 +1321,7 @@ function cleanCompanyState(company) {
   next.weeks = [currentWeekEnding()];
   next.people = [];
   next.customDepartments = [];
+  next.workerPositions = [];
   next.jobs = [];
   next.sheets = {};
   next.production = [];
@@ -1550,6 +1552,15 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
   next.selectedEmployeeProfile = next.selectedEmployeeProfile || "";
+  next.workerPositions = (next.workerPositions || []).map((position) => ({
+    id: String(position.id || "").trim(),
+    area: String(position.area || "").trim(),
+    name: String(position.name || "").trim(),
+    es: String(position.es || position.name || "").trim(),
+    archived: Boolean(position.archived),
+    createdAt: position.createdAt || "",
+    createdBy: position.createdBy || ""
+  })).filter((position) => position.id && position.area && position.name);
   next.jobDraftType = next.jobDraftType || "";
   next.production = next.production || [];
   next.safetyForms = next.safetyForms || [];
@@ -5931,7 +5942,7 @@ function renderForemanTimeRow(row, index, editable) {
     <tr>
       <td class="worker-name-cell">
         <select data-row="${index}" data-field="employee" ${disabled}>${setOptions(workers, row.employee, (worker) => worker.name, (worker) => worker.name)}${person.name ? "" : `<option value="${row.employee}" selected>${row.employee}</option>`}</select>
-        <select class="compact-role" data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(area().roles, row.roleOverride || "")}</select>
+        <select class="compact-role" data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(roleOptionsForArea(state.selectedArea, row.roleOverride || person.role), row.roleOverride || "")}</select>
         <div class="row-tags">
           ${row.borrowed ? '<span class="tag">Week only</span>' : ""}
           ${area().dol ? `<span class="tag">${person.dol ? "DOL" : "No DOL"}</span>` : ""}
@@ -5965,7 +5976,7 @@ function renderWorkerCard(row, index, editable) {
         ${days.map((day, dayIndex) => `<label>${dayLabels[dayIndex]}<span class="es">${["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][dayIndex]}</span><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} />${!area().dol ? `<span class="mini-check"><input data-row="${index}" data-field="lightDuty.${day}" type="checkbox" ${row.lightDuty?.[day] ? "checked" : ""} ${disabled} /> LD</span>` : ""}</label>`).join("")}
       </div>
       <div class="mini-grid">
-        <label>Role<span class="es">Puesto</span><select data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(area().roles, row.roleOverride || "")}</select></label>
+        <label>Role<span class="es">Puesto</span><select data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(roleOptionsForArea(state.selectedArea, row.roleOverride || person.role), row.roleOverride || "")}</select></label>
         <label>PTO<span class="es">Permiso</span><input data-row="${index}" data-field="pto" type="number" min="0" step="0.25" value="${row.pto || 0}" ${disabled} /></label>
         <label>Sick<span class="es">Enfermo</span><input data-row="${index}" data-field="sick" type="number" min="0" step="0.25" value="${row.sick || 0}" ${disabled} /></label>
         ${area().perDiem ? `<label>Per diem<span class="es">Viatico</span><div class="money-input"><span>$</span><input data-row="${index}" data-field="perDiem" type="number" min="0" step="1" value="${row.perDiem || 0}" ${disabled} /></div></label>` : ""}
@@ -5985,7 +5996,7 @@ function renderWorkerAdder(editable) {
     <div class="add-worker-grid section-gap">
       <label class="worker-add-existing">Add existing worker<span class="es">Agregar trabajador existente</span><select id="borrowWorker"><option value="">Select worker</option>${setOptions(allWorkers, "")}</select></label>
       <label class="worker-add-name">Or type new name<span class="es">O escriba nombre nuevo</span><input id="manualWorker" placeholder="Name" /></label>
-      <label class="worker-add-role">Role<span class="es">Puesto</span><select id="manualRole">${setOptions(area().roles, area().roles[1] || area().roles[0])}</select></label>
+      <label class="worker-add-role">Role<span class="es">Puesto</span><select id="manualRole">${setOptions(roleOptionsForArea(), roleOptionsForArea()[1] || roleOptionsForArea()[0])}</select></label>
       ${isCrewArea ? `<label class="worker-add-group">Crew<span class="es">Cuadrilla</span><input id="manualGroup" value="${currentSheet().group}" disabled /></label>` : `<label class="worker-add-group">Shift<span class="es">Turno</span><select id="manualGroup">${setOptions(groupOptions(), currentSheet().group)}</select></label>`}
       <label class="check-label worker-add-dol ${area().dol ? "" : "hidden"}"><input id="manualDol" type="checkbox" /> DOL apprentice</label>
       <button class="secondary-action compact-add worker-add-button" id="addWorker" type="button">${t("Add", "Agregar")}</button>
@@ -6006,7 +6017,7 @@ function renderTimesheetRow(row, index, editable) {
         </select>
         ${row.borrowed ? '<span class="tag">Week only</span>' : ""}
       </td>
-      <td><select class="role-select" data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(area().roles, row.roleOverride || "")}</select></td>
+      <td><select class="role-select" data-row="${index}" data-field="roleOverride" ${disabled}><option value="">${person.role || "Role"}</option>${setOptions(roleOptionsForArea(state.selectedArea, row.roleOverride || person.role), row.roleOverride || "")}</select></td>
       ${days.map((day) => `<td><input data-row="${index}" data-field="${day}" type="number" min="0" step="0.25" value="${row[day] || 0}" ${disabled} />${!area().dol ? `<label class="mini-check"><input data-row="${index}" data-field="lightDuty.${day}" type="checkbox" ${row.lightDuty?.[day] ? "checked" : ""} ${disabled} /> LD</label>` : ""}</td>`).join("")}
       <td><input data-row="${index}" data-field="pto" type="number" min="0" step="0.25" value="${row.pto || 0}" ${disabled} /></td>
       <td><input data-row="${index}" data-field="sick" type="number" min="0" step="0.25" value="${row.sick || 0}" ${disabled} /></td>
@@ -7126,8 +7137,105 @@ function renderSetup() {
   const canManage = canManagePeopleSetup();
   const canEditRates = canEditPayRates();
   const departmentManager = canManage ? renderDepartmentManager() : "";
+  const positionManager = canManage ? renderWorkerPositionManager() : "";
   const peopleSetup = area().mode === "crew" ? renderCrewSetup(canManage, canEditRates) : renderShiftSetup(canManage, canEditRates);
-  return `${peopleSetup}${departmentManager}`;
+  return `${positionManager}${peopleSetup}${departmentManager}`;
+}
+
+function workerPositionsForArea(areaId = state.selectedArea, includeArchived = false) {
+  return (state.workerPositions || [])
+    .filter((position) => position.area === areaId && (includeArchived || !position.archived))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function roleOptionsForArea(areaId = state.selectedArea, currentRole = "") {
+  const builtIn = areas[areaId]?.roles || [];
+  const custom = workerPositionsForArea(areaId).map((position) => position.name);
+  const values = [...new Set([...builtIn, ...custom])];
+  if (currentRole && !values.includes(currentRole)) values.push(currentRole);
+  const unassignedIndex = values.indexOf("Unassigned");
+  if (unassignedIndex >= 0) values.push(...values.splice(unassignedIndex, 1));
+  return values;
+}
+
+function renderWorkerPositionManager() {
+  const positions = workerPositionsForArea(state.selectedArea, true);
+  return `
+    <section class="panel">
+      <div class="split">
+        <div>
+          <h2>${t("Worker positions", "Puestos de trabajadores")}</h2>
+          <p class="sub">Add positions for ${escapeHtml(area().label)}. They will appear when employees are added, edited, or assigned to a crew.</p>
+          <p class="sub es">Agregue puestos para ${escapeHtml(area().es)}. Apareceran al agregar, editar o asignar trabajadores a una cuadrilla.</p>
+        </div>
+        <span class="tag">${escapeHtml(area().label)}</span>
+      </div>
+      <div class="form-grid section-gap">
+        <label>Position name<span class="es">Nombre del puesto</span><input id="newWorkerPositionName" placeholder="Example: Welder" /></label>
+        <label>Spanish name (optional)<span class="es">Nombre en espanol (opcional)</span><input id="newWorkerPositionNameEs" placeholder="Ejemplo: Soldador" /></label>
+        <button class="primary-action" type="button" onclick="addWorkerPosition()">${t("Add position", "Agregar puesto")}</button>
+      </div>
+      <div class="table-wrap section-gap">
+        <table>
+          <thead><tr><th>Position<span class="es">Puesto</span></th><th>Spanish name<span class="es">Nombre en espanol</span></th><th>Status<span class="es">Estado</span></th><th>Actions<span class="es">Acciones</span></th></tr></thead>
+          <tbody>
+            ${positions.map((position) => `
+              <tr>
+                <td><strong>${escapeHtml(position.name)}</strong></td>
+                <td>${escapeHtml(position.es || position.name)}</td>
+                <td><span class="tag">${position.archived ? "Archived / Archivado" : "Active / Activo"}</span></td>
+                <td>${position.archived
+                  ? `<button class="secondary-action table-action" type="button" onclick="setWorkerPositionArchived('${position.id}', false)">${t("Restore", "Restaurar")}</button>`
+                  : `<button class="danger-action table-action" type="button" onclick="setWorkerPositionArchived('${position.id}', true)">${t("Archive", "Archivar")}</button>`}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4"><div class="empty-state">No custom positions in this department yet.<span class="es">Todavia no hay puestos personalizados en este departamento.</span></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function workerPositionNameExists(name) {
+  const normalized = String(name || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if ((areas[state.selectedArea]?.roles || []).some((role) => role.toLowerCase() === normalized)) return true;
+  return (state.workerPositions || []).some((position) => position.area === state.selectedArea && position.name.toLowerCase() === normalized);
+}
+
+function addWorkerPosition() {
+  if (!canManagePeopleSetup()) return;
+  const name = $("newWorkerPositionName")?.value.trim() || "";
+  const nameEs = $("newWorkerPositionNameEs")?.value.trim() || name;
+  if (!name) return showToast("Enter a position name / Escriba el nombre del puesto");
+  if (workerPositionNameExists(name)) return showToast("That position already exists / Ese puesto ya existe");
+  const position = {
+    id: `position-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    area: state.selectedArea,
+    name,
+    es: nameEs,
+    archived: false,
+    createdAt: timestamp(),
+    createdBy: actorName()
+  };
+  state.workerPositions = state.workerPositions || [];
+  state.workerPositions.push(position);
+  logActivity("Worker position added", { department: area().label, field: name });
+  saveState();
+  render();
+  showToast(`${name} added / agregado`);
+}
+
+function setWorkerPositionArchived(positionId, archived) {
+  if (!canManagePeopleSetup()) return;
+  const position = (state.workerPositions || []).find((entry) => entry.id === positionId && entry.area === state.selectedArea);
+  if (!position) return;
+  position.archived = Boolean(archived);
+  logActivity(archived ? "Worker position archived" : "Worker position restored", { department: area().label, field: position.name });
+  saveState();
+  render();
+  showToast(`${position.name} ${archived ? "archived / archivado" : "restored / restaurado"}`);
 }
 
 function renderDepartmentManager() {
@@ -7451,7 +7559,7 @@ function renderCrewSetup(canManage, canEditRates) {
       <div class="crew-add-grid section-gap">
         <label>Add existing worker<span class="es">Agregar trabajador existente</span><select id="crewExistingWorker" ${!canManage ? "disabled" : ""}><option value="">Select worker</option>${setOptions(availableWorkers, "", (person) => `${person.name} - ${person.role}`, (person) => person.name)}</select></label>
         <label>Or type new name<span class="es">O escriba nombre nuevo</span><input id="crewNewName" placeholder="Name" ${!canManage ? "disabled" : ""} /></label>
-        <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles.filter((role) => role !== "Foreman"), "Rodbuster")}</select></label>
+        <label>Role<span class="es">Puesto</span><select id="crewNewRole" ${!canManage ? "disabled" : ""}>${setOptions(roleOptionsForArea().filter((role) => role !== "Foreman"), roleOptionsForArea().includes("Rodbuster") ? "Rodbuster" : roleOptionsForArea().find((role) => !["Foreman", "Unassigned"].includes(role)) || "Unassigned")}</select></label>
         <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="crewHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!canManage ? "disabled" : ""} /></div></label>
         <label class="check-label"><input id="crewNewDol" type="checkbox" ${!canManage ? "disabled" : ""} /> DOL apprentice</label>
         <button class="primary-action compact-add" id="addCrewPerson" type="button" ${!canManage ? "disabled" : ""}>${t("Add", "Agregar")}</button>
@@ -7463,7 +7571,7 @@ function renderCrewSetup(canManage, canEditRates) {
             ${crewMembers
               .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
                 <td>${person.group}</td>
                 <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
@@ -7491,7 +7599,7 @@ function renderShiftSetup(canManage, canEditRates) {
       ${renderEmployeeProfilePanel(canEditProfiles)}
       <div class="people-form section-gap">
         <label>Name<span class="es">Nombre</span><input id="personName" ${!canManage ? "disabled" : ""} /></label>
-        <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(area().roles, area().roles.includes("Unassigned") ? "Unassigned" : area().roles[1] || area().roles[0])}</select></label>
+        <label>Role<span class="es">Puesto</span><select id="personRole" ${!canManage ? "disabled" : ""}>${setOptions(roleOptionsForArea(), roleOptionsForArea().includes("Unassigned") ? "Unassigned" : roleOptionsForArea()[1] || roleOptionsForArea()[0])}</select></label>
         <label>Default shift<span class="es">Turno</span><select id="personGroup" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), groupOptions()[0] || "")}</select></label>
         <label>Hourly rate<span class="es">Pago por hora</span><div class="money-input"><span>$</span><input id="personHourlyRate" type="number" min="0" step="0.01" placeholder="0.00" ${!canManage ? "disabled" : ""} /></div></label>
         <button class="primary-action" id="savePerson" type="button" ${!canManage ? "disabled" : ""}>${t("Save person", "Guardar persona")}</button>
@@ -7503,7 +7611,7 @@ function renderShiftSetup(canManage, canEditRates) {
             ${peopleForArea()
               .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(area().roles, person.role)}</select></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
                 <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
                 <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
