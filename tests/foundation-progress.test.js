@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const FoundationProgress = require("../foundation-progress.js");
 
 const stages = FoundationProgress.STATUSES;
+assert.deepEqual(stages, ["Not Started", "Started", "Bottom", "Top", "Pedestal", "Completed"]);
 for (let index = 0; index < stages.length - 1; index += 1) {
   assert.equal(FoundationProgress.nextStatus(stages[index]), stages[index + 1]);
 }

@@ -3,7 +3,7 @@
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (root) root.FoundationProgress = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function createFoundationProgress() {
-  const STATUSES = ["Not Started", "Started", "Bottom", "Pedestal", "Top", "Completed"];
+  const STATUSES = ["Not Started", "Started", "Bottom", "Top", "Pedestal", "Completed"];
   const UPDATE_ROLES = ["Admin", "Foreman", "Approver", "Quality"];
 
   function validStatus(status) {
