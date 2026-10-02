@@ -1279,6 +1279,7 @@ const defaultState = {
   selectedFoundationId: "",
   foundationMapFilter: "All",
   foundationMapSetupMode: false,
+  foundationPinMoveId: "",
   foundationProjectWizardOpen: false,
   foundationMapZoom: 1.5,
   foundationReportFrom: "",
@@ -1539,8 +1540,9 @@ function pushCloud(immediate = false) {
     }
   };
   clearTimeout(cloudSaveTimer);
-  if (immediate) save();
-  else cloudSaveTimer = setTimeout(save, 500);
+  if (immediate) return save();
+  cloudSaveTimer = setTimeout(save, 500);
+  return Promise.resolve();
 }
 
 function setSyncStatus(status, message) {
@@ -1674,6 +1676,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedFoundationId = next.selectedFoundationId || "";
   next.foundationMapFilter = ["All", ...(window.FoundationProgress?.STATUSES || [])].includes(next.foundationMapFilter) ? next.foundationMapFilter : "All";
   next.foundationMapSetupMode = Boolean(next.foundationMapSetupMode);
+  next.foundationPinMoveId = String(next.foundationPinMoveId || "");
   next.foundationProjectWizardOpen = Boolean(next.foundationProjectWizardOpen);
   next.foundationMapZoom = Math.max(0.75, Math.min(4, Number(next.foundationMapZoom) || 1.5));
   next.foundationReportFrom = /^\d{4}-\d{2}-\d{2}$/.test(next.foundationReportFrom || "") ? next.foundationReportFrom : "";
@@ -6630,6 +6633,7 @@ function renderFoundationDetails(map, foundation) {
         <div class="form-grid compact-form-grid section-gap">
           <label>Correct status<span class="es">Corregir estado</span><select id="foundationCorrectionStatus">${setOptions(window.FoundationProgress.STATUSES, foundation.status)}</select></label>
           <button class="secondary-action" id="saveFoundationCorrection" type="button" data-foundation-id="${escapeHtml(foundation.id)}">${t("Save correction", "Guardar correccion")}</button>
+          ${state.foundationMapSetupMode ? `<button class="primary-action" id="moveFoundationHotspot" type="button" data-foundation-id="${escapeHtml(foundation.id)}">${state.foundationPinMoveId === foundation.id ? t("Cancel move", "Cancelar movimiento") : t("Move pin", "Mover punto")}</button>` : ""}
           ${state.foundationMapSetupMode ? `<button class="danger-action" id="deleteFoundationHotspot" type="button" data-foundation-id="${escapeHtml(foundation.id)}">${t("Delete hotspot", "Borrar punto")}</button>` : ""}
         </div>
       ` : ""}
@@ -6745,6 +6749,7 @@ function renderFoundationProgress() {
         ${state.foundationMapSetupMode ? `
           <div class="notice section-gap foundation-setup-notice">
             <strong>Admin mapping mode:</strong> tap an empty map location to add a foundation. Drag a marker to reposition it. Select a marker to inspect or delete it.<span class="es">Modo de configuracion: toque un espacio vacio para agregar una cimentacion, arrastre un punto para moverlo y seleccione un punto para revisarlo o borrarlo.</span>
+            ${state.foundationPinMoveId ? `<div class="notice section-gap"><strong>${t(`Moving ${map.hotspots.find((entry) => entry.id === state.foundationPinMoveId)?.foundationId || "pin"}: tap its new location on the map.`, `Moviendo ${map.hotspots.find((entry) => entry.id === state.foundationPinMoveId)?.foundationId || "punto"}: toque la nueva ubicacion en el mapa.`)}</strong></div>` : ""}
             <div class="foundation-mapping-progress">
               <span><strong>${map.hotspots.length}</strong> mapped / ubicadas</span>
               <span><strong>${unmappedIds.length}</strong> remaining / pendientes</span>
@@ -7011,10 +7016,32 @@ function deleteFoundationHotspot(foundationId) {
   const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
   if (!foundation || !confirm(`Delete foundation hotspot ${foundation.foundationId}? Its status history will be removed from this map. / Borrar el punto ${foundation.foundationId}?`)) return;
   map.hotspots = map.hotspots.filter((entry) => entry.id !== foundationId);
+  if (state.foundationPinMoveId === foundationId) state.foundationPinMoveId = "";
   state.selectedFoundationId = "";
   logActivity("Foundation hotspot deleted", { job: jobName(map.jobId), foundation: foundation.foundationId });
   saveState();
   render();
+}
+
+async function moveFoundationHotspotAt(map, foundationId, x, y) {
+  if (!canManageFoundationMaps() || !state.foundationMapSetupMode) return;
+  const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
+  if (!foundation) return;
+  const view = captureFoundationView();
+  foundation.x = window.FoundationProgress.clampCoordinate(x);
+  foundation.y = window.FoundationProgress.clampCoordinate(y);
+  foundation.positionUpdatedAt = new Date().toISOString();
+  foundation.positionUpdatedBy = actorName();
+  state.selectedFoundationId = foundation.id;
+  state.foundationPinMoveId = "";
+  logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
+  pendingRemoteState = null;
+  persistLocalState();
+  setSyncStatus("pending", "Saving pin location...");
+  await pushCloud(true);
+  render();
+  restoreFoundationView(view);
+  showToast(`${foundation.foundationId} pin location saved / ubicacion guardada`);
 }
 
 function addFoundationHotspotAt(map, x, y) {
@@ -8572,6 +8599,7 @@ function bindFoundationProgressEvents() {
     $("foundationMapJobSelect").addEventListener("change", (event) => {
       state.selectedFoundationMapJob = event.target.value;
       state.selectedFoundationId = "";
+      state.foundationPinMoveId = "";
       state.foundationMapFilter = "All";
       state.foundationMapZoom = 1.5;
       saveState();
@@ -8597,6 +8625,7 @@ function bindFoundationProgressEvents() {
   if ($("toggleFoundationSetup")) {
     $("toggleFoundationSetup").addEventListener("click", () => {
       state.foundationMapSetupMode = !state.foundationMapSetupMode;
+      state.foundationPinMoveId = "";
       saveState();
       render();
     });
@@ -8624,6 +8653,14 @@ function bindFoundationProgressEvents() {
   }
   if ($("deleteFoundationHotspot")) {
     $("deleteFoundationHotspot").addEventListener("click", (event) => deleteFoundationHotspot(event.currentTarget.dataset.foundationId));
+  }
+  if ($("moveFoundationHotspot")) {
+    $("moveFoundationHotspot").addEventListener("click", (event) => {
+      const foundationId = event.currentTarget.dataset.foundationId;
+      state.foundationPinMoveId = state.foundationPinMoveId === foundationId ? "" : foundationId;
+      saveState();
+      render();
+    });
   }
 
   const map = foundationMapForJob();
@@ -8670,7 +8707,12 @@ function bindFoundationProgressEvents() {
   stage.addEventListener("click", (event) => {
     if (!state.foundationMapSetupMode || event.target.closest("[data-foundation-hotspot]")) return;
     const rect = stage.getBoundingClientRect();
-    addFoundationHotspotAt(map, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+    const position = window.FoundationProgress.positionFromClient(rect, event.clientX, event.clientY);
+    if (state.foundationPinMoveId) {
+      moveFoundationHotspotAt(map, state.foundationPinMoveId, position.x, position.y);
+      return;
+    }
+    addFoundationHotspotAt(map, position.x, position.y);
   });
 
   document.querySelectorAll("[data-foundation-hotspot]").forEach((button) => {
@@ -8693,14 +8735,14 @@ function bindFoundationProgressEvents() {
       if (moved) {
         const pointer = latestPointer || { x: event.clientX, y: event.clientY };
         const position = moveButtonToPointer(pointer.x, pointer.y);
-        foundation.x = position.x;
-        foundation.y = position.y;
-        logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
+        start = null;
+        latestPointer = null;
+        moveFoundationHotspotAt(map, foundation.id, position.x, position.y);
+        return true;
       }
       const view = captureFoundationView();
       state.selectedFoundationId = foundation.id;
       saveState();
-      if (moved) pushCloud(true);
       render();
       restoreFoundationView(view);
       start = null;
