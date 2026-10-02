@@ -3600,6 +3600,10 @@ tr:last-child td {
   margin-top: 10px;
 }
 
+.foundation-print-report {
+  display: none;
+}
+
 @media (max-width: 1000px) {
   .foundation-map-layout {
     grid-template-columns: 1fr;
@@ -3720,6 +3724,20 @@ tr:last-child td {
 
   .printable-report {
     display: block;
+  }
+
+  .foundation-progress-panel > :not(.foundation-print-report) {
+    display: none !important;
+  }
+
+  .foundation-print-report {
+    display: block !important;
+  }
+
+  .foundation-history-report-table th,
+  .foundation-history-report-table td {
+    font-size: 8px;
+    padding: 5px;
   }
 
   .print-report-header {

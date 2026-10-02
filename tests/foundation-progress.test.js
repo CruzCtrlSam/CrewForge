@@ -44,4 +44,13 @@ const reloaded = JSON.parse(JSON.stringify(foundations));
 assert.equal(reloaded[0].status, "Started");
 assert.equal(reloaded[0].history.length, 1);
 
+const historyRows = FoundationProgress.historyRows(reloaded);
+assert.equal(historyRows.length, 3);
+assert.deepEqual(
+  { foundationId: historyRows[0].foundationId, previousStatus: historyRows[0].previousStatus, newStatus: historyRows[0].newStatus, currentStatus: historyRows[0].currentStatus },
+  { foundationId: "1", previousStatus: "Not Started", newStatus: "Started", currentStatus: "Started" }
+);
+assert.equal(historyRows[1].foundationId, "2");
+assert.equal(historyRows[1].at, "");
+
 console.log("Foundation progress model tests passed.");

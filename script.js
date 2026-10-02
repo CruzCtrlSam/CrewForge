@@ -6502,6 +6502,45 @@ function foundationDailyCounts(map) {
   return counts;
 }
 
+function foundationReportRows(map) {
+  return (window.FoundationProgress?.historyRows(map?.hotspots || []) || []).map((row) => ({
+    ...row,
+    projectId: map?.jobId || "",
+    projectName: jobName(map?.jobId) || map?.name || "",
+    mapId: map?.id || "",
+    mapName: map?.name || ""
+  }));
+}
+
+function foundationExportFilename(map, extension) {
+  const project = (jobName(map?.jobId) || map?.name || "foundation-progress").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `crewforge-foundation-progress-${project || "project"}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+function exportFoundationCsv() {
+  const map = foundationMapForJob();
+  if (!map) return showToast("Select a configured foundation map first");
+  const headers = ["Project ID", "Project", "Map ID", "Map", "Foundation", "Current status", "Previous status", "New status", "Timestamp ISO", "Timestamp local", "Updated by", "User ID", "Correction"];
+  const rows = foundationReportRows(map).map((row) => [
+    row.projectId,
+    row.projectName,
+    row.mapId,
+    row.mapName,
+    row.foundationId,
+    row.currentStatus,
+    row.previousStatus,
+    row.newStatus,
+    row.at,
+    row.at ? foundationHistoryTime(row.at) : "",
+    row.by,
+    row.userId,
+    row.correction ? "Yes" : "No"
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  downloadFile(foundationExportFilename(map, "csv"), `\ufeff${csv}`);
+  showToast("Foundation history CSV exported");
+}
+
 function foundationHistoryTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -6535,6 +6574,33 @@ function renderFoundationDetails(map, foundation) {
   `;
 }
 
+function renderFoundationPrintReport(map, counts, daily, statuses) {
+  if (!map) return "";
+  const rows = foundationReportRows(map);
+  return `
+    <section class="foundation-print-report">
+      ${reportHeader("Foundation Progress Report", `${jobName(map.jobId)} · ${map.name}`)}
+      <h3>Current progress / Avance actual</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Status / Estado</th><th>Current / Actual</th><th>Today / Hoy</th></tr></thead>
+          <tbody>
+            <tr><td>Total</td><td>${counts.total || 0}</td><td></td></tr>
+            ${statuses.map((status) => `<tr><td>${escapeHtml(foundationStatusMeta[status]?.label || status)} / ${escapeHtml(foundationStatusMeta[status]?.es || status)}</td><td>${counts[status] || 0}</td><td>${status === "Not Started" ? "" : daily[status] || 0}</td></tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <h3 class="section-gap">Timestamp history / Historial con fecha y hora</h3>
+      <div class="table-wrap">
+        <table class="foundation-history-report-table">
+          <thead><tr><th>Foundation<br><span class="es">Cimentacion</span></th><th>Current status<br><span class="es">Estado actual</span></th><th>Previous<br><span class="es">Anterior</span></th><th>New status<br><span class="es">Estado nuevo</span></th><th>Date and time<br><span class="es">Fecha y hora</span></th><th>Updated by<br><span class="es">Actualizado por</span></th><th>Correction<br><span class="es">Correccion</span></th></tr></thead>
+          <tbody>${rows.map((row) => `<tr><td><strong>${escapeHtml(row.foundationId)}</strong></td><td>${escapeHtml(row.currentStatus)}</td><td>${escapeHtml(row.previousStatus || "-")}</td><td>${escapeHtml(row.newStatus || "-")}</td><td>${row.at ? foundationHistoryTime(row.at) : "No transitions / Sin cambios"}</td><td>${escapeHtml(row.by || "-")}</td><td>${row.correction ? "Yes / Si" : "No"}</td></tr>`).join("")}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function renderFoundationProgress() {
   if (!canViewFoundationProgress()) return `<section class="panel"><div class="notice">You do not have access to foundation progress.</div></section>`;
   const jobs = foundationMapJobs();
@@ -6548,7 +6614,7 @@ function renderFoundationProgress() {
   const filter = state.foundationMapFilter || "All";
   const zoom = Math.max(0.75, Math.min(4, Number(state.foundationMapZoom) || 1.5));
   return `
-    <section class="panel foundation-progress-panel">
+    <section class="panel foundation-progress-panel printable-report">
       <div class="split">
         <div>
           <h2>${t("Foundation Progress Map", "Mapa de avance de cimentaciones")}</h2>
@@ -6556,6 +6622,7 @@ function renderFoundationProgress() {
           <p class="sub es">Toque una cimentacion una vez para avanzar una etapa. Mantenga presionado para ver detalles.</p>
         </div>
         <div class="foundation-map-actions">
+          ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="primary-action no-print" id="exportFoundationCsv" type="button">${t("Export CSV", "Exportar CSV")}</button>` : ""}
           ${canManageFoundationMaps() ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Exit setup", "Salir de configuracion") : t("Map setup", "Configurar mapa")}</button>` : ""}
         </div>
       </div>
@@ -6603,6 +6670,7 @@ function renderFoundationProgress() {
           <div class="foundation-daily-grid">${statuses.slice(1).map((status) => `<div><span>${escapeHtml(status)}</span><strong>${daily[status] || 0}</strong></div>`).join("")}</div>
         </section>
       `}
+      ${renderFoundationPrintReport(map, counts, daily, statuses)}
     </section>
   `;
 }
@@ -8216,6 +8284,7 @@ function deleteBundleItem(itemId) {
 
 function bindFoundationProgressEvents() {
   if (state.activeTab !== "foundationProgress") return;
+  if ($("exportFoundationCsv")) $("exportFoundationCsv").addEventListener("click", exportFoundationCsv);
   if ($("foundationMapJobSelect")) {
     $("foundationMapJobSelect").addEventListener("change", (event) => {
       state.selectedFoundationMapJob = event.target.value;

@@ -77,5 +77,36 @@
     };
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions };
+  function historyRows(foundations = []) {
+    return foundations
+      .slice()
+      .sort((a, b) => String(a.foundationId || a.id).localeCompare(String(b.foundationId || b.id), undefined, { numeric: true }))
+      .flatMap((foundation) => {
+        const history = (foundation.history || []).slice().sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+        if (!history.length) {
+          return [{
+            foundationId: foundation.foundationId || foundation.id,
+            currentStatus: validStatus(foundation.status),
+            previousStatus: "",
+            newStatus: "",
+            at: "",
+            by: "",
+            userId: "",
+            correction: false
+          }];
+        }
+        return history.map((entry) => ({
+          foundationId: foundation.foundationId || foundation.id,
+          currentStatus: validStatus(foundation.status),
+          previousStatus: validStatus(entry.previousStatus),
+          newStatus: validStatus(entry.newStatus),
+          at: entry.at || "",
+          by: entry.by || "",
+          userId: entry.userId || "",
+          correction: Boolean(entry.correction)
+        }));
+      });
+  }
+
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, historyRows };
 });
