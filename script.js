@@ -640,6 +640,7 @@ function defaultLaurelFoundationMap() {
     imageHeight: 2117,
     coordinateRevision: 2,
     published: true,
+    expectedFoundationIds: laurelFoundationCoordinates.map(([foundationId]) => foundationId),
     createdAt: "2026-10-02T00:00:00.000Z",
     createdBy: "CrewForge prototype",
     hotspots: laurelFoundationCoordinates.map(([foundationId, x, y]) => ({
@@ -1274,6 +1275,7 @@ const defaultState = {
   selectedFoundationId: "",
   foundationMapFilter: "All",
   foundationMapSetupMode: false,
+  foundationProjectWizardOpen: false,
   foundationMapZoom: 1.5,
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
@@ -1666,6 +1668,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedFoundationId = next.selectedFoundationId || "";
   next.foundationMapFilter = ["All", ...(window.FoundationProgress?.STATUSES || [])].includes(next.foundationMapFilter) ? next.foundationMapFilter : "All";
   next.foundationMapSetupMode = Boolean(next.foundationMapSetupMode);
+  next.foundationProjectWizardOpen = Boolean(next.foundationProjectWizardOpen);
   next.foundationMapZoom = Math.max(0.75, Math.min(4, Number(next.foundationMapZoom) || 1.5));
   next.workerPositions = (next.workerPositions || []).map((position) => ({
     id: String(position.id || "").trim(),
@@ -1862,6 +1865,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
     imageWidth: Number(map.imageWidth) || 1,
     imageHeight: Number(map.imageHeight) || 1,
     published: map.published !== false,
+    expectedFoundationIds: Array.isArray(map.expectedFoundationIds) ? map.expectedFoundationIds.map((id) => String(id)) : [],
     hotspots: (map.hotspots || []).map((hotspot) => ({
       ...hotspot,
       id: hotspot.id || `foundation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -6477,13 +6481,19 @@ function renderFoundationProductionCard(item) {
 }
 
 function foundationMapJobs() {
+  const canManage = canManageFoundationMaps();
   return state.jobs
-    .filter((job) => job.area === state.selectedArea && job.jobType === "Wind Farm" && (job.status || "Active") === "Active")
+    .filter((job) => {
+      if (job.area !== state.selectedArea || job.jobType !== "Wind Farm" || (job.status || "Active") !== "Active") return false;
+      if (canManage) return true;
+      return Boolean((state.foundationMaps || []).find((map) => map.jobId === job.id && map.published));
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function foundationMapForJob(jobId = state.selectedFoundationMapJob) {
-  return (state.foundationMaps || []).find((map) => map.jobId === jobId) || null;
+  const map = (state.foundationMaps || []).find((entry) => entry.jobId === jobId) || null;
+  return map && (map.published || canManageFoundationMaps()) ? map : null;
 }
 
 function selectedFoundation(map = foundationMapForJob()) {
@@ -6588,6 +6598,40 @@ function renderFoundationDetails(map, foundation) {
   `;
 }
 
+function foundationUnmappedIds(map) {
+  const mapped = new Set((map?.hotspots || []).map((hotspot) => String(hotspot.foundationId)));
+  return (map?.expectedFoundationIds || jobById(map?.jobId)?.foundationIds || []).filter((foundationId) => !mapped.has(String(foundationId)));
+}
+
+function renderFoundationProjectWizard() {
+  if (!canManageFoundationMaps() || !state.foundationProjectWizardOpen) return "";
+  return `
+    <section class="foundation-project-wizard section-gap">
+      <div class="split">
+        <div>
+          <h3>${t("Add wind project map", "Agregar mapa de proyecto eolico")}</h3>
+          <p class="sub">Create the job and its draft map together. CrewForge will assign the next foundation ID as you tap each symbol.</p>
+          <p class="sub es">Cree el trabajo y el mapa juntos. CrewForge asignara el siguiente ID al tocar cada simbolo.</p>
+        </div>
+        <button class="icon-button" id="cancelFoundationProject" type="button" title="Close">×</button>
+      </div>
+      <div class="form-grid foundation-project-grid section-gap">
+        <label>Job name<span class="es">Nombre del trabajo</span><input id="foundationProjectName" placeholder="Example: Laurel Wind" /></label>
+        <label>Job number (optional)<span class="es">Numero del trabajo</span><input id="foundationProjectNumber" placeholder="Example: 1126" /></label>
+        <label>Customer (optional)<span class="es">Cliente</span><input id="foundationProjectCustomer" placeholder="Customer name" /></label>
+        <label>Foundation prefix (optional)<span class="es">Prefijo opcional</span><input id="foundationProjectPrefix" placeholder="Blank for 1, 2, 3 or WTG-" /></label>
+        <label>First number<span class="es">Primer numero</span><input id="foundationProjectFrom" type="number" min="0" step="1" value="1" /></label>
+        <label>Last number<span class="es">Ultimo numero</span><input id="foundationProjectTo" type="number" min="0" step="1" value="20" /></label>
+        <label class="foundation-project-file">Site map image (25 MB max)<span class="es">Imagen del mapa (25 MB max.)</span><input id="foundationProjectFile" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+      </div>
+      <div class="button-group">
+        <button class="primary-action" id="createFoundationProject" type="button">${t("Create project and map", "Crear proyecto y mapa")}</button>
+        <span class="sub">Large images are optimized for reliable offline use. PNG, JPEG, or WebP.</span>
+      </div>
+    </section>
+  `;
+}
+
 function renderFoundationPrintReport(map, counts, daily, statuses) {
   if (!map) return "";
   const rows = foundationReportRows(map);
@@ -6627,6 +6671,7 @@ function renderFoundationProgress() {
   const selected = selectedFoundation(map);
   const filter = state.foundationMapFilter || "All";
   const zoom = Math.max(0.75, Math.min(4, Number(state.foundationMapZoom) || 1.5));
+  const unmappedIds = foundationUnmappedIds(map);
   return `
     <section class="panel foundation-progress-panel printable-report">
       <div class="split">
@@ -6636,10 +6681,13 @@ function renderFoundationProgress() {
           <p class="sub es">Toque una cimentacion una vez para avanzar una etapa. Mantenga presionado para ver detalles.</p>
         </div>
         <div class="foundation-map-actions">
+          ${canManageFoundationMaps() ? `<button class="primary-action" id="openFoundationProjectWizard" type="button">${t("Add project map", "Agregar mapa")}</button>` : ""}
+          ${map && canManageFoundationMaps() ? `<span class="tag">${map.published ? "Published / Publicado" : "Draft / Borrador"}</span>` : ""}
           ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="primary-action no-print" id="exportFoundationCsv" type="button">${t("Export CSV", "Exportar CSV")}</button>` : ""}
-          ${canManageFoundationMaps() ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Exit setup", "Salir de configuracion") : t("Map setup", "Configurar mapa")}</button>` : ""}
+          ${canManageFoundationMaps() && map ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Exit setup", "Salir de configuracion") : t("Map setup", "Configurar mapa")}</button>` : ""}
         </div>
       </div>
+      ${renderFoundationProjectWizard()}
       <div class="form-grid compact-form-grid section-gap">
         <label>Wind project<span class="es">Proyecto eolico</span><select id="foundationMapJobSelect">${setOptions(jobs, state.selectedFoundationMapJob, (entry) => entry.name, (entry) => entry.id)}</select></label>
         <label>Foundation details<span class="es">Detalle de cimentacion</span><select id="foundationDetailSelect"><option value="">Select foundation / Seleccione</option>${setOptions((map?.hotspots || []).slice().sort((a, b) => a.foundationId.localeCompare(b.foundationId, undefined, { numeric: true })), state.selectedFoundationId, (entry) => `${entry.foundationId} - ${entry.status}`, (entry) => entry.id)}</select></label>
@@ -6655,8 +6703,15 @@ function renderFoundationProgress() {
       ` : `
         ${state.foundationMapSetupMode ? `
           <div class="notice section-gap foundation-setup-notice">
-            <strong>Admin mapping mode:</strong> tap an empty map location to add a foundation. Drag a marker to reposition it. Select a marker to rename or delete it.<span class="es">Modo de configuracion: toque el mapa para agregar y arrastre puntos para moverlos.</span>
+            <strong>Admin mapping mode:</strong> tap an empty map location to add a foundation. Drag a marker to reposition it. Select a marker to inspect or delete it.<span class="es">Modo de configuracion: toque un espacio vacio para agregar una cimentacion, arrastre un punto para moverlo y seleccione un punto para revisarlo o borrarlo.</span>
+            <div class="foundation-mapping-progress">
+              <span><strong>${map.hotspots.length}</strong> mapped / ubicadas</span>
+              <span><strong>${unmappedIds.length}</strong> remaining / pendientes</span>
+              <span>Next / Siguiente: <strong>${escapeHtml(unmappedIds[0] || "Manual")}</strong></span>
+              <span class="tag">${map.published ? "Published / Publicado" : "Draft / Borrador"}</span>
+            </div>
             <label>Replace map image<span class="es">Reemplazar imagen</span><input id="foundationMapImage" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+            <button class="primary-action section-gap" id="publishFoundationMap" type="button">${t("Publish map", "Publicar mapa")}</button>
           </div>
         ` : ""}
         <div class="foundation-counter-grid section-gap">
@@ -6702,6 +6757,7 @@ function createFoundationMapForSelectedJob() {
     imageWidth: 1,
     imageHeight: 1,
     published: false,
+    expectedFoundationIds: [...(job.foundationIds || [])],
     createdAt: new Date().toISOString(),
     createdBy: actorName(),
     hotspots: []
@@ -6709,6 +6765,139 @@ function createFoundationMapForSelectedJob() {
   state.foundationMapSetupMode = true;
   saveState();
   render();
+}
+
+function optimizedFoundationMapImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file?.type.startsWith("image/")) return reject(new Error("Choose a PNG, JPEG, or WebP image"));
+    if (file.size > 25 * 1024 * 1024) return reject(new Error("Site map images must be 25 MB or smaller"));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The site map could not be read"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("The selected file is not a readable map image"));
+      image.onload = () => {
+        const attempts = [
+          { max: 2600, quality: 0.86 },
+          { max: 2200, quality: 0.8 },
+          { max: 1800, quality: 0.74 },
+          { max: 1400, quality: 0.68 }
+        ];
+        let result = null;
+        for (const attempt of attempts) {
+          const scale = Math.min(1, attempt.max / Math.max(image.naturalWidth, image.naturalHeight));
+          const width = Math.max(1, Math.round(image.naturalWidth * scale));
+          const height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+          result = { imageSrc: canvas.toDataURL("image/jpeg", attempt.quality), imageWidth: width, imageHeight: height, imageName: file.name, sourceBytes: file.size };
+          if (result.imageSrc.length <= 700 * 1024) break;
+        }
+        if (!result || result.imageSrc.length > 1024 * 1024) return reject(new Error("This map could not be optimized for offline storage. Try a smaller image."));
+        resolve(result);
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function uniqueJobId(name) {
+  const baseId = String(name || "wind-project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "wind-project";
+  let id = baseId;
+  let counter = 2;
+  while (state.jobs.some((job) => job.id === id)) {
+    id = `${baseId}-${counter}`;
+    counter += 1;
+  }
+  return id;
+}
+
+async function createFoundationProjectMap() {
+  if (!canManageFoundationMaps()) return;
+  const name = $("foundationProjectName")?.value.trim() || "";
+  const file = $("foundationProjectFile")?.files?.[0];
+  const foundationIds = window.FoundationProgress.generateMapIds(
+    $("foundationProjectPrefix")?.value || "",
+    $("foundationProjectFrom")?.value,
+    $("foundationProjectTo")?.value
+  );
+  if (!name) return showToast("Enter the job name / Escriba el nombre del trabajo");
+  if (state.jobs.some((job) => job.area === state.selectedArea && sameName(job.name, name))) return showToast("A job with that name already exists / Ese trabajo ya existe");
+  if (!foundationIds.length) return showToast("Check the first and last foundation numbers");
+  if (!file) return showToast("Choose the site map image / Seleccione la imagen del mapa");
+  const button = $("createFoundationProject");
+  if (button) button.disabled = true;
+  try {
+    const image = await optimizedFoundationMapImage(file);
+    const jobId = uniqueJobId(name);
+    const job = {
+      id: jobId,
+      name,
+      number: $("foundationProjectNumber")?.value.trim() || "",
+      customer: $("foundationProjectCustomer")?.value.trim() || "",
+      area: state.selectedArea,
+      jobType: "Wind Farm",
+      foundationIds,
+      customTracking: [],
+      documents: [],
+      status: "Active"
+    };
+    const map = {
+      id: `foundation-map-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      jobId,
+      name: `${name} Foundation Map`,
+      ...image,
+      published: false,
+      expectedFoundationIds: foundationIds,
+      createdAt: new Date().toISOString(),
+      createdBy: actorName(),
+      hotspots: []
+    };
+    state.jobs.push(job);
+    state.foundationMaps = state.foundationMaps || [];
+    state.foundationMaps.push(map);
+    state.selectedFoundationMapJob = jobId;
+    state.selectedFoundationId = "";
+    state.foundationMapFilter = "All";
+    state.foundationMapZoom = 1.5;
+    state.foundationMapSetupMode = true;
+    state.foundationProjectWizardOpen = false;
+    logActivity("Foundation project map created", { area: state.selectedArea, job: name, count: foundationIds.length, field: image.imageName });
+    saveState();
+    render();
+    showToast(`${name}: ${foundationIds.length} foundations ready to map`);
+  } catch (error) {
+    showToast(error.message || "The project map could not be created");
+    if (button) button.disabled = false;
+  }
+}
+
+function publishFoundationMap() {
+  if (!canManageFoundationMaps()) return;
+  const map = foundationMapForJob();
+  if (!map) return;
+  const errors = window.FoundationProgress.validateMapping(map, map.expectedFoundationIds || []);
+  const messages = {
+    "missing-image": "Upload the site map image first",
+    "missing-hotspots": "Map at least one foundation before publishing",
+    "duplicate-ids": "Remove duplicate foundation IDs before publishing",
+    "incomplete-ids": `Map every expected foundation first (${foundationUnmappedIds(map).length} remaining)`
+  };
+  if (errors.length) return showToast(messages[errors[0]] || "Complete the map setup before publishing");
+  map.published = true;
+  map.publishedAt = new Date().toISOString();
+  map.publishedBy = actorName();
+  state.foundationMapSetupMode = false;
+  logActivity("Foundation map published", { job: jobName(map.jobId), count: map.hotspots.length });
+  saveState();
+  render();
+  showToast("Foundation map published / Mapa publicado");
 }
 
 function captureFoundationView() {
@@ -6789,7 +6978,8 @@ function deleteFoundationHotspot(foundationId) {
 
 function addFoundationHotspotAt(map, x, y) {
   if (!canManageFoundationMaps() || !state.foundationMapSetupMode) return;
-  const foundationId = prompt("Foundation ID / ID de cimentacion");
+  const view = captureFoundationView();
+  const foundationId = foundationUnmappedIds(map)[0] || prompt("Foundation ID / ID de cimentacion");
   if (!foundationId?.trim()) return;
   if (map.hotspots.some((entry) => sameName(entry.foundationId, foundationId))) return showToast("That foundation ID already exists / Ese ID ya existe");
   const hotspot = {
@@ -6808,31 +6998,26 @@ function addFoundationHotspotAt(map, x, y) {
   logActivity("Foundation hotspot added", { job: jobName(map.jobId), foundation: hotspot.foundationId });
   saveState();
   render();
+  restoreFoundationView(view);
+  showToast(`${hotspot.foundationId} mapped / ubicado`);
 }
 
-function uploadFoundationMapImage(event) {
+async function uploadFoundationMapImage(event) {
   if (!canManageFoundationMaps()) return;
   const file = event.target.files?.[0];
   const map = foundationMapForJob();
   if (!file || !map) return;
-  if (!file.type.startsWith("image/")) return showToast("Choose an image file / Seleccione una imagen");
-  if (file.size > 4 * 1024 * 1024) return showToast("Map images must be 4 MB or smaller for offline storage");
-  const reader = new FileReader();
-  reader.onload = () => {
-    const image = new Image();
-    image.onload = () => {
-      map.imageSrc = reader.result;
-      map.imageName = file.name;
-      map.imageWidth = image.naturalWidth || 1;
-      map.imageHeight = image.naturalHeight || 1;
-      logActivity("Foundation map image uploaded", { job: jobName(map.jobId), field: file.name });
-      saveState();
-      render();
-      showToast("Map image saved for offline use");
-    };
-    image.src = reader.result;
-  };
-  reader.readAsDataURL(file);
+  try {
+    const image = await optimizedFoundationMapImage(file);
+    Object.assign(map, image);
+    map.published = false;
+    logActivity("Foundation map image uploaded", { job: jobName(map.jobId), field: file.name });
+    saveState();
+    render();
+    showToast("Map image saved for offline use; publish when mapping is complete");
+  } catch (error) {
+    showToast(error.message || "The map image could not be saved");
+  }
 }
 
 function renderJobs() {
@@ -8328,6 +8513,20 @@ function deleteBundleItem(itemId) {
 function bindFoundationProgressEvents() {
   if (state.activeTab !== "foundationProgress") return;
   if ($("exportFoundationCsv")) $("exportFoundationCsv").addEventListener("click", exportFoundationCsv);
+  if ($("openFoundationProjectWizard")) {
+    $("openFoundationProjectWizard").addEventListener("click", () => {
+      state.foundationProjectWizardOpen = true;
+      render();
+    });
+  }
+  if ($("cancelFoundationProject")) {
+    $("cancelFoundationProject").addEventListener("click", () => {
+      state.foundationProjectWizardOpen = false;
+      render();
+    });
+  }
+  if ($("createFoundationProject")) $("createFoundationProject").addEventListener("click", createFoundationProjectMap);
+  if ($("publishFoundationMap")) $("publishFoundationMap").addEventListener("click", publishFoundationMap);
   if ($("foundationMapJobSelect")) {
     $("foundationMapJobSelect").addEventListener("change", (event) => {
       state.selectedFoundationMapJob = event.target.value;
@@ -8474,9 +8673,11 @@ function bindFoundationProgressEvents() {
           foundation.y = window.FoundationProgress.clampCoordinate((event.clientY - rect.top) / rect.height);
           logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
         }
+        const view = captureFoundationView();
         state.selectedFoundationId = foundation.id;
         saveState();
         render();
+        restoreFoundationView(view);
         return;
       }
       const now = Date.now();

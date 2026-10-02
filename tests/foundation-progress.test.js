@@ -54,4 +54,10 @@ assert.deepEqual(
 assert.equal(historyRows[1].foundationId, "2");
 assert.equal(historyRows[1].at, "");
 
+assert.deepEqual(FoundationProgress.generateMapIds("", 1, 3), ["1", "2", "3"]);
+assert.deepEqual(FoundationProgress.generateMapIds("WTG-", 1, 3), ["WTG-001", "WTG-002", "WTG-003"]);
+assert.deepEqual(FoundationProgress.generateMapIds("T", 4, 2), []);
+assert.deepEqual(FoundationProgress.validateMapping({ imageSrc: "map.jpg", hotspots: [{ foundationId: "1" }] }, ["1"]), []);
+assert.deepEqual(FoundationProgress.validateMapping({ imageSrc: "map.jpg", hotspots: [{ foundationId: "1" }, { foundationId: "1" }] }, ["1", "2"]), ["duplicate-ids", "incomplete-ids"]);
+
 console.log("Foundation progress model tests passed.");

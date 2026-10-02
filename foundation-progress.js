@@ -108,5 +108,26 @@
       });
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, historyRows };
+  function generateMapIds(prefix, from, to) {
+    const start = Number(from);
+    const end = Number(to);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end - start > 2000) return [];
+    const cleanPrefix = String(prefix || "").trim();
+    const width = cleanPrefix ? Math.max(String(from).length, String(to).length, 3) : Math.max(String(from).length, String(to).length);
+    return Array.from({ length: end - start + 1 }, (_, index) => `${cleanPrefix}${String(start + index).padStart(width, "0")}`);
+  }
+
+  function validateMapping(map, expectedIds = []) {
+    const errors = [];
+    if (!map?.imageSrc) errors.push("missing-image");
+    const hotspots = map?.hotspots || [];
+    if (!hotspots.length) errors.push("missing-hotspots");
+    const ids = hotspots.map((hotspot) => String(hotspot.foundationId || "").trim()).filter(Boolean);
+    if (new Set(ids.map((id) => id.toLowerCase())).size !== ids.length) errors.push("duplicate-ids");
+    const expected = expectedIds.map((id) => String(id));
+    if (expected.length && (expected.length !== ids.length || expected.some((id) => !ids.includes(id)))) errors.push("incomplete-ids");
+    return errors;
+  }
+
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, historyRows, generateMapIds, validateMapping };
 });
