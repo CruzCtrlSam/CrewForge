@@ -23,6 +23,15 @@
     return Math.max(0, Math.min(1, Number(value) || 0));
   }
 
+  function positionFromClient(rect, clientX, clientY) {
+    const width = Number(rect?.width) || 1;
+    const height = Number(rect?.height) || 1;
+    return {
+      x: clampCoordinate((Number(clientX) - (Number(rect?.left) || 0)) / width),
+      y: clampCoordinate((Number(clientY) - (Number(rect?.top) || 0)) / height)
+    };
+  }
+
   function counts(foundations = []) {
     return foundations.reduce(
       (totals, foundation) => {
@@ -155,5 +164,5 @@
     return errors;
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, positionFromClient, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
 });

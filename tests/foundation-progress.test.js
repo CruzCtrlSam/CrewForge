@@ -32,6 +32,8 @@ assert.deepEqual(totals, { total: 3, "Not Started": 0, Started: 1, Bottom: 1, Pe
 assert.equal(FoundationProgress.clampCoordinate(-0.4), 0);
 assert.equal(FoundationProgress.clampCoordinate(1.4), 1);
 assert.equal(FoundationProgress.clampCoordinate(0.42), 0.42);
+assert.deepEqual(FoundationProgress.positionFromClient({ left: 100, top: 200, width: 400, height: 200 }, 300, 250), { x: 0.5, y: 0.25 });
+assert.deepEqual(FoundationProgress.positionFromClient({ left: 100, top: 200, width: 400, height: 200 }, 50, 500), { x: 0, y: 1 });
 assert.equal(FoundationProgress.shouldAcceptTap(1000, 1100, 2), false);
 assert.equal(FoundationProgress.shouldAcceptTap(1000, 1800, 2), true);
 assert.equal(FoundationProgress.shouldAcceptTap(0, 1000, 20), false);

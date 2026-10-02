@@ -8634,6 +8634,10 @@ function bindFoundationProgressEvents() {
   let touchGesture = null;
   const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
   viewport.addEventListener("touchstart", (event) => {
+    if (state.foundationMapSetupMode && event.target.closest?.("[data-foundation-hotspot]")) {
+      touchGesture = null;
+      return;
+    }
     if (event.touches.length === 2) {
       touchGesture = { mode: "zoom", distance: touchDistance(event.touches), zoom: state.foundationMapZoom || 1 };
     } else if (event.touches.length === 1) {
@@ -8671,9 +8675,38 @@ function bindFoundationProgressEvents() {
 
   document.querySelectorAll("[data-foundation-hotspot]").forEach((button) => {
     let start = null;
+    let latestPointer = null;
     let moved = false;
     let longPressed = false;
     let longPressTimer = null;
+    const moveButtonToPointer = (clientX, clientY) => {
+      const position = window.FoundationProgress.positionFromClient(stage.getBoundingClientRect(), clientX, clientY);
+      button.style.left = `${position.x * 100}%`;
+      button.style.top = `${position.y * 100}%`;
+      return position;
+    };
+    const commitSetupMove = (event) => {
+      clearTimeout(longPressTimer);
+      if (!start || longPressed || !state.foundationMapSetupMode) return false;
+      const foundation = map.hotspots.find((entry) => entry.id === button.dataset.foundationHotspot);
+      if (!foundation) return false;
+      if (moved) {
+        const pointer = latestPointer || { x: event.clientX, y: event.clientY };
+        const position = moveButtonToPointer(pointer.x, pointer.y);
+        foundation.x = position.x;
+        foundation.y = position.y;
+        logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
+      }
+      const view = captureFoundationView();
+      state.selectedFoundationId = foundation.id;
+      saveState();
+      if (moved) pushCloud(true);
+      render();
+      restoreFoundationView(view);
+      start = null;
+      latestPointer = null;
+      return true;
+    };
     button.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       state.selectedFoundationId = button.dataset.foundationHotspot;
@@ -8682,7 +8715,9 @@ function bindFoundationProgressEvents() {
     });
     button.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
+      if (state.foundationMapSetupMode) event.preventDefault();
       start = { x: event.clientX, y: event.clientY, at: Date.now() };
+      latestPointer = { x: event.clientX, y: event.clientY };
       moved = false;
       longPressed = false;
       button.setPointerCapture?.(event.pointerId);
@@ -8698,44 +8733,37 @@ function bindFoundationProgressEvents() {
     });
     button.addEventListener("pointermove", (event) => {
       if (!start) return;
+      latestPointer = { x: event.clientX, y: event.clientY };
       const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
       if (movement > 8) {
         moved = true;
         clearTimeout(longPressTimer);
       }
       if (!state.foundationMapSetupMode || !moved) return;
-      const rect = stage.getBoundingClientRect();
-      button.style.left = `${window.FoundationProgress.clampCoordinate((event.clientX - rect.left) / rect.width) * 100}%`;
-      button.style.top = `${window.FoundationProgress.clampCoordinate((event.clientY - rect.top) / rect.height) * 100}%`;
+      event.preventDefault();
+      moveButtonToPointer(event.clientX, event.clientY);
     });
     button.addEventListener("pointerup", (event) => {
       event.stopPropagation();
+      if (commitSetupMove(event)) return;
       clearTimeout(longPressTimer);
       if (!start || longPressed) return;
       const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
       const foundation = map.hotspots.find((entry) => entry.id === button.dataset.foundationHotspot);
       if (!foundation) return;
-      if (state.foundationMapSetupMode) {
-        if (moved) {
-          const rect = stage.getBoundingClientRect();
-          foundation.x = window.FoundationProgress.clampCoordinate((event.clientX - rect.left) / rect.width);
-          foundation.y = window.FoundationProgress.clampCoordinate((event.clientY - rect.top) / rect.height);
-          logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
-        }
-        const view = captureFoundationView();
-        state.selectedFoundationId = foundation.id;
-        saveState();
-        render();
-        restoreFoundationView(view);
-        return;
-      }
       const now = Date.now();
       const lastAccepted = foundationTapTimes.get(foundation.id) || 0;
       if (moved || !window.FoundationProgress.shouldAcceptTap(lastAccepted, now, movement)) return;
       foundationTapTimes.set(foundation.id, now);
       advanceFoundation(foundation.id);
     });
-    button.addEventListener("pointercancel", () => clearTimeout(longPressTimer));
+    button.addEventListener("pointercancel", (event) => {
+      if (!commitSetupMove(event)) {
+        clearTimeout(longPressTimer);
+        start = null;
+        latestPointer = null;
+      }
+    });
     button.addEventListener("click", (event) => event.preventDefault());
   });
 }
