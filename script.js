@@ -1281,6 +1281,8 @@ const defaultState = {
   foundationMapSetupMode: false,
   foundationProjectWizardOpen: false,
   foundationMapZoom: 1.5,
+  foundationReportFrom: "",
+  foundationReportTo: "",
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -1674,6 +1676,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.foundationMapSetupMode = Boolean(next.foundationMapSetupMode);
   next.foundationProjectWizardOpen = Boolean(next.foundationProjectWizardOpen);
   next.foundationMapZoom = Math.max(0.75, Math.min(4, Number(next.foundationMapZoom) || 1.5));
+  next.foundationReportFrom = /^\d{4}-\d{2}-\d{2}$/.test(next.foundationReportFrom || "") ? next.foundationReportFrom : "";
+  next.foundationReportTo = /^\d{4}-\d{2}-\d{2}$/.test(next.foundationReportTo || "") ? next.foundationReportTo : "";
   next.workerPositions = (next.workerPositions || []).map((position) => ({
     id: String(position.id || "").trim(),
     area: String(position.area || "").trim(),
@@ -6560,8 +6564,8 @@ function foundationDailyCounts(map) {
   return counts;
 }
 
-function foundationReportRows(map) {
-  return (window.FoundationProgress?.historyRows(map?.hotspots || []) || []).map((row) => ({
+function foundationReportRows(map, fromDate = state.foundationReportFrom || "", toDate = state.foundationReportTo || "") {
+  return (window.FoundationProgress?.progressRows(map?.hotspots || [], fromDate, toDate) || []).map((row) => ({
     ...row,
     projectId: map?.jobId || "",
     projectName: jobName(map?.jobId) || map?.name || "",
@@ -6572,14 +6576,19 @@ function foundationReportRows(map) {
 
 function foundationExportFilename(map, extension) {
   const project = (jobName(map?.jobId) || map?.name || "foundation-progress").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return `crewforge-foundation-progress-${project || "project"}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+  const range = state.foundationReportFrom || state.foundationReportTo
+    ? `${state.foundationReportFrom || "start"}-to-${state.foundationReportTo || "present"}`
+    : new Date().toISOString().slice(0, 10);
+  return `crewforge-foundation-progress-${project || "project"}-${range}.${extension}`;
 }
 
 function exportFoundationCsv() {
   const map = foundationMapForJob();
   if (!map) return showToast("Select a configured foundation map first");
+  const reportRows = foundationReportRows(map);
+  if (!reportRows.length) return showToast("No progress was recorded in that date range / No hay avance en esas fechas");
   const headers = ["Project ID", "Project", "Map ID", "Map", "Foundation", "Current status", "Previous status", "New status", "Timestamp ISO", "Timestamp local", "Updated by", "User ID", "Correction"];
-  const rows = foundationReportRows(map).map((row) => [
+  const rows = reportRows.map((row) => [
     row.projectId,
     row.projectName,
     row.mapId,
@@ -6666,27 +6675,23 @@ function renderFoundationProjectWizard() {
   `;
 }
 
-function renderFoundationPrintReport(map, counts, daily, statuses) {
+function foundationReportRangeLabel() {
+  if (!state.foundationReportFrom && !state.foundationReportTo) return "All recorded progress / Todo el avance registrado";
+  return `${state.foundationReportFrom || "Beginning / Inicio"} - ${state.foundationReportTo || "Present / Presente"}`;
+}
+
+function renderFoundationPrintReport(map) {
   if (!map) return "";
   const rows = foundationReportRows(map);
   return `
     <section class="foundation-print-report">
       ${reportHeader("Foundation Progress Report", `${jobName(map.jobId)} · ${map.name}`)}
-      <h3>Current progress / Avance actual</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Status / Estado</th><th>Current / Actual</th><th>Today / Hoy</th></tr></thead>
-          <tbody>
-            <tr><td>Total</td><td>${counts.total || 0}</td><td></td></tr>
-            ${statuses.map((status) => `<tr><td>${escapeHtml(foundationStatusMeta[status]?.label || status)} / ${escapeHtml(foundationStatusMeta[status]?.es || status)}</td><td>${counts[status] || 0}</td><td>${status === "Not Started" ? "" : daily[status] || 0}</td></tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-      <h3 class="section-gap">Timestamp history / Historial con fecha y hora</h3>
+      <p><strong>Date range / Rango de fechas:</strong> ${escapeHtml(foundationReportRangeLabel())}</p>
+      <h3 class="section-gap">Progress made / Avance realizado</h3>
       <div class="table-wrap">
         <table class="foundation-history-report-table">
           <thead><tr><th>Foundation<br><span class="es">Cimentacion</span></th><th>Current status<br><span class="es">Estado actual</span></th><th>Previous<br><span class="es">Anterior</span></th><th>New status<br><span class="es">Estado nuevo</span></th><th>Date and time<br><span class="es">Fecha y hora</span></th><th>Updated by<br><span class="es">Actualizado por</span></th><th>Correction<br><span class="es">Correccion</span></th></tr></thead>
-          <tbody>${rows.map((row) => `<tr><td><strong>${escapeHtml(row.foundationId)}</strong></td><td>${escapeHtml(row.currentStatus)}</td><td>${escapeHtml(row.previousStatus || "-")}</td><td>${escapeHtml(row.newStatus || "-")}</td><td>${row.at ? foundationHistoryTime(row.at) : "No transitions / Sin cambios"}</td><td>${escapeHtml(row.by || "-")}</td><td>${row.correction ? "Yes / Si" : "No"}</td></tr>`).join("")}</tbody>
+          <tbody>${rows.length ? rows.map((row) => `<tr><td><strong>${escapeHtml(row.foundationId)}</strong></td><td>${escapeHtml(row.currentStatus)}</td><td>${escapeHtml(row.previousStatus || "-")}</td><td>${escapeHtml(row.newStatus || "-")}</td><td>${foundationHistoryTime(row.at)}</td><td>${escapeHtml(row.by || "-")}</td><td>${row.correction ? "Yes / Si" : "No"}</td></tr>`).join("") : `<tr><td colspan="7">No progress was recorded in this date range. / No se registro avance en este rango de fechas.</td></tr>`}</tbody>
         </table>
       </div>
     </section>
@@ -6718,13 +6723,15 @@ function renderFoundationProgress() {
           ${canManageFoundationMaps() ? `<button class="primary-action" id="openFoundationProjectWizard" type="button">${t("Add project map", "Agregar mapa")}</button>` : ""}
           ${map && canManageFoundationMaps() ? `<span class="tag">${map.published ? "Published / Publicado" : "Draft / Borrador"}</span>` : ""}
           ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="primary-action no-print" id="exportFoundationCsv" type="button">${t("Export CSV", "Exportar CSV")}</button>` : ""}
-          ${canManageFoundationMaps() && map ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Exit setup", "Salir de configuracion") : t("Map setup", "Configurar mapa")}</button>` : ""}
+          ${canManageFoundationMaps() && map ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Finish editing", "Terminar edicion") : t("Edit map", "Editar mapa")}</button>` : ""}
         </div>
       </div>
       ${renderFoundationProjectWizard()}
       <div class="form-grid compact-form-grid section-gap">
         <label>Wind project<span class="es">Proyecto eolico</span><select id="foundationMapJobSelect">${setOptions(jobs, state.selectedFoundationMapJob, (entry) => entry.name, (entry) => entry.id)}</select></label>
         <label>Foundation details<span class="es">Detalle de cimentacion</span><select id="foundationDetailSelect"><option value="">Select foundation / Seleccione</option>${setOptions((map?.hotspots || []).slice().sort((a, b) => a.foundationId.localeCompare(b.foundationId, undefined, { numeric: true })), state.selectedFoundationId, (entry) => `${entry.foundationId} - ${entry.status}`, (entry) => entry.id)}</select></label>
+        <label>Report from<span class="es">Reporte desde</span><input id="foundationReportFrom" type="date" value="${escapeHtml(state.foundationReportFrom || "")}" /></label>
+        <label>Report through<span class="es">Reporte hasta</span><input id="foundationReportTo" type="date" value="${escapeHtml(state.foundationReportTo || "")}" /></label>
         <div class="foundation-zoom-controls" aria-label="Map zoom controls">
           <button class="icon-button" id="foundationZoomOut" type="button" title="Zoom out">−</button>
           <strong>${Math.round(zoom * 100)}%</strong>
@@ -6773,7 +6780,7 @@ function renderFoundationProgress() {
           <div class="foundation-daily-grid">${statuses.slice(1).map((status) => `<div><span>${escapeHtml(status)}</span><strong>${daily[status] || 0}</strong></div>`).join("")}</div>
         </section>
       `}
-      ${renderFoundationPrintReport(map, counts, daily, statuses)}
+      ${renderFoundationPrintReport(map)}
     </section>
   `;
 }
@@ -8578,6 +8585,14 @@ function bindFoundationProgressEvents() {
       render();
     });
   }
+  ["foundationReportFrom", "foundationReportTo"].forEach((id) => {
+    if (!$(id)) return;
+    $(id).addEventListener("change", (event) => {
+      state[id] = event.target.value;
+      saveState();
+      render();
+    });
+  });
   if ($("createFoundationMap")) $("createFoundationMap").addEventListener("click", createFoundationMapForSelectedJob);
   if ($("toggleFoundationSetup")) {
     $("toggleFoundationSetup").addEventListener("click", () => {

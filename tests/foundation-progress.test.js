@@ -57,6 +57,19 @@ assert.deepEqual(
 assert.equal(historyRows[1].foundationId, "2");
 assert.equal(historyRows[1].at, "");
 
+const datedFoundations = [{
+  id: "T001",
+  foundationId: "T001",
+  status: "Top",
+  history: [
+    { previousStatus: "Not Started", newStatus: "Bottom", at: "2026-10-01T14:00:00.000Z", by: "A" },
+    { previousStatus: "Bottom", newStatus: "Top", at: "2026-10-02T18:00:00.000Z", by: "B" }
+  ]
+}, { id: "T002", foundationId: "T002", status: "Not Started", history: [] }];
+assert.equal(FoundationProgress.progressRows(datedFoundations).length, 2);
+assert.equal(FoundationProgress.progressRows(datedFoundations, "2026-10-02", "2026-10-02").length, 1);
+assert.equal(FoundationProgress.progressRows(datedFoundations, "2026-10-03", "").length, 0);
+
 assert.deepEqual(FoundationProgress.generateMapIds("", 1, 3), ["1", "2", "3"]);
 assert.deepEqual(FoundationProgress.generateMapIds("WTG-", 1, 3), ["WTG-001", "WTG-002", "WTG-003"]);
 assert.deepEqual(FoundationProgress.generateMapIds("T", 4, 2), []);

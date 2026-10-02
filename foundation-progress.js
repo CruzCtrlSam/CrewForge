@@ -114,6 +114,26 @@
       });
   }
 
+  function reportDateBoundary(value, endOfRange = false) {
+    const clean = String(value || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+    const date = new Date(`${clean}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return null;
+    if (endOfRange) date.setDate(date.getDate() + 1);
+    return date.getTime();
+  }
+
+  function progressRows(foundations = [], fromDate = "", toDate = "") {
+    const from = reportDateBoundary(fromDate);
+    const until = reportDateBoundary(toDate, true);
+    return historyRows(foundations).filter((row) => {
+      if (!row.at) return false;
+      const timestamp = new Date(row.at).getTime();
+      if (Number.isNaN(timestamp)) return false;
+      return (from === null || timestamp >= from) && (until === null || timestamp < until);
+    });
+  }
+
   function generateMapIds(prefix, from, to) {
     const start = Number(from);
     const end = Number(to);
@@ -135,5 +155,5 @@
     return errors;
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, generateMapIds, validateMapping };
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
 });
