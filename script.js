@@ -7571,7 +7571,7 @@ function renderCrewSetup(canManage, canEditRates) {
             ${crewMembers
               .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
                 <td>${person.group}</td>
                 <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
@@ -7611,7 +7611,7 @@ function renderShiftSetup(canManage, canEditRates) {
             ${peopleForArea()
               .map((person) => `<tr data-person-directory-row data-search-name="${escapeHtml(person.name.toLowerCase())}">
                 <td><strong>${person.name}</strong></td>
-                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage || person.role === "Foreman" ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
+                <td><select class="table-select" data-person-field="role" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(roleOptionsForArea(state.selectedArea, person.role), person.role)}</select></td>
                 <td><select class="table-select" data-person-field="group" data-person-name="${person.name}" ${!canManage ? "disabled" : ""}>${setOptions(groupOptions(), person.group || groupOptions()[0] || "")}</select></td>
                 <td><span class="tag">${person.drugTestingEligible === false ? "No" : "Yes / Si"}</span></td>
                 <td><div class="money-input compact-money"><span>$</span><input data-person-field="hourlyRate" data-person-name="${person.name}" type="number" min="0" step="0.01" value="${person.hourlyRate || 0}" ${!canEditRates ? "disabled" : ""} /></div></td>
@@ -9105,10 +9105,37 @@ function updatePersonField(event) {
   if (field === "hourlyRate" && !canEditPayRates()) return;
   if (field !== "hourlyRate" && !canManagePeopleSetup()) return;
   const oldValue = person[field];
-  person[field] = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
+  const newValue = field === "hourlyRate" ? Number(event.target.value) || 0 : event.target.value;
+  const demotingCrewForeman = field === "role" && oldValue === "Foreman" && newValue !== "Foreman" && area().mode === "crew";
+  const oldCrew = demotingCrewForeman ? crewNameForForeman(person.name) : "";
+  const assignedCrew = demotingCrewForeman
+    ? peopleForArea().filter((entry) => !sameName(entry.name, person.name) && entry.group === oldCrew)
+    : [];
+  if (assignedCrew.length) {
+    const warning = `Change ${person.name} from Foreman to ${newValue}? ${assignedCrew.length} worker(s) will become unassigned from ${oldCrew}. Existing timesheets will remain unchanged.\n\nCambiar a ${person.name} de Capataz a ${newValue}? ${assignedCrew.length} trabajador(es) quedaran sin cuadrilla. Las hojas de tiempo existentes no cambiaran.`;
+    if (!confirm(warning)) {
+      event.target.value = oldValue;
+      return;
+    }
+  }
+  person[field] = newValue;
+  if (demotingCrewForeman) {
+    assignedCrew.forEach((entry) => {
+      entry.group = "";
+      syncPersonToDrugTesting(entry);
+    });
+    person.group = "";
+    const replacement = foremenForArea().find((entry) => !sameName(entry.name, person.name))?.name || "";
+    if (sameName(state.setupForeman, person.name)) state.setupForeman = replacement;
+    if (sameName(state.currentForeman, person.name)) state.currentForeman = replacement;
+  } else if (field === "role" && newValue === "Foreman" && oldValue !== "Foreman" && area().mode === "crew") {
+    person.group = crewNameForForeman(person.name);
+    state.setupForeman = person.name;
+  }
   if (["group", "role"].includes(field)) syncPersonToDrugTesting(person);
   logActivity("Person updated", { employee: person.name, field, from: oldValue, to: person[field] });
   saveState();
+  if (["group", "role"].includes(field)) render();
   showToast(`${person.name} updated`);
 }
 
