@@ -613,6 +613,47 @@ const trialWindFarmJobs = [
   { id: "wind-pioneer-creek", name: "Pioneer Creek (Takkion)", number: "PIONEER-CREEK", customer: "", start: "", finish: "", wtgs: 0, tons: 0, state: "", town: "", foreman: "", rrFolder: "", supply: "" },
   { id: "wind-big-bend", name: "Big Bend", number: "BIG-BEND", customer: "", start: "", finish: "", wtgs: 0, tons: 0, state: "", town: "", foreman: "", rrFolder: "", supply: "" }
 ];
+const foundationStatusMeta = {
+  "Not Started": { short: "", label: "Not Started", es: "No iniciado" },
+  Started: { short: "S", label: "Started", es: "Iniciado" },
+  Bottom: { short: "B", label: "Bottom", es: "Fondo" },
+  Pedestal: { short: "P", label: "Pedestal", es: "Pedestal" },
+  Top: { short: "T", label: "Top", es: "Superior" },
+  Completed: { short: "✓", label: "Completed", es: "Completado" }
+};
+const laurelFoundationCoordinates = [
+  ["1", 0.126, 0.895], ["2", 0.145, 0.856], ["3", 0.165, 0.817], ["4", 0.184, 0.783],
+  ["5", 0.215, 0.755], ["6", 0.279, 0.744], ["7", 0.303, 0.727], ["8", 0.335, 0.716],
+  ["9", 0.366, 0.696], ["10", 0.403, 0.679], ["11", 0.409, 0.649], ["12", 0.445, 0.636],
+  ["13", 0.471, 0.623], ["14", 0.501, 0.608], ["15", 0.524, 0.594], ["16", 0.549, 0.583],
+  ["17", 0.621, 0.559], ["18", 0.645, 0.540], ["19", 0.655, 0.511], ["20", 0.688, 0.509]
+];
+
+function defaultLaurelFoundationMap() {
+  return {
+    id: "foundation-map-laurel-1126",
+    jobId: "wind-laurel",
+    name: "1126 Laurel Wind",
+    imageSrc: "./assets/laurel-wind-foundation-map.jpg",
+    imageName: "Laurel Wind.jpg.jpeg",
+    imageWidth: 1382,
+    imageHeight: 2117,
+    published: true,
+    createdAt: "2026-10-02T00:00:00.000Z",
+    createdBy: "CrewForge prototype",
+    hotspots: laurelFoundationCoordinates.map(([foundationId, x, y]) => ({
+      id: `laurel-foundation-${foundationId}`,
+      foundationId,
+      x,
+      y,
+      status: "Not Started",
+      updatedAt: "",
+      updatedBy: "",
+      updatedByUserId: "",
+      history: []
+    }))
+  };
+}
 function trialWindFarmJobRecord(job) {
   return {
     ...job,
@@ -830,7 +871,7 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
+const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "foundationMaps", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1228,6 +1269,11 @@ const defaultState = {
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
   selectedEmployeeProfile: "",
+  selectedFoundationMapJob: "wind-laurel",
+  selectedFoundationId: "",
+  foundationMapFilter: "All",
+  foundationMapSetupMode: false,
+  foundationMapZoom: 1.5,
   setupForeman: "Lidio Barron",
   selectedRole: "Foreman",
   currentForeman: "Lidio Barron",
@@ -1247,6 +1293,7 @@ const defaultState = {
     { id: "laurel", name: "Laurel", number: "LAU-2026", customer: "Laurel", area: "rebarFab", jobType: "Commercial", status: "Active" },
     { id: "solar-demo", name: "Solar Piles Demo Job", number: "SP-100", customer: "Solar", area: "solarPiles", status: "Active" }
   ],
+  foundationMaps: [defaultLaurelFoundationMap()],
   sheets: {},
   safetyForms: [],
   employeeIncidents: [],
@@ -1285,12 +1332,66 @@ let state = loadState();
 let toastTimer;
 let suppressHistorySync = false;
 let lastHistoryRoute = "";
+const foundationTapTimes = new Map();
 
 function sharedSnapshot(source = state) {
   return SHARED_STATE_KEYS.reduce((snapshot, key) => {
     snapshot[key] = structuredClone(source[key]);
     return snapshot;
   }, {});
+}
+
+function mergeFoundationMaps(localMaps = [], remoteMaps = []) {
+  const maps = new Map();
+  [...remoteMaps, ...localMaps].forEach((map) => {
+    const mapKey = map.id || map.jobId;
+    if (!mapKey) return;
+    const current = maps.get(mapKey);
+    if (!current) {
+      maps.set(mapKey, structuredClone(map));
+      return;
+    }
+    const mergedMap = { ...current, ...structuredClone(map) };
+    const hotspots = new Map();
+    [...(current.hotspots || []), ...(map.hotspots || [])].forEach((foundation) => {
+      const foundationKey = foundation.id || foundation.foundationId;
+      const existing = hotspots.get(foundationKey);
+      if (!existing) {
+        hotspots.set(foundationKey, structuredClone(foundation));
+        return;
+      }
+      const historyById = new Map();
+      [...(existing.history || []), ...(foundation.history || [])].forEach((entry) => historyById.set(entry.id || `${entry.at}:${entry.deviceId}:${entry.newStatus}`, structuredClone(entry)));
+      const history = [...historyById.values()].sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+      const latest = history.at(-1);
+      const conflicts = [];
+      const byBase = new Map();
+      history.forEach((entry) => {
+        if (!entry.baseUpdatedAt) return;
+        const siblings = byBase.get(entry.baseUpdatedAt) || [];
+        siblings.push(entry);
+        byBase.set(entry.baseUpdatedAt, siblings);
+      });
+      byBase.forEach((entries, baseUpdatedAt) => {
+        const statuses = [...new Set(entries.map((entry) => entry.newStatus))];
+        const devices = [...new Set(entries.map((entry) => entry.deviceId).filter(Boolean))];
+        if (statuses.length > 1 && devices.length > 1) conflicts.push({ baseUpdatedAt, statuses, historyIds: entries.map((entry) => entry.id) });
+      });
+      hotspots.set(foundationKey, {
+        ...existing,
+        ...structuredClone(foundation),
+        status: latest?.newStatus || foundation.status || existing.status || "Not Started",
+        updatedAt: latest?.at || foundation.updatedAt || existing.updatedAt || "",
+        updatedBy: latest?.by || foundation.updatedBy || existing.updatedBy || "",
+        updatedByUserId: latest?.userId || foundation.updatedByUserId || existing.updatedByUserId || "",
+        history,
+        conflicts
+      });
+    });
+    mergedMap.hotspots = [...hotspots.values()];
+    maps.set(mapKey, mergedMap);
+  });
+  return [...maps.values()];
 }
 
 function selectedCompany() {
@@ -1323,6 +1424,7 @@ function cleanCompanyState(company) {
   next.customDepartments = [];
   next.workerPositions = [];
   next.jobs = [];
+  next.foundationMaps = [];
   next.sheets = {};
   next.production = [];
   next.jobLists = { solarClients: [], solarJobNames: [] };
@@ -1400,14 +1502,19 @@ function pushCloud(immediate = false) {
       setSyncStatus("offline", "Offline. Changes are saved on this device.");
       return;
     }
-    const snapshot = sharedSnapshot();
-    const serialized = JSON.stringify(snapshot);
-    if (serialized === lastCloudPush) {
-      if (navigator.onLine) setSyncStatus("synced", "Saved on this device. Shared records are up to date.");
-      return;
-    }
-    lastCloudPush = serialized;
     try {
+      const snapshot = sharedSnapshot();
+      const { data: existing, error: loadError } = await cloud.from("app_state").select("data").eq("id", workspaceId).maybeSingle();
+      if (loadError) throw loadError;
+      snapshot.foundationMaps = mergeFoundationMaps(snapshot.foundationMaps || [], existing?.data?.foundationMaps || []);
+      state.foundationMaps = structuredClone(snapshot.foundationMaps);
+      persistLocalState();
+      const serialized = JSON.stringify(snapshot);
+      if (serialized === lastCloudPush) {
+        setSyncStatus("synced", "Saved on this device. Shared records are up to date.");
+        return;
+      }
+      lastCloudPush = serialized;
       const { error } = await cloud.from("app_state").upsert({
         id: workspaceId,
         data: snapshot,
@@ -1552,6 +1659,11 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
   next.selectedEmployeeProfile = next.selectedEmployeeProfile || "";
+  next.selectedFoundationMapJob = next.selectedFoundationMapJob || "wind-laurel";
+  next.selectedFoundationId = next.selectedFoundationId || "";
+  next.foundationMapFilter = ["All", ...(window.FoundationProgress?.STATUSES || [])].includes(next.foundationMapFilter) ? next.foundationMapFilter : "All";
+  next.foundationMapSetupMode = Boolean(next.foundationMapSetupMode);
+  next.foundationMapZoom = Math.max(0.75, Math.min(4, Number(next.foundationMapZoom) || 1.5));
   next.workerPositions = (next.workerPositions || []).map((position) => ({
     id: String(position.id || "").trim(),
     area: String(position.area || "").trim(),
@@ -1737,6 +1849,36 @@ function upgradeState(next, resetToCurrentWeek = false) {
     documents: job.documents || []
   }));
   if (seedTrialData) seedTrialWindFarmJobs(next);
+  next.foundationMaps = (next.foundationMaps || []).map((map) => ({
+    ...map,
+    id: map.id || `foundation-map-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    jobId: map.jobId || "",
+    name: map.name || "Foundation Progress Map",
+    imageSrc: map.imageSrc || "",
+    imageName: map.imageName || "",
+    imageWidth: Number(map.imageWidth) || 1,
+    imageHeight: Number(map.imageHeight) || 1,
+    published: map.published !== false,
+    hotspots: (map.hotspots || []).map((hotspot) => ({
+      ...hotspot,
+      id: hotspot.id || `foundation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      foundationId: String(hotspot.foundationId || "").trim(),
+      x: window.FoundationProgress?.clampCoordinate(hotspot.x) ?? Math.max(0, Math.min(1, Number(hotspot.x) || 0)),
+      y: window.FoundationProgress?.clampCoordinate(hotspot.y) ?? Math.max(0, Math.min(1, Number(hotspot.y) || 0)),
+      status: window.FoundationProgress?.validStatus(hotspot.status) || "Not Started",
+      updatedAt: hotspot.updatedAt || "",
+      updatedBy: hotspot.updatedBy || "",
+      updatedByUserId: hotspot.updatedByUserId || "",
+      history: Array.isArray(hotspot.history) ? hotspot.history : [],
+      conflicts: Array.isArray(hotspot.conflicts) ? hotspot.conflicts : []
+    })).filter((hotspot) => hotspot.foundationId)
+  })).filter((map) => map.jobId);
+  if (seedTrialData && !next.foundationMaps.some((map) => map.jobId === "wind-laurel")) {
+    next.foundationMaps.push(defaultLaurelFoundationMap());
+  }
+  if (!next.jobs.some((job) => job.id === next.selectedFoundationMapJob && job.jobType === "Wind Farm")) {
+    next.selectedFoundationMapJob = next.foundationMaps[0]?.jobId || next.jobs.find((job) => job.jobType === "Wind Farm")?.id || "";
+  }
   next.people = (next.people || []).map((person) => ({
     ...person,
     name: aliasName(person.name),
@@ -2146,6 +2288,22 @@ function canManageJobDocuments() {
   return ["Admin", "Quality", "Safety"].includes(state.selectedRole);
 }
 
+function canViewFoundationProgress() {
+  return window.FoundationProgress.permissions(state.selectedRole, Boolean(state.auth)).view;
+}
+
+function canUpdateFoundationProgress() {
+  return window.FoundationProgress.permissions(state.selectedRole, Boolean(state.auth)).update;
+}
+
+function canManageFoundationMaps() {
+  return window.FoundationProgress.permissions(state.selectedRole, Boolean(state.auth)).manage;
+}
+
+function hasWindFarmJobsForArea(areaId = state.selectedArea) {
+  return state.jobs.some((job) => job.area === areaId && job.jobType === "Wind Farm" && (job.status || "Active") === "Active");
+}
+
 function canManageTraining() {
   return canManageTrainingResources();
 }
@@ -2210,6 +2368,7 @@ function availableTabs() {
   if (state.selectedRole === "Quality") {
     return [
       ["qualityControl", "Quality Control", "Control de calidad"],
+      ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
       ["audits", "Field Audits", "Auditorias de campo"],
       ["documents", "Documents", "Documentos"],
       ["setup", "People / Departments", "Personas / Departamentos"]
@@ -2218,6 +2377,7 @@ function availableTabs() {
   if (state.selectedRole === "Safety") {
     return [
       ["training", "Training & Competency", "Capacitacion"],
+      ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
       ["audits", "Field Audits", "Auditorias de campo"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
       ["employeeIncidents", "Employee Incidents", "Incidentes de empleados"],
@@ -2229,6 +2389,7 @@ function availableTabs() {
   return [
     ...(isOwnerAccount() ? [["ownerAdmin", "Companies & Accounts", "Companias y cuentas"]] : []),
     ["training", "Training & Competency", "Capacitacion"],
+    ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
     ["audits", "Field Audits", "Auditorias de campo"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
     ...(state.selectedRole === "Admin" ? [["employeeIncidents", "Employee Incidents", "Incidentes de empleados"]] : []),
@@ -3241,6 +3402,7 @@ function renderActiveTab() {
   if (state.activeTab === "bundlePlanner") return renderBundlePlanner();
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
+  if (state.activeTab === "foundationProgress") return renderFoundationProgress();
   if (state.activeTab === "jobs") return renderJobs();
   if (state.activeTab === "qualityControl") return renderQualityControl();
   if (state.activeTab === "reimbursements") return renderReimbursements();
@@ -6300,6 +6462,268 @@ function renderFoundationProductionCard(item) {
   `;
 }
 
+function foundationMapJobs() {
+  return state.jobs
+    .filter((job) => job.area === state.selectedArea && job.jobType === "Wind Farm" && (job.status || "Active") === "Active")
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function foundationMapForJob(jobId = state.selectedFoundationMapJob) {
+  return (state.foundationMaps || []).find((map) => map.jobId === jobId) || null;
+}
+
+function selectedFoundation(map = foundationMapForJob()) {
+  return map?.hotspots?.find((foundation) => foundation.id === state.selectedFoundationId) || null;
+}
+
+function foundationDeviceId() {
+  const key = "crewforge-foundation-device-v1";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
+function foundationStatusClass(status) {
+  return String(status || "Not Started").toLowerCase().replace(/\s+/g, "-");
+}
+
+function foundationDailyCounts(map) {
+  const today = new Date().toDateString();
+  const counts = Object.fromEntries((window.FoundationProgress?.STATUSES || []).slice(1).map((status) => [status, 0]));
+  (map?.hotspots || []).forEach((foundation) => {
+    (foundation.history || []).forEach((entry) => {
+      if (!entry.at || new Date(entry.at).toDateString() !== today || counts[entry.newStatus] === undefined) return;
+      counts[entry.newStatus] += 1;
+    });
+  });
+  return counts;
+}
+
+function foundationHistoryTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function renderFoundationDetails(map, foundation) {
+  if (!foundation) {
+    return `<div class="foundation-details empty-state">Select a foundation marker or use the foundation list to see its status history.<span class="es">Seleccione una cimentacion para ver su historial.</span></div>`;
+  }
+  const history = (foundation.history || []).slice().reverse();
+  return `
+    <section class="foundation-details" aria-live="polite">
+      <div class="split">
+        <div><span class="eyebrow">Foundation / Cimentacion</span><h3>${escapeHtml(foundation.foundationId)}</h3></div>
+        <span class="foundation-status-badge ${foundationStatusClass(foundation.status)}">${escapeHtml(foundationStatusMeta[foundation.status]?.label || foundation.status)}</span>
+      </div>
+      ${(foundation.conflicts || []).length ? `<div class="notice section-gap"><strong>Offline conflict detected.</strong> Review the history and save the correct status.<span class="es">Se detecto un conflicto sin conexion. Revise el historial y guarde el estado correcto.</span></div>` : ""}
+      ${canManageFoundationMaps() ? `
+        <div class="form-grid compact-form-grid section-gap">
+          <label>Correct status<span class="es">Corregir estado</span><select id="foundationCorrectionStatus">${setOptions(window.FoundationProgress.STATUSES, foundation.status)}</select></label>
+          <button class="secondary-action" id="saveFoundationCorrection" type="button" data-foundation-id="${escapeHtml(foundation.id)}">${t("Save correction", "Guardar correccion")}</button>
+          ${state.foundationMapSetupMode ? `<button class="danger-action" id="deleteFoundationHotspot" type="button" data-foundation-id="${escapeHtml(foundation.id)}">${t("Delete hotspot", "Borrar punto")}</button>` : ""}
+        </div>
+      ` : ""}
+      <div class="foundation-history section-gap">
+        <h4>${t("Status history", "Historial de estados")}</h4>
+        ${history.length ? `<ol>${history.map((entry) => `<li><strong>${escapeHtml(entry.newStatus)}</strong><span>${foundationHistoryTime(entry.at)} · ${escapeHtml(entry.by || "Unknown")}${entry.correction ? " · Correction / Correccion" : ""}</span></li>`).join("")}</ol>` : `<div class="empty-state">No progress recorded yet.<span class="es">Todavia no hay avance registrado.</span></div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderFoundationProgress() {
+  if (!canViewFoundationProgress()) return `<section class="panel"><div class="notice">You do not have access to foundation progress.</div></section>`;
+  const jobs = foundationMapJobs();
+  if (!jobs.some((job) => job.id === state.selectedFoundationMapJob)) state.selectedFoundationMapJob = jobs[0]?.id || "";
+  const job = jobById(state.selectedFoundationMapJob);
+  const map = foundationMapForJob();
+  const statuses = window.FoundationProgress?.STATUSES || Object.keys(foundationStatusMeta);
+  const counts = window.FoundationProgress?.counts(map?.hotspots || []) || { total: 0 };
+  const daily = foundationDailyCounts(map);
+  const selected = selectedFoundation(map);
+  const filter = state.foundationMapFilter || "All";
+  const zoom = Math.max(0.75, Math.min(4, Number(state.foundationMapZoom) || 1.5));
+  return `
+    <section class="panel foundation-progress-panel">
+      <div class="split">
+        <div>
+          <h2>${t("Foundation Progress Map", "Mapa de avance de cimentaciones")}</h2>
+          <p class="sub">Tap a foundation once to advance one stage. Press and hold to open details. Dragging the map never changes status.</p>
+          <p class="sub es">Toque una cimentacion una vez para avanzar una etapa. Mantenga presionado para ver detalles.</p>
+        </div>
+        <div class="foundation-map-actions">
+          ${canManageFoundationMaps() ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Exit setup", "Salir de configuracion") : t("Map setup", "Configurar mapa")}</button>` : ""}
+        </div>
+      </div>
+      <div class="form-grid compact-form-grid section-gap">
+        <label>Wind project<span class="es">Proyecto eolico</span><select id="foundationMapJobSelect">${setOptions(jobs, state.selectedFoundationMapJob, (entry) => entry.name, (entry) => entry.id)}</select></label>
+        <label>Foundation details<span class="es">Detalle de cimentacion</span><select id="foundationDetailSelect"><option value="">Select foundation / Seleccione</option>${setOptions((map?.hotspots || []).slice().sort((a, b) => a.foundationId.localeCompare(b.foundationId, undefined, { numeric: true })), state.selectedFoundationId, (entry) => `${entry.foundationId} - ${entry.status}`, (entry) => entry.id)}</select></label>
+        <div class="foundation-zoom-controls" aria-label="Map zoom controls">
+          <button class="icon-button" id="foundationZoomOut" type="button" title="Zoom out">−</button>
+          <strong>${Math.round(zoom * 100)}%</strong>
+          <button class="icon-button" id="foundationZoomIn" type="button" title="Zoom in">+</button>
+          <button class="secondary-action table-action" id="foundationZoomReset" type="button">${t("Fit", "Ajustar")}</button>
+        </div>
+      </div>
+      ${!jobs.length ? `<div class="empty-state section-gap">Add an active Wind Farm job before creating a foundation map.<span class="es">Agregue un proyecto eolico activo primero.</span></div>` : !map ? `
+        <div class="empty-state section-gap">No map is configured for ${escapeHtml(job?.name || "this project")}. ${canManageFoundationMaps() ? `<button class="primary-action" id="createFoundationMap" type="button">${t("Create map", "Crear mapa")}</button>` : "Ask an Admin to configure it."}<span class="es">No hay mapa configurado para este proyecto.</span></div>
+      ` : `
+        ${state.foundationMapSetupMode ? `
+          <div class="notice section-gap foundation-setup-notice">
+            <strong>Admin mapping mode:</strong> tap an empty map location to add a foundation. Drag a marker to reposition it. Select a marker to rename or delete it.<span class="es">Modo de configuracion: toque el mapa para agregar y arrastre puntos para moverlos.</span>
+            <label>Replace map image<span class="es">Reemplazar imagen</span><input id="foundationMapImage" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+          </div>
+        ` : ""}
+        <div class="foundation-counter-grid section-gap">
+          <article class="foundation-counter all"><span>Total</span><strong>${counts.total || 0}</strong></article>
+          ${statuses.map((status) => `<article class="foundation-counter ${foundationStatusClass(status)}"><span>${escapeHtml(foundationStatusMeta[status]?.label || status)}<small>${escapeHtml(foundationStatusMeta[status]?.es || "")}</small></span><strong>${counts[status] || 0}</strong></article>`).join("")}
+        </div>
+        <div class="foundation-filter-bar section-gap" role="group" aria-label="Foundation status filter">
+          ${["All", ...statuses].map((status) => `<button class="foundation-filter ${filter === status ? "active" : ""}" type="button" data-foundation-filter="${status}">${status === "All" ? t("All", "Todos") : `${escapeHtml(foundationStatusMeta[status]?.label || status)}<span class="es">${escapeHtml(foundationStatusMeta[status]?.es || "")}</span>`}</button>`).join("")}
+        </div>
+        <div class="foundation-map-layout section-gap">
+          <div class="foundation-map-viewport" id="foundationMapViewport">
+            <div class="foundation-map-stage ${state.foundationMapSetupMode ? "setup" : ""}" id="foundationMapStage" data-map-id="${escapeHtml(map.id)}" style="width:${zoom * 100}%;aspect-ratio:${map.imageWidth}/${map.imageHeight};">
+              <img src="${escapeHtml(map.imageSrc)}" alt="${escapeHtml(map.name)} site map" draggable="false" />
+              ${(map.hotspots || []).map((foundation) => {
+                const dimmed = filter !== "All" && foundation.status !== filter;
+                const meta = foundationStatusMeta[foundation.status] || foundationStatusMeta["Not Started"];
+                return `<button class="foundation-hotspot ${foundationStatusClass(foundation.status)} ${dimmed ? "dimmed" : ""} ${selected?.id === foundation.id ? "selected" : ""}" type="button" data-foundation-hotspot="${escapeHtml(foundation.id)}" style="left:${foundation.x * 100}%;top:${foundation.y * 100}%;" aria-label="Foundation ${escapeHtml(foundation.foundationId)}, ${escapeHtml(foundation.status)}"><span class="foundation-marker-symbol">${escapeHtml(meta.short)}</span><span class="foundation-marker-id">${escapeHtml(foundation.foundationId)}</span></button>`;
+              }).join("")}
+            </div>
+          </div>
+          ${renderFoundationDetails(map, selected)}
+        </div>
+        <section class="foundation-daily-summary section-gap">
+          <div><h3>${t("Today", "Hoy")}</h3><p class="sub">Stage transitions recorded today.</p></div>
+          <div class="foundation-daily-grid">${statuses.slice(1).map((status) => `<div><span>${escapeHtml(status)}</span><strong>${daily[status] || 0}</strong></div>`).join("")}</div>
+        </section>
+      `}
+    </section>
+  `;
+}
+
+function createFoundationMapForSelectedJob() {
+  if (!canManageFoundationMaps() || !state.selectedFoundationMapJob || foundationMapForJob()) return;
+  const job = jobById(state.selectedFoundationMapJob);
+  state.foundationMaps = state.foundationMaps || [];
+  state.foundationMaps.push({
+    id: `foundation-map-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    jobId: job.id,
+    name: `${job.name} Foundation Map`,
+    imageSrc: "",
+    imageName: "",
+    imageWidth: 1,
+    imageHeight: 1,
+    published: false,
+    createdAt: new Date().toISOString(),
+    createdBy: actorName(),
+    hotspots: []
+  });
+  state.foundationMapSetupMode = true;
+  saveState();
+  render();
+}
+
+function setFoundationStatus(foundationId, requestedStatus, correction = false) {
+  const map = foundationMapForJob();
+  const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
+  if (!map || !foundation) return;
+  if (correction ? !canManageFoundationMaps() : !canUpdateFoundationProgress()) return;
+  const result = window.FoundationProgress.transition(map.hotspots, foundationId, requestedStatus, {
+    at: new Date().toISOString(),
+    by: actorName(),
+    userId: state.auth?.uid || "",
+    correction,
+    deviceId: foundationDeviceId(),
+    baseUpdatedAt: foundation.updatedAt || "",
+    projectId: map.jobId,
+    mapId: map.id
+  });
+  if (!result.changed) {
+    if (foundation.status === "Completed") showToast("Completed foundations cannot advance / Una cimentacion completada no puede avanzar");
+    return;
+  }
+  state.selectedFoundationId = foundation.id;
+  logActivity(correction ? "Foundation status corrected" : "Foundation advanced", { job: jobName(map.jobId), foundation: foundation.foundationId, from: result.historyEntry.previousStatus, to: result.historyEntry.newStatus });
+  saveState();
+  render();
+  showToast(`${foundation.foundationId}: ${foundation.status}`);
+}
+
+function advanceFoundation(foundationId) {
+  const foundation = foundationMapForJob()?.hotspots?.find((entry) => entry.id === foundationId);
+  if (!foundation || !window.FoundationProgress.canAdvance(foundation.status)) {
+    showToast("Completed foundations cannot advance / Una cimentacion completada no puede avanzar");
+    return;
+  }
+  setFoundationStatus(foundationId, window.FoundationProgress.nextStatus(foundation.status));
+}
+
+function deleteFoundationHotspot(foundationId) {
+  if (!canManageFoundationMaps()) return;
+  const map = foundationMapForJob();
+  const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
+  if (!foundation || !confirm(`Delete foundation hotspot ${foundation.foundationId}? Its status history will be removed from this map. / Borrar el punto ${foundation.foundationId}?`)) return;
+  map.hotspots = map.hotspots.filter((entry) => entry.id !== foundationId);
+  state.selectedFoundationId = "";
+  logActivity("Foundation hotspot deleted", { job: jobName(map.jobId), foundation: foundation.foundationId });
+  saveState();
+  render();
+}
+
+function addFoundationHotspotAt(map, x, y) {
+  if (!canManageFoundationMaps() || !state.foundationMapSetupMode) return;
+  const foundationId = prompt("Foundation ID / ID de cimentacion");
+  if (!foundationId?.trim()) return;
+  if (map.hotspots.some((entry) => sameName(entry.foundationId, foundationId))) return showToast("That foundation ID already exists / Ese ID ya existe");
+  const hotspot = {
+    id: `foundation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    foundationId: foundationId.trim(),
+    x: window.FoundationProgress.clampCoordinate(x),
+    y: window.FoundationProgress.clampCoordinate(y),
+    status: "Not Started",
+    updatedAt: "",
+    updatedBy: "",
+    updatedByUserId: "",
+    history: []
+  };
+  map.hotspots.push(hotspot);
+  state.selectedFoundationId = hotspot.id;
+  logActivity("Foundation hotspot added", { job: jobName(map.jobId), foundation: hotspot.foundationId });
+  saveState();
+  render();
+}
+
+function uploadFoundationMapImage(event) {
+  if (!canManageFoundationMaps()) return;
+  const file = event.target.files?.[0];
+  const map = foundationMapForJob();
+  if (!file || !map) return;
+  if (!file.type.startsWith("image/")) return showToast("Choose an image file / Seleccione una imagen");
+  if (file.size > 4 * 1024 * 1024) return showToast("Map images must be 4 MB or smaller for offline storage");
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      map.imageSrc = reader.result;
+      map.imageName = file.name;
+      map.imageWidth = image.naturalWidth || 1;
+      map.imageHeight = image.naturalHeight || 1;
+      logActivity("Foundation map image uploaded", { job: jobName(map.jobId), field: file.name });
+      saveState();
+      render();
+      showToast("Map image saved for offline use");
+    };
+    image.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function renderJobs() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
   const areaOptions = visibleAreaEntries().map(([id, info]) => ({ id, name: info.label }));
@@ -6399,7 +6823,7 @@ function renderJobs() {
                 <td>${admin ? `<input class="table-input" style="min-width:120px;" data-edit-job-customer="${job.id}" value="${escapeHtml(job.customer || "")}" />` : (job.customer || "")}</td>
                 <td><select class="table-select" data-job-foreman="${job.id}" ${!admin ? "disabled" : ""}><option value="">Unassigned</option>${setOptions(foremenForArea().map((person) => person.name), jobAssignedForeman(job))}</select></td>
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
-                <td>${admin && job.jobType === "T-line Substation" ? `<button class="secondary-action table-action" data-edit-codes="${job.id}" type="button">Edit codes<span class="es">Editar codigos</span></button> ` : ""}<button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
+                <td>${job.jobType === "Wind Farm" ? `<button class="table-button" data-open-foundation-map="${job.id}" type="button">Progress map<span class="es">Mapa de avance</span></button> ` : ""}${admin && job.jobType === "T-line Substation" ? `<button class="secondary-action table-action" data-edit-codes="${job.id}" type="button">Edit codes<span class="es">Editar codigos</span></button> ` : ""}<button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
               .join("") : `<tr><td colspan="9"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
           </tbody>
@@ -7790,7 +8214,172 @@ function deleteBundleItem(itemId) {
   showToast("Item deleted");
 }
 
+function bindFoundationProgressEvents() {
+  if (state.activeTab !== "foundationProgress") return;
+  if ($("foundationMapJobSelect")) {
+    $("foundationMapJobSelect").addEventListener("change", (event) => {
+      state.selectedFoundationMapJob = event.target.value;
+      state.selectedFoundationId = "";
+      state.foundationMapFilter = "All";
+      state.foundationMapZoom = 1.5;
+      saveState();
+      render();
+    });
+  }
+  if ($("foundationDetailSelect")) {
+    $("foundationDetailSelect").addEventListener("change", (event) => {
+      state.selectedFoundationId = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  if ($("createFoundationMap")) $("createFoundationMap").addEventListener("click", createFoundationMapForSelectedJob);
+  if ($("toggleFoundationSetup")) {
+    $("toggleFoundationSetup").addEventListener("click", () => {
+      state.foundationMapSetupMode = !state.foundationMapSetupMode;
+      saveState();
+      render();
+    });
+  }
+  if ($("foundationMapImage")) $("foundationMapImage").addEventListener("change", uploadFoundationMapImage);
+  document.querySelectorAll("[data-foundation-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.foundationMapFilter = button.dataset.foundationFilter;
+      saveState();
+      render();
+    });
+  });
+  const setZoom = (value, rerender = true) => {
+    state.foundationMapZoom = Math.max(0.75, Math.min(4, Number(value) || 1));
+    saveState();
+    if (rerender) render();
+  };
+  if ($("foundationZoomIn")) $("foundationZoomIn").addEventListener("click", () => setZoom((state.foundationMapZoom || 1) + 0.25));
+  if ($("foundationZoomOut")) $("foundationZoomOut").addEventListener("click", () => setZoom((state.foundationMapZoom || 1) - 0.25));
+  if ($("foundationZoomReset")) $("foundationZoomReset").addEventListener("click", () => setZoom(1));
+  if ($("saveFoundationCorrection")) {
+    $("saveFoundationCorrection").addEventListener("click", (event) => {
+      setFoundationStatus(event.currentTarget.dataset.foundationId, $("foundationCorrectionStatus")?.value || "Not Started", true);
+    });
+  }
+  if ($("deleteFoundationHotspot")) {
+    $("deleteFoundationHotspot").addEventListener("click", (event) => deleteFoundationHotspot(event.currentTarget.dataset.foundationId));
+  }
+
+  const map = foundationMapForJob();
+  const stage = $("foundationMapStage");
+  const viewport = $("foundationMapViewport");
+  if (!map || !stage || !viewport) return;
+
+  let touchGesture = null;
+  const touchDistance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  viewport.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      touchGesture = { mode: "zoom", distance: touchDistance(event.touches), zoom: state.foundationMapZoom || 1 };
+    } else if (event.touches.length === 1) {
+      touchGesture = { mode: "pan", x: event.touches[0].clientX, y: event.touches[0].clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+    }
+  }, { passive: true });
+  viewport.addEventListener("touchmove", (event) => {
+    if (!touchGesture) return;
+    if (touchGesture.mode === "zoom" && event.touches.length === 2) {
+      event.preventDefault();
+      const zoom = Math.max(0.75, Math.min(4, touchGesture.zoom * (touchDistance(event.touches) / touchGesture.distance)));
+      state.foundationMapZoom = zoom;
+      stage.style.width = `${zoom * 100}%`;
+    } else if (touchGesture.mode === "pan" && event.touches.length === 1) {
+      event.preventDefault();
+      viewport.scrollLeft = touchGesture.left - (event.touches[0].clientX - touchGesture.x);
+      viewport.scrollTop = touchGesture.top - (event.touches[0].clientY - touchGesture.y);
+    }
+  }, { passive: false });
+  viewport.addEventListener("touchend", () => {
+    if (touchGesture?.mode === "zoom") saveState();
+    touchGesture = null;
+  }, { passive: true });
+  viewport.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    setZoom((state.foundationMapZoom || 1) + (event.deltaY < 0 ? 0.25 : -0.25));
+  }, { passive: false });
+
+  stage.addEventListener("click", (event) => {
+    if (!state.foundationMapSetupMode || event.target.closest("[data-foundation-hotspot]")) return;
+    const rect = stage.getBoundingClientRect();
+    addFoundationHotspotAt(map, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
+  });
+
+  document.querySelectorAll("[data-foundation-hotspot]").forEach((button) => {
+    let start = null;
+    let moved = false;
+    let longPressed = false;
+    let longPressTimer = null;
+    button.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      state.selectedFoundationId = button.dataset.foundationHotspot;
+      saveState();
+      render();
+    });
+    button.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      start = { x: event.clientX, y: event.clientY, at: Date.now() };
+      moved = false;
+      longPressed = false;
+      button.setPointerCapture?.(event.pointerId);
+      if (!state.foundationMapSetupMode) {
+        longPressTimer = setTimeout(() => {
+          if (moved) return;
+          longPressed = true;
+          state.selectedFoundationId = button.dataset.foundationHotspot;
+          saveState();
+          render();
+        }, 650);
+      }
+    });
+    button.addEventListener("pointermove", (event) => {
+      if (!start) return;
+      const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+      if (movement > 8) {
+        moved = true;
+        clearTimeout(longPressTimer);
+      }
+      if (!state.foundationMapSetupMode || !moved) return;
+      const rect = stage.getBoundingClientRect();
+      button.style.left = `${window.FoundationProgress.clampCoordinate((event.clientX - rect.left) / rect.width) * 100}%`;
+      button.style.top = `${window.FoundationProgress.clampCoordinate((event.clientY - rect.top) / rect.height) * 100}%`;
+    });
+    button.addEventListener("pointerup", (event) => {
+      event.stopPropagation();
+      clearTimeout(longPressTimer);
+      if (!start || longPressed) return;
+      const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+      const foundation = map.hotspots.find((entry) => entry.id === button.dataset.foundationHotspot);
+      if (!foundation) return;
+      if (state.foundationMapSetupMode) {
+        if (moved) {
+          const rect = stage.getBoundingClientRect();
+          foundation.x = window.FoundationProgress.clampCoordinate((event.clientX - rect.left) / rect.width);
+          foundation.y = window.FoundationProgress.clampCoordinate((event.clientY - rect.top) / rect.height);
+          logActivity("Foundation hotspot moved", { job: jobName(map.jobId), foundation: foundation.foundationId });
+        }
+        state.selectedFoundationId = foundation.id;
+        saveState();
+        render();
+        return;
+      }
+      const now = Date.now();
+      const lastAccepted = foundationTapTimes.get(foundation.id) || 0;
+      if (moved || !window.FoundationProgress.shouldAcceptTap(lastAccepted, now, movement)) return;
+      foundationTapTimes.set(foundation.id, now);
+      advanceFoundation(foundation.id);
+    });
+    button.addEventListener("pointercancel", () => clearTimeout(longPressTimer));
+    button.addEventListener("click", (event) => event.preventDefault());
+  });
+}
+
 function bindTabEvents() {
+  bindFoundationProgressEvents();
   document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => window.print()));
   document.querySelectorAll("[data-date-shift]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -8208,6 +8797,17 @@ function bindTabEvents() {
 
   document.querySelectorAll("[data-delete-job]").forEach((button) => {
     button.addEventListener("click", () => deleteJob(button.dataset.deleteJob));
+  });
+
+  document.querySelectorAll("[data-open-foundation-map]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFoundationMapJob = button.dataset.openFoundationMap;
+      state.selectedFoundationId = "";
+      state.activeTab = "foundationProgress";
+      saveState();
+      render();
+      syncHistory();
+    });
   });
 
   document.querySelectorAll("[data-job-foreman]").forEach((select) => {
