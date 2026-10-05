@@ -4,7 +4,7 @@ const COMPANY_STATE_PREFIX = `${STORAGE_KEY}:company:`;
 
 const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const coreDrugTestingDepartments = ["Rebar", "Solar Piles", "Skids"];
+const coreDrugTestingDepartments = ["Rebar Fabrication", "Rebar Installation", "Solar Piles", "Skids"];
 const drugTestingShifts = ["Day", "Night"];
 
 const areas = {
@@ -1270,7 +1270,7 @@ const defaultState = {
   selectedSafetyFormType: "JHA",
   selectedTrainingCourse: "",
   selectedTrainingTab: "library",
-  selectedDrugTestingDepartment: "Rebar",
+  selectedDrugTestingDepartment: "Rebar Fabrication",
   selectedAuditJob: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
@@ -1669,8 +1669,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
   next.selectedTrainingTab = next.selectedTrainingTab || "library";
-  next.selectedDrugTestingDepartment = next.selectedDrugTestingDepartment || "Rebar";
-  if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar";
+  if (!next.selectedDrugTestingDepartment || next.selectedDrugTestingDepartment === "Rebar") next.selectedDrugTestingDepartment = "Rebar Fabrication";
+  if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar Fabrication";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
@@ -1728,19 +1728,29 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.drugTestingRoster = (next.drugTestingRoster || []).map((employee) => ({
     id: employee.id || `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: String(employee.name || "").trim(),
-    department: drugTestingDepartmentNames(next, true).includes(employee.department) ? employee.department : "Rebar",
+    department: canonicalDrugTestingDepartment(employee, next),
     shift: ["Day", "Night"].includes(employee.shift) ? employee.shift : "Day",
     active: employee.active !== false,
     addedAt: employee.addedAt || "",
     addedBy: employee.addedBy || ""
   })).filter((employee) => employee.name);
-  next.drugTestingDraws = (next.drugTestingDraws || []).map((draw) => ({
-    ...draw,
-    employees: Array.isArray(draw.employees) ? draw.employees : [],
-    department: draw.department || "All departments",
-    shift: draw.shift || "All shifts",
-    count: Number(draw.count) || draw.employees?.length || 0
-  }));
+  next.drugTestingDraws = (next.drugTestingDraws || []).map((draw) => {
+    const employees = (Array.isArray(draw.employees) ? draw.employees : []).map((employee) => ({
+      ...employee,
+      department: canonicalDrugTestingDepartment(employee, next)
+    }));
+    const rebarDepartments = [...new Set(employees.map((employee) => employee.department).filter((department) => department.startsWith("Rebar ")))];
+    const department = draw.department === "Rebar"
+      ? rebarDepartments.length === 1 ? rebarDepartments[0] : "Rebar Fabrication / Rebar Installation"
+      : draw.department || "All departments";
+    return {
+      ...draw,
+      employees,
+      department,
+      shift: draw.shift || "All shifts",
+      count: Number(draw.count) || employees.length
+    };
+  });
   next.qualityChecks = next.qualityChecks || [];
   next.reimbursementRequests = (next.reimbursementRequests || []).map((request) => ({
     ...request,
@@ -3487,7 +3497,8 @@ function drugTestingDepartmentNames(target = state, includeArchived = false) {
 }
 
 function drugDepartmentForArea(areaId) {
-  if (["rebarFab", "rebarInstall"].includes(areaId)) return "Rebar";
+  if (areaId === "rebarFab") return "Rebar Fabrication";
+  if (areaId === "rebarInstall") return "Rebar Installation";
   if (areaId === "solarPiles") return "Solar Piles";
   if (areaId === "skids") return "Skids";
   if (areas[areaId]?.custom) return areas[areaId].label;
@@ -3495,12 +3506,20 @@ function drugDepartmentForArea(areaId) {
 }
 
 function peopleAreaForDrugDepartment(department, target = state) {
-  if (department === "Rebar") return "rebarFab";
+  if (["Rebar", "Rebar Fabrication"].includes(department)) return "rebarFab";
+  if (department === "Rebar Installation") return "rebarInstall";
   if (department === "Solar Piles") return "solarPiles";
   if (department === "Skids") return "skids";
   const custom = (target.customDepartments || []).find((entry) => !entry.archived && entry.label === department);
   if (custom) return custom.id;
   return "";
+}
+
+function canonicalDrugTestingDepartment(employee, target = state) {
+  const department = String(employee?.department || "").trim();
+  if (department && department !== "Rebar" && drugTestingDepartmentNames(target, true).includes(department)) return department;
+  const person = (target.people || []).find((entry) => entry.drugTestingId === employee?.id || sameName(entry.name, employee?.name));
+  return drugDepartmentForArea(person?.area) || "Rebar Fabrication";
 }
 
 function drugShiftForPerson(person) {
@@ -3600,7 +3619,7 @@ function drugTestingShiftOptions(selected, includeAll = false) {
 
 function renderDrugTesting() {
   if (!["Safety", "Admin"].includes(state.selectedRole)) return renderDashboard();
-  const selectedDepartment = state.selectedDrugTestingDepartment || "Rebar";
+  const selectedDepartment = state.selectedDrugTestingDepartment || "Rebar Fabrication";
   const roster = (state.drugTestingRoster || []).slice().sort((a, b) => a.name.localeCompare(b.name));
   const departmentRoster = roster.filter((employee) => employee.department === selectedDepartment);
   const activeCount = departmentRoster.filter((employee) => employee.active).length;
@@ -3714,7 +3733,7 @@ function selectDrugTestingDepartment(department) {
 
 function addDrugTestingEmployees() {
   if (!["Safety", "Admin"].includes(state.selectedRole)) return;
-  const department = $("drugRosterDepartment")?.value || state.selectedDrugTestingDepartment || "Rebar";
+  const department = $("drugRosterDepartment")?.value || state.selectedDrugTestingDepartment || "Rebar Fabrication";
   const shift = $("drugEmployeeShift")?.value || "Day";
   const names = ($("drugEmployeeNames")?.value || "").split(/\n|;/).map((name) => name.trim()).filter(Boolean);
   if (!names.length) {
@@ -8163,7 +8182,7 @@ function setCustomDepartmentArchived(departmentId, archived) {
     state.people.forEach((person) => {
       if (person.area === departmentId) person.drugTestingEligible = false;
     });
-    if (state.selectedDrugTestingDepartment === department.label) state.selectedDrugTestingDepartment = "Rebar";
+    if (state.selectedDrugTestingDepartment === department.label) state.selectedDrugTestingDepartment = "Rebar Fabrication";
     if (state.selectedArea === departmentId) {
       state.selectedArea = "";
       state.activeTab = "training";
