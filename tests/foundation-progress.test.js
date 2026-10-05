@@ -34,6 +34,8 @@ assert.equal(FoundationProgress.clampCoordinate(1.4), 1);
 assert.equal(FoundationProgress.clampCoordinate(0.42), 0.42);
 assert.deepEqual(FoundationProgress.positionFromClient({ left: 100, top: 200, width: 400, height: 200 }, 300, 250), { x: 0.5, y: 0.25 });
 assert.deepEqual(FoundationProgress.positionFromClient({ left: 100, top: 200, width: 400, height: 200 }, 50, 500), { x: 0, y: 1 });
+assert.deepEqual(FoundationProgress.mergeDeletedHotspotIds(["pin-1", "pin-2"], ["pin-2", "pin-3", ""]), ["pin-1", "pin-2", "pin-3"]);
+assert.deepEqual(FoundationProgress.excludeDeletedHotspots([{ id: "pin-1" }, { id: "pin-2" }], ["pin-1"]), [{ id: "pin-2" }]);
 assert.equal(FoundationProgress.shouldAcceptTap(1000, 1100, 2), false);
 assert.equal(FoundationProgress.shouldAcceptTap(1000, 1800, 2), true);
 assert.equal(FoundationProgress.shouldAcceptTap(0, 1000, 20), false);

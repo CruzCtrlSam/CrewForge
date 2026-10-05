@@ -1362,9 +1362,12 @@ function mergeFoundationMaps(localMaps = [], remoteMaps = []) {
       return;
     }
     const mergedMap = { ...current, ...structuredClone(map) };
+    const deletedHotspotIds = window.FoundationProgress.mergeDeletedHotspotIds(current.deletedHotspotIds, map.deletedHotspotIds);
+    const deletedHotspotSet = new Set(deletedHotspotIds);
     const hotspots = new Map();
     [...(current.hotspots || []), ...(map.hotspots || [])].forEach((foundation) => {
       const foundationKey = foundation.id || foundation.foundationId;
+      if (deletedHotspotSet.has(String(foundationKey))) return;
       const existing = hotspots.get(foundationKey);
       if (!existing) {
         hotspots.set(foundationKey, structuredClone(foundation));
@@ -1398,7 +1401,8 @@ function mergeFoundationMaps(localMaps = [], remoteMaps = []) {
         conflicts
       });
     });
-    mergedMap.hotspots = [...hotspots.values()];
+    mergedMap.hotspots = window.FoundationProgress.excludeDeletedHotspots([...hotspots.values()], deletedHotspotIds);
+    mergedMap.deletedHotspotIds = deletedHotspotIds;
     maps.set(mapKey, mergedMap);
   });
   return [...maps.values()];
@@ -1877,7 +1881,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
     imageHeight: Number(map.imageHeight) || 1,
     published: map.published !== false,
     expectedFoundationIds: Array.isArray(map.expectedFoundationIds) ? map.expectedFoundationIds.map((id) => String(id)) : [],
-    hotspots: (map.hotspots || []).map((hotspot) => ({
+    deletedHotspotIds: window.FoundationProgress?.mergeDeletedHotspotIds(map.deletedHotspotIds) || [],
+    hotspots: window.FoundationProgress.excludeDeletedHotspots(map.hotspots || [], map.deletedHotspotIds).map((hotspot) => ({
       ...hotspot,
       id: hotspot.id || `foundation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       foundationId: String(hotspot.foundationId || "").trim(),
@@ -6806,6 +6811,7 @@ function createFoundationMapForSelectedJob() {
     expectedFoundationIds: [...(job.foundationIds || [])],
     createdAt: new Date().toISOString(),
     createdBy: actorName(),
+    deletedHotspotIds: [],
     hotspots: []
   });
   state.foundationMapSetupMode = true;
@@ -6903,6 +6909,7 @@ async function createFoundationProjectMap() {
       expectedFoundationIds: foundationIds,
       createdAt: new Date().toISOString(),
       createdBy: actorName(),
+      deletedHotspotIds: [],
       hotspots: []
     };
     state.jobs.push(job);
@@ -7010,17 +7017,22 @@ function advanceFoundation(foundationId) {
   setFoundationStatus(foundationId, window.FoundationProgress.nextStatus(foundation.status));
 }
 
-function deleteFoundationHotspot(foundationId) {
+async function deleteFoundationHotspot(foundationId) {
   if (!canManageFoundationMaps()) return;
   const map = foundationMapForJob();
   const foundation = map?.hotspots?.find((entry) => entry.id === foundationId);
   if (!foundation || !confirm(`Delete foundation hotspot ${foundation.foundationId}? Its status history will be removed from this map. / Borrar el punto ${foundation.foundationId}?`)) return;
+  map.deletedHotspotIds = window.FoundationProgress.mergeDeletedHotspotIds(map.deletedHotspotIds, [foundation.id || foundation.foundationId]);
   map.hotspots = map.hotspots.filter((entry) => entry.id !== foundationId);
   if (state.foundationPinMoveId === foundationId) state.foundationPinMoveId = "";
   state.selectedFoundationId = "";
   logActivity("Foundation hotspot deleted", { job: jobName(map.jobId), foundation: foundation.foundationId });
-  saveState();
+  pendingRemoteState = null;
+  persistLocalState();
+  setSyncStatus("pending", "Deleting foundation pin...");
+  await pushCloud(true);
   render();
+  showToast(`${foundation.foundationId} pin deleted / punto borrado`);
 }
 
 async function moveFoundationHotspotAt(map, foundationId, x, y) {

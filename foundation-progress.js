@@ -32,6 +32,15 @@
     };
   }
 
+  function mergeDeletedHotspotIds(...lists) {
+    return [...new Set(lists.flatMap((list) => Array.isArray(list) ? list : []).map((id) => String(id || "").trim()).filter(Boolean))];
+  }
+
+  function excludeDeletedHotspots(hotspots = [], deletedIds = []) {
+    const deleted = new Set(mergeDeletedHotspotIds(deletedIds));
+    return (Array.isArray(hotspots) ? hotspots : []).filter((hotspot) => !deleted.has(String(hotspot?.id || hotspot?.foundationId || "")));
+  }
+
   function counts(foundations = []) {
     return foundations.reduce(
       (totals, foundation) => {
@@ -164,5 +173,5 @@
     return errors;
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, positionFromClient, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, positionFromClient, mergeDeletedHotspotIds, excludeDeletedHotspots, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
 });
