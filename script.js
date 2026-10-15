@@ -3245,13 +3245,18 @@ function renderShell() {
   }
   const tabs = availableTabs();
   if (!tabs.some(([id]) => id === state.activeTab)) state.activeTab = tabs[0][0];
+  const activeTab = tabs.find(([id]) => id === state.activeTab) || ["", "Dashboard", "Panel"];
 
   $("app").innerHTML = `
     <div class="shell ${isFieldEntryMode() ? "foreman-shell" : "office-shell"}">
-      <aside class="sidebar">
-        <div class="brand">
-          <img class="brand-logo" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge logo" />
-          <div><strong>${appName}</strong><span>${appTagline}</span><small>${isFieldEntryMode() ? "Field view" : "Office view"}</small></div>
+      <button class="navigation-scrim" id="navigationScrim" type="button" aria-label="Close navigation menu"></button>
+      <aside class="sidebar" id="appNavigation" aria-label="Main navigation">
+        <div class="sidebar-heading">
+          <div class="brand">
+            <img class="brand-logo" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge logo" />
+            <div><strong>${appName}</strong><span>${appTagline}</span><small>${isFieldEntryMode() ? "Field view" : "Office view"}</small></div>
+          </div>
+          <button class="navigation-close-button" id="navigationCloseButton" type="button" aria-label="Close navigation menu" title="Close menu">&times;</button>
         </div>
         <div class="area-badge">
           <span>Department filter</span>
@@ -3275,14 +3280,20 @@ function renderShell() {
       <main class="workspace">
         ${renderSyncBanner()}
         <header class="topbar">
-          <div class="topbar-title">
-            <div class="topbar-brandlockup">
-              <img src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
-              <strong>${appName}</strong>
+          <div class="topbar-heading">
+            <button class="navigation-menu-button" id="navigationMenuButton" type="button" aria-label="Open navigation menu" aria-controls="appNavigation" aria-expanded="false" title="Menu">
+              <span></span><span></span><span></span>
+            </button>
+            <div class="topbar-title">
+              <div class="topbar-brandlockup">
+                <img src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+                <strong>${appName}</strong>
+              </div>
+              <p class="eyebrow">Safety recordkeeping · ${area().label}</p>
+              <h1>${activeTab[1]}</h1>
+              <p class="mobile-section-translation">${activeTab[2]}</p>
+              ${state.selectedRole === "Foreman" ? `<p class="sub">${escapeHtml(state.auth?.name || "Foreman")} · ${t("Foundation progress", "Avance de cimentaciones")}</p>` : isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
             </div>
-            <p class="eyebrow">Safety recordkeeping · ${area().label}</p>
-            <h1>${tabs.find(([id]) => id === state.activeTab)?.[1] || "Dashboard"}</h1>
-            ${state.selectedRole === "Foreman" ? `<p class="sub">${escapeHtml(state.auth?.name || "Foreman")} · ${t("Foundation progress", "Avance de cimentaciones")}</p>` : isFieldEntryMode() ? `<p class="sub">${state.currentForeman} · ${selectedWeekStart()} to ${state.selectedWeek}</p>` : ""}
           </div>
           <div class="top-actions">
             <div class="login-pill">Viewing as<span class="es">Viendo como</span><strong>${state.auth?.name || state.selectedRole}</strong><small>${state.selectedRole}</small></div>
@@ -3297,7 +3308,34 @@ function renderShell() {
     </div>
   `;
 
-  document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => changeTab(button.dataset.tab)));
+  const shell = document.querySelector(".shell");
+  const menuButton = $("navigationMenuButton");
+  const closeNavigation = () => {
+    shell?.classList.remove("navigation-open");
+    document.body.classList.remove("navigation-drawer-open");
+    menuButton?.setAttribute("aria-expanded", "false");
+  };
+  const openNavigation = () => {
+    shell?.classList.add("navigation-open");
+    document.body.classList.add("navigation-drawer-open");
+    menuButton?.setAttribute("aria-expanded", "true");
+    $("navigationCloseButton")?.focus();
+  };
+  menuButton?.addEventListener("click", openNavigation);
+  $("navigationCloseButton")?.addEventListener("click", () => {
+    closeNavigation();
+    menuButton?.focus();
+  });
+  $("navigationScrim")?.addEventListener("click", closeNavigation);
+  shell?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !shell.classList.contains("navigation-open")) return;
+    closeNavigation();
+    menuButton?.focus();
+  });
+  document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => {
+    closeNavigation();
+    changeTab(button.dataset.tab);
+  }));
   $("changeArea").addEventListener("click", () => {
     state.selectedArea = "";
     state.showIntro = false;
