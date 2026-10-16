@@ -2435,7 +2435,6 @@ function availableTabs() {
     return [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]];
   }
   return [
-    ...(isOwnerAccount() ? [["ownerAdmin", "Companies & Accounts", "Companias y cuentas"]] : []),
     ["training", "Training & Competency", "Capacitacion"],
     ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
     ["audits", "Field Audits", "Auditorias de campo"],
@@ -2898,6 +2897,7 @@ function changeTab(tab) {
 function routeFromState() {
   if (!state.companyVerified) return "company";
   if (!state.auth) return "login";
+  if (isOwnerAccount() && state.activeTab === "ownerAdmin") return "owner";
   if (state.showIntro) return "intro";
   if (!state.selectedArea) return "areas";
   return `${state.selectedArea}/${state.activeTab || "dashboard"}`;
@@ -2928,6 +2928,10 @@ function applyRoute(route = "") {
     state.auth = null;
     state.showIntro = false;
     state.activeTab = "dashboard";
+  } else if (route === "owner" && isOwnerAccount()) {
+    state.showIntro = false;
+    state.selectedArea = "";
+    state.activeTab = "ownerAdmin";
   } else if (route === "intro" && state.auth) {
     state.showIntro = true;
     state.selectedArea = "";
@@ -3121,9 +3125,14 @@ async function loginWithPassword() {
   state.auth = account;
   state.loginEmailDraft = email;
   state.selectedRole = account.role;
-  state.selectedArea = account.role === "Foreman" ? account.area : "";
   state.showIntro = false;
-  state.activeTab = account.role === "Foreman" ? "foundationProgress" : account.role === "Quality" ? "qualityControl" : "training";
+  if (account.isOwner) {
+    state.selectedArea = "";
+    state.activeTab = "ownerAdmin";
+  } else {
+    state.selectedArea = account.role === "Foreman" ? account.area : "";
+    state.activeTab = account.role === "Foreman" ? "foundationProgress" : account.role === "Quality" ? "qualityControl" : "training";
+  }
   persistLocalState();
   await initCloud();
   render();
@@ -3214,7 +3223,10 @@ function renderGate() {
         </div>
         <h1>${t("Choose department filter", "Escoja departamento")}</h1>
         <p class="sub">Safety and audits are available in every department. This choice tags the records you create.</p>
-        <button class="text-button gate-logout" id="gateLogout" type="button">Change company<span class="es">Cambiar compania</span></button>
+        <div class="gate-header-actions">
+          ${isOwnerAccount() ? `<button class="text-button" id="gateOwnerConsole" type="button">Owner console<span class="es">Consola del propietario</span></button>` : ""}
+          <button class="text-button gate-logout" id="gateLogout" type="button">Change company<span class="es">Cambiar compania</span></button>
+        </div>
       </section>
       <section class="area-grid">
         ${visibleAreaEntries()
@@ -3235,7 +3247,28 @@ function renderGate() {
     </main>
   `;
   document.querySelectorAll("[data-area]").forEach((button) => button.addEventListener("click", () => setArea(button.dataset.area)));
+  $("gateOwnerConsole")?.addEventListener("click", openOwnerConsole);
   $("gateLogout").addEventListener("click", changeCompany);
+}
+
+function openOwnerConsole() {
+  if (!isOwnerAccount()) return;
+  state.selectedArea = "";
+  state.showIntro = false;
+  state.activeTab = "ownerAdmin";
+  saveState();
+  render();
+  syncHistory();
+}
+
+function openOwnerCompanyWorkspace() {
+  if (!isOwnerAccount()) return;
+  state.selectedArea = "";
+  state.showIntro = false;
+  state.activeTab = "training";
+  saveState();
+  render();
+  syncHistory();
 }
 
 function renderShell() {
@@ -3272,6 +3305,7 @@ function renderShell() {
             <strong>${state.auth?.name || state.selectedRole}</strong>
             <small>${state.selectedRole}</small>
           </div>
+          ${isOwnerAccount() ? `<button class="text-button" id="ownerConsoleLink" type="button">Exit to owner console<span class="es">Salir a consola del propietario</span></button>` : ""}
           <button class="text-button" id="changeArea" type="button">Change area<span class="es">Cambiar area</span></button>
           <button class="text-button" id="logout" type="button">Log out<span class="es">Salir</span></button>
           ${state.selectedRole === "Foreman" ? "" : `<button class="text-button" id="resetDemo" type="button">Reset demo<span class="es">Reiniciar demo</span></button>`}
@@ -3343,6 +3377,7 @@ function renderShell() {
     render();
     syncHistory();
   });
+  $("ownerConsoleLink")?.addEventListener("click", openOwnerConsole);
   $("logout").addEventListener("click", logoutUser);
   $("resetDemo")?.addEventListener("click", () => {
     const auth = state.auth;
@@ -3508,8 +3543,38 @@ function renderOwnerAdmin() {
   `;
 }
 
+function renderOwnerConsole() {
+  if (!isOwnerAccount()) return renderLogin();
+  $("app").innerHTML = `
+    <main class="owner-console-screen">
+      <div class="owner-console-shell">
+        <header class="owner-console-header">
+          <div class="owner-console-identity">
+            <div class="gate-logo-stack owner-console-logo">
+              <img class="gate-icon" src="${asset("./assets/crewforge-app-icon.png")}" alt="CrewForge icon" />
+              <img class="gate-wordmark" src="${asset("./assets/crewforge-logo-lockup.png")}" alt="CrewForge" />
+            </div>
+            <div>
+              <p class="eyebrow">Platform administration <span class="es">Administracion de la plataforma</span></p>
+              <h1>Owner Console</h1>
+              <p class="sub">Create companies and manage their accounts outside every company workspace.</p>
+              <p class="sub es">Cree companias y administre sus cuentas fuera de cada espacio de compania.</p>
+            </div>
+          </div>
+          <div class="owner-console-actions">
+            <button class="secondary-action" id="ownerOpenWorkspace" type="button">Open ${escapeHtml(state.companyName || "Valor Steel")} workspace<span class="es">Abrir espacio de ${escapeHtml(state.companyName || "Valor Steel")}</span></button>
+            <button class="text-button" id="ownerConsoleLogout" type="button">Sign out<span class="es">Salir</span></button>
+          </div>
+        </header>
+        <div class="owner-console-content">${renderOwnerAdmin()}</div>
+      </div>
+    </main>
+  `;
+  $("ownerOpenWorkspace")?.addEventListener("click", openOwnerCompanyWorkspace);
+  $("ownerConsoleLogout")?.addEventListener("click", changeCompany);
+}
+
 function renderActiveTab() {
-  if (state.activeTab === "ownerAdmin") return renderOwnerAdmin();
   if (state.activeTab === "bundlePlanner") return renderBundlePlanner();
   if (state.activeTab === "timesheet") return renderTimesheet();
   if (state.activeTab === "production") return renderProduction();
@@ -11556,6 +11621,7 @@ function render() {
   if (publicTrainingId) renderPublicTraining();
   else if (!state.companyVerified) renderCompanyLogin();
   else if (!state.auth) renderLogin();
+  else if (isOwnerAccount() && state.activeTab === "ownerAdmin") renderOwnerConsole();
   else if (state.showIntro) renderIntro();
   else if (!state.selectedArea) renderGate();
   else renderShell();

@@ -18,6 +18,99 @@
   --shadow: 0 14px 38px rgba(7, 20, 38, 0.18);
 }
 
+.owner-console-screen {
+  min-height: 100vh;
+  padding: 24px;
+  background: #071a2d;
+}
+
+.owner-console-shell {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+
+.owner-console-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px;
+  color: #fff;
+  border: 1px solid #af8422;
+  border-radius: 8px;
+  background: #0b2035;
+}
+
+.owner-console-identity {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.owner-console-logo {
+  flex: 0 0 auto;
+}
+
+.owner-console-header h1 {
+  margin: 2px 0 6px;
+  color: #fff;
+}
+
+.owner-console-header .eyebrow {
+  color: #f6c344;
+}
+
+.owner-console-header .sub {
+  color: #d7e0e7;
+}
+
+.owner-console-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.owner-console-header .text-button {
+  color: #f6c344;
+}
+
+.owner-console-content {
+  display: grid;
+  gap: 18px;
+}
+
+.gate-header-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .owner-console-screen {
+    padding: 12px;
+  }
+
+  .owner-console-header,
+  .owner-console-identity {
+    display: grid;
+  }
+
+  .owner-console-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .owner-console-actions button {
+    width: 100%;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
