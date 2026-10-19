@@ -621,6 +621,15 @@ const foundationStatusMeta = {
   Top: { short: "T", label: "Top", es: "Superior" },
   Completed: { short: "✓", label: "Completed", es: "Completado" }
 };
+const foundationJobIdAliases = {
+  longspur: "wind-longspur",
+  "four-horizons-wind": "wind-four-horizons-ira"
+};
+
+function canonicalFoundationJobId(jobId) {
+  const normalized = String(jobId || "").trim();
+  return foundationJobIdAliases[normalized] || normalized;
+}
 const laurelFoundationCoordinates = [
   ["1", 0.1252, 0.9041], ["2", 0.1512, 0.8852], ["3", 0.1657, 0.8625], ["4", 0.1838, 0.8422],
   ["5", 0.2221, 0.8238], ["6", 0.2699, 0.8455], ["7", 0.2931, 0.8309], ["8", 0.3256, 0.8266],
@@ -1356,12 +1365,13 @@ function mergeFoundationMaps(localMaps = [], remoteMaps = []) {
   [...remoteMaps, ...localMaps].forEach((map) => {
     const mapKey = map.id || map.jobId;
     if (!mapKey) return;
+    const normalizedMap = { ...structuredClone(map), jobId: canonicalFoundationJobId(map.jobId) };
     const current = maps.get(mapKey);
     if (!current) {
-      maps.set(mapKey, structuredClone(map));
+      maps.set(mapKey, normalizedMap);
       return;
     }
-    const mergedMap = { ...current, ...structuredClone(map) };
+    const mergedMap = { ...current, ...normalizedMap };
     const deletedHotspotIds = window.FoundationProgress.mergeDeletedHotspotIds(current.deletedHotspotIds, map.deletedHotspotIds);
     const deletedHotspotSet = new Set(deletedHotspotIds);
     const hotspots = new Map();
@@ -1883,7 +1893,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.foundationMaps = (next.foundationMaps || []).map((map) => ({
     ...map,
     id: map.id || `foundation-map-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    jobId: map.jobId || "",
+    jobId: canonicalFoundationJobId(map.jobId),
     name: map.name || "Foundation Progress Map",
     imageSrc: map.imageSrc || "",
     imageName: map.imageName || "",
@@ -1920,6 +1930,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
     });
     laurelMap.coordinateRevision = 2;
   }
+  next.selectedFoundationMapJob = canonicalFoundationJobId(next.selectedFoundationMapJob);
   if (!next.jobs.some((job) => job.id === next.selectedFoundationMapJob && job.jobType === "Wind Farm")) {
     next.selectedFoundationMapJob = next.foundationMaps[0]?.jobId || next.jobs.find((job) => job.jobType === "Wind Farm")?.id || "";
   }
@@ -6654,13 +6665,14 @@ function foundationMapJobs() {
       if (job.area !== state.selectedArea || job.jobType !== "Wind Farm" || (job.status || "Active") !== "Active") return false;
       if (!window.FoundationProgress.canAccessJob(state.selectedRole, job.id, state.auth?.jobIds || [])) return false;
       if (canManage) return true;
-      return Boolean((state.foundationMaps || []).find((map) => map.jobId === job.id && map.published));
+      return Boolean((state.foundationMaps || []).find((map) => canonicalFoundationJobId(map.jobId) === job.id && map.published));
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function foundationMapForJob(jobId = state.selectedFoundationMapJob) {
-  const map = (state.foundationMaps || []).find((entry) => entry.jobId === jobId) || null;
+  const canonicalJobId = canonicalFoundationJobId(jobId);
+  const map = (state.foundationMaps || []).find((entry) => canonicalFoundationJobId(entry.jobId) === canonicalJobId) || null;
   return map && (map.published || canManageFoundationMaps()) ? map : null;
 }
 
