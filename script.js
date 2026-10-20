@@ -763,6 +763,17 @@ const appName = "CrewForge";
 const appTagline = "Crew time and job progress, forged into one.";
 const assetVersion = "66";
 const asset = (path) => `${path}?v=${assetVersion}`;
+const companyPrintBranding = {
+  VALOR: { name: "Valor Steel", logo: "./assets/valor-steel-logo.png" }
+};
+function currentCompanyPrintBrand() {
+  const companyCode = String(state?.companyCode || "").toUpperCase();
+  const configuredBrand = companyPrintBranding[companyCode];
+  return {
+    name: configuredBrand?.name || state?.companyName || companyDirectory[companyCode]?.name || appName,
+    logo: configuredBrand?.logo || "./assets/crewforge-logo-lockup.png"
+  };
+}
 const areaArtwork = {
   rebarFab: asset("./assets/crewforge-rebar-fabrication.png"),
   solarPiles: asset("./assets/crewforge-solar-piles.png"),
@@ -11257,6 +11268,8 @@ function printAccidentReport(record) {
   const accident = record.accident || {};
   const win = window.open("", "_blank");
   if (!win) return showToast("Allow popups to print this accident report");
+  const companyBrand = currentCompanyPrintBrand();
+  const companyLogoUrl = new URL(companyBrand.logo, window.location.href).href;
   const files = record.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments</li>";
   const location = record.location || accident.location || jobName(record.jobId);
   const ynRows = accidentYesNoFields.map(([key, en, es]) => `
@@ -11274,7 +11287,10 @@ function printAccidentReport(record) {
         <title>Accident Report - ${escapeHtml(accident.employee || location)}</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 28px; color: #0b1828; }
-          header { border-bottom: 3px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
+          header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; border-bottom: 3px solid #0b1828; padding-bottom: 12px; margin-bottom: 18px; }
+          .report-heading { min-width: 0; }
+          .company-name { margin: 0 0 5px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+          .company-logo { display: block; width: 190px; max-width: 32%; max-height: 72px; object-fit: contain; object-position: right top; }
           h1 { margin: 0; font-size: 28px; }
           h2 { margin: 20px 0 8px; font-size: 16px; text-transform: uppercase; }
           p, li, td, th { font-size: 13px; line-height: 1.42; }
@@ -11285,13 +11301,17 @@ function printAccidentReport(record) {
           .box { border: 1px solid #9aa5ad; padding: 10px; min-height: 52px; }
           .line-box { border: 1px solid #9aa5ad; padding: 10px; min-height: 90px; white-space: pre-wrap; }
           .muted { color: #53606a; font-weight: 700; }
-          @media print { button { display: none; } body { margin: 18px; } }
+          @media print { button { display: none; } body { margin: 18px; } .company-logo { width: 170px; } }
         </style>
       </head>
       <body>
         <header>
-          <h1>Injury / Accident Report</h1>
-          <p class="muted">${escapeHtml(location)} · ${escapeHtml(record.date)} · ${escapeHtml(accident.status || "Draft")}</p>
+          <div class="report-heading">
+            <p class="company-name">${escapeHtml(companyBrand.name)}</p>
+            <h1>Injury / Accident Report</h1>
+            <p class="muted">${escapeHtml(location)} · ${escapeHtml(record.date)} · ${escapeHtml(accident.status || "Draft")}</p>
+          </div>
+          <img class="company-logo" src="${escapeHtml(companyLogoUrl)}" alt="${escapeHtml(companyBrand.name)} logo" />
         </header>
         <h2>Worker Information</h2>
         <div class="grid">

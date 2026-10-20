@@ -1,4 +1,4 @@
-const CACHE_NAME = "crewforge-v163";
+const CACHE_NAME = "crewforge-v164";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./assets/crewforge-app-icon.png",
   "./assets/crewforge-logo-lockup.png",
+  "./assets/valor-steel-logo.png",
   "./assets/crewforge-favicon.png",
   "./assets/laurel-wind-foundation-map.jpg",
   "./assets/accident-body-front.png",
