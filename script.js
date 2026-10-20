@@ -651,6 +651,44 @@ const fieldAuditChecks = [
   ["rigging", "Rigging inspected", "Rigging inspeccionado"],
   ["client", "Client requirements met", "Requisitos del cliente cumplidos"]
 ];
+const fieldAuditTypes = {
+  standard: { id: "standard", label: "Quick Field Audit", labelEs: "Auditoria rapida de campo" },
+  reliableRebarGeneral: { id: "reliable-rebar-general", label: "General Safety Inspection", labelEs: "Inspeccion general de seguridad" }
+};
+const reliableRebarSafetyInspectionChecks = [
+  { code: "S.170", en: "Are workers adequately protected for cold conditions, with wind breaks where possible, reduced exposure, and a buddy system at 10 degrees F or below?", es: "Los trabajadores estan protegidos adecuadamente contra el frio, con barreras contra el viento cuando sea posible, menor exposicion y sistema de companeros a 10 grados F o menos?" },
+  { code: "S.442", en: "Is safe and adequate access provided to all work areas, including elevated platforms and subgrade work locations?", es: "Se proporciona acceso seguro y adecuado a todas las areas de trabajo, incluidas plataformas elevadas y areas bajo nivel?" },
+  { code: "S.443", en: "Are project access points designated and provided with overhead protection where necessary?", es: "Los puntos de acceso al proyecto estan designados y cuentan con proteccion superior cuando es necesario?" },
+  { code: "S.444", en: "Are interior and exterior walking paths clear and free of slip and trip hazards?", es: "Los caminos peatonales interiores y exteriores estan despejados y libres de riesgos de resbalones y tropiezos?" },
+  { code: "S.446", en: "Has the lift plan been reviewed with the crew and made available in the work area, with lifting operations and approved redlined deviations following the plan?", es: "El plan de izaje fue revisado con la cuadrilla y esta disponible en el area, y las operaciones y desviaciones aprobadas y marcadas siguen el plan?" },
+  { code: "S.447", en: "Are taglines used on all loads?", es: "Se usan cuerdas guia en todas las cargas?" },
+  { code: "S.450", en: "Is the swing radius properly marked and barricaded?", es: "El radio de giro esta debidamente marcado y acordonado?" },
+  { code: "S.453", en: "Are temporary systems protected from damage, including elevated cords and distribution units kept out of equipment traffic?", es: "Los sistemas temporales estan protegidos contra danos, incluidos cables elevados y unidades de distribucion fuera del trafico de equipos?" },
+  { code: "S.455", en: "Has all equipment been inspected before use?", es: "Todo el equipo fue inspeccionado antes de usarse?" },
+  { code: "S.456", en: "Is equipment used according to the manufacturer's recommendations, including use of seat belts?", es: "El equipo se usa de acuerdo con las recomendaciones del fabricante, incluido el uso de cinturones de seguridad?" },
+  { code: "S.457", en: "Are phones, tablets, and earbuds not being used while operating equipment, UTVs, or vehicles?", es: "Se evita el uso de telefonos, tabletas y audifonos al operar equipos, UTV o vehiculos?" },
+  { code: "S.460", en: "Are workers at height protected from falls, and has the fall-protection plan been reviewed with the crews?", es: "Los trabajadores en altura estan protegidos contra caidas y el plan de proteccion contra caidas fue revisado con las cuadrillas?" },
+  { code: "S.461", en: "Are all holes properly covered, marked, and secured?", es: "Todos los huecos estan debidamente cubiertos, marcados y asegurados?" },
+  { code: "S.462", en: "Is alternate protection provided when guardrails or hole covers are removed, and are they promptly replaced before the area is left unattended?", es: "Se proporciona proteccion alterna al retirar barandales o cubiertas y se reinstalan antes de dejar el area sin vigilancia?" },
+  { code: "S.463", en: "Are primary and secondary controls in place to prevent falling objects and protect workers at lower levels?", es: "Existen controles primarios y secundarios para prevenir objetos que caen y proteger a trabajadores en niveles inferiores?" },
+  { code: "S.465", en: "Are all hot-work permit requirements being met, and does the fire watch have no other duties when required?", es: "Se cumplen todos los requisitos del permiso de trabajo en caliente y el vigilante de incendios no tiene otras tareas cuando se requiere?" },
+  { code: "S.466", en: "Are portable fire extinguishers properly distributed, current on inspections, and accessible without obstructions or trip hazards?", es: "Los extintores portatiles estan bien distribuidos, con inspecciones vigentes y accesibles sin obstrucciones ni riesgos de tropiezo?" },
+  { code: "S.467", en: "Are compressed fuel-gas cylinders secured, properly stored, and separated from oxygen cylinders in ventilated areas?", es: "Los cilindros de gas combustible estan asegurados, almacenados correctamente y separados de los cilindros de oxigeno en areas ventiladas?" },
+  { code: "S.469", en: "Are only approved hand and power tools on site, used correctly and for their intended purpose?", es: "Solo hay herramientas manuales y electricas aprobadas y se usan correctamente para su proposito previsto?" },
+  { code: "S.470", en: "Are tools in safe working condition with guards, handles, dust collection, and other safety features installed and functioning?", es: "Las herramientas estan en condiciones seguras, con guardas, mangos, recoleccion de polvo y otros dispositivos instalados y funcionando?" },
+  { code: "S.471", en: "Is the proper PPE being used for each tool, including hearing protection and face shields when required?", es: "Se usa el EPP adecuado para cada herramienta, incluida proteccion auditiva y careta cuando se requiere?" },
+  { code: "S.472", en: "Do all workers have access to and know the location of chemical Safety Data Sheets?", es: "Todos los trabajadores tienen acceso y conocen la ubicacion de las Hojas de Datos de Seguridad de productos quimicos?" },
+  { code: "S.473", en: "Are chemical containers properly stored and labeled, with secondary containment present and free of leaks?", es: "Los recipientes quimicos estan almacenados y etiquetados correctamente, con contencion secundaria presente y sin fugas?" },
+  { code: "S.474", en: "Is drinking water reasonably close to the work, with adequate shade or shelter and appropriate break frequency?", es: "Hay agua potable cerca del trabajo, sombra o refugio adecuado y descansos con frecuencia apropiada?" },
+  { code: "S.475", en: "Are adequate debris containers available, work areas cleaned as work progresses, and containers emptied before overfilling?", es: "Hay recipientes adecuados para desechos, se limpian las areas conforme avanza el trabajo y se vacian antes de sobrellenarse?" },
+  { code: "S.476", en: "Are all work areas adequately illuminated?", es: "Todas las areas de trabajo tienen iluminacion adecuada?" },
+  { code: "S.477", en: "Has material-handling equipment and rigging been inspected by a competent person before use?", es: "El equipo de manejo de materiales y rigging fue inspeccionado por una persona competente antes de usarse?" },
+  { code: "S.478", en: "Is material weighing 50 pounds or more handled by more than one team member or by mechanical means?", es: "El material de 50 libras o mas se maneja entre mas de una persona o con medios mecanicos?" },
+  { code: "S.479", en: "Are pretask plan cards in the work area, complete, and signed by the crew?", es: "Las tarjetas del plan previo a la tarea estan en el area, completas y firmadas por la cuadrilla?" },
+  { code: "S.480", en: "Does the work being performed follow the plan?", es: "El trabajo que se realiza sigue el plan?" },
+  { code: "S.481", en: "Are rebar, pipe, conduit, fence posts, and similar materials capped or guarded to prevent impalement hazards?", es: "La varilla, tuberia, conduit, postes y materiales similares estan protegidos o cubiertos para evitar riesgos de empalamiento?" },
+  { code: "S.482", en: "Are swing gates or chains installed at all access points so workers do not climb over or through guardrails?", es: "Hay puertas abatibles o cadenas en todos los accesos para que nadie tenga que pasar por encima o entre barandales?" }
+];
 const installationJobTypes = ["Wind Farm", "T-line Substation", "Data Center"];
 const fabricationJobTypes = [...installationJobTypes, "Commercial"];
 const windFoundationComponents = ["Bottom Mat", "Top", "Pedestal"];
@@ -1350,6 +1388,7 @@ const defaultState = {
   selectedTrainingTab: "library",
   selectedDrugTestingDepartment: "Rebar Fabrication",
   selectedAuditJob: "",
+  selectedFieldAuditType: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
   selectedEmployeeProfile: "",
@@ -1752,6 +1791,7 @@ function upgradeState(next, resetToCurrentWeek = false) {
   if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar Fabrication";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
+  next.selectedFieldAuditType = next.selectedFieldAuditType || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
   next.selectedEmployeeProfile = next.selectedEmployeeProfile || "";
@@ -7928,9 +7968,92 @@ function incidentAttachmentRow(recordId, file) {
   `;
 }
 
+function availableFieldAuditTypes() {
+  const types = [fieldAuditTypes.standard];
+  if (state.selectedArea === "rebarInstall") types.push(fieldAuditTypes.reliableRebarGeneral);
+  return types;
+}
+
+function activeFieldAuditType() {
+  const types = availableFieldAuditTypes();
+  const selected = types.find((type) => type.id === state.selectedFieldAuditType);
+  return selected || (state.selectedArea === "rebarInstall" ? fieldAuditTypes.reliableRebarGeneral : fieldAuditTypes.standard);
+}
+
+function renderFieldAuditTemplateSelect() {
+  const selected = activeFieldAuditType();
+  return `
+    <label>Audit template<span class="es">Plantilla de auditoria</span>
+      <select id="fieldAuditTypeSelect">
+        ${availableFieldAuditTypes().map((type) => `<option value="${type.id}" ${type.id === selected.id ? "selected" : ""}>${escapeHtml(type.label)} / ${escapeHtml(type.labelEs)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderStandardFieldAuditForm() {
+  return `
+    <div class="audit-check-grid section-gap">
+      ${fieldAuditChecks.map(([key, en, es]) => `
+        <label class="audit-choice">
+          <span>${en}<span class="es">${es}</span></span>
+          <select data-audit-check="${key}">
+            ${setOptions(["Yes", "No", "N/A"], "N/A")}
+          </select>
+        </label>
+      `).join("")}
+    </div>
+    <label class="section-gap">Notes / corrective action<span class="es">Notas / accion correctiva</span><textarea id="auditNotes" placeholder="What was found, what was corrected, who was notified"></textarea></label>
+  `;
+}
+
+function renderReliableRebarAuditForm() {
+  return `
+    <div class="notice section-gap">
+      <strong>Reliable Rebar General Safety Inspection</strong><br>
+      Choose Meets Expectations, Needs Improvement, or N/A. A finding and corrective action are required for every item marked Needs Improvement.
+      <span class="es">Elija Cumple las expectativas, Necesita mejorar o N/A. Cada punto marcado Necesita mejorar requiere un hallazgo y una accion correctiva.</span>
+    </div>
+    <div class="form-grid section-gap">
+      <label>Inspector company<span class="es">Compania del inspector</span><input id="auditInspectorCompany" value="${escapeHtml(state.companyName || "Valor Steel")}" /></label>
+      <label>Inspection location<span class="es">Lugar de inspeccion</span><input id="auditLocation" placeholder="Jobsite area, turbine, or GPS location" /></label>
+      <label class="wide-field">Other attendees<span class="es">Otros asistentes</span><input id="auditAttendees" placeholder="Names or none / Nombres o ninguno" /></label>
+    </div>
+    <div class="reliable-audit-list section-gap">
+      ${reliableRebarSafetyInspectionChecks.map((item, index) => `
+        <article class="reliable-audit-item">
+          <div class="reliable-audit-question">
+            <span class="tag">${escapeHtml(item.code)}</span>
+            <span class="audit-item-number">${index + 1} / ${reliableRebarSafetyInspectionChecks.length}</span>
+            <strong>${escapeHtml(item.en)}</strong>
+            <span class="es reliable-audit-es">${escapeHtml(item.es)}</span>
+          </div>
+          <label>Result<span class="es">Resultado</span>
+            <select data-reliable-audit-answer="${escapeHtml(item.code)}">
+              <option value="Meets Expectations">Meets Expectations / Cumple las expectativas</option>
+              <option value="Needs Improvement">Needs Improvement / Necesita mejorar</option>
+              <option value="N/A" selected>N/A</option>
+            </select>
+          </label>
+          <label>Finding<span class="es">Hallazgo</span><textarea data-reliable-audit-finding="${escapeHtml(item.code)}" placeholder="Describe the condition found / Describa la condicion"></textarea></label>
+          <label>Corrective action<span class="es">Accion correctiva</span><textarea data-reliable-audit-action="${escapeHtml(item.code)}" placeholder="How was the issue addressed? / Como se corrigio?"></textarea></label>
+        </article>
+      `).join("")}
+    </div>
+    <label class="section-gap">Overall notes<span class="es">Notas generales</span><textarea id="auditNotes" placeholder="Additional observations, notifications, or follow-up"></textarea></label>
+    <label class="section-gap">Inspector signature<span class="es">Firma del inspector</span>
+      <div class="signature-pad-wrap">
+        <canvas id="auditSignaturePad" class="signature-pad" width="720" height="180" aria-label="Inspector signature"></canvas>
+        <button class="secondary-action table-action" id="clearAuditSignature" type="button">Clear signature<span class="es">Borrar firma</span></button>
+      </div>
+    </label>
+  `;
+}
+
 function renderFieldAudits() {
   const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
+  const selectedType = activeFieldAuditType();
   const audits = state.fieldAudits.filter((audit) => audit.area === state.selectedArea && (!selectedJob || audit.jobId === selectedJob.id));
   return `
     <section class="panel">
@@ -7944,22 +8067,13 @@ function renderFieldAudits() {
       ${!jobs.length ? `<div class="notice">Add a job first so audits can be tied to the site. <span class="es">Agregue un trabajo primero.</span></div>` : `
         <div class="form-grid section-gap">
           <label>Department<span class="es">Departamento</span><input value="${escapeHtml(area().label)}" disabled /></label>
+          ${renderFieldAuditTemplateSelect()}
           <label>Job site<span class="es">Sitio de trabajo</span><select id="auditJobSelect">${setOptions(jobs, selectedJob?.id || "", (job) => job.name, (job) => job.id)}</select></label>
           <label>Date<span class="es">Fecha</span><input id="auditDate" type="date" value="${dateInputValue(state.selectedWeek, state.selectedWeek)}" /></label>
           <label>Inspector / user<span class="es">Inspector / usuario</span><input id="auditUser" value="${escapeHtml(actorName())}" /></label>
           <label>Evidence photos/files<span class="es">Fotos / evidencia</span><input id="auditFiles" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
         </div>
-        <div class="audit-check-grid section-gap">
-          ${fieldAuditChecks.map(([key, en, es]) => `
-            <label class="audit-choice">
-              <span>${en}<span class="es">${es}</span></span>
-              <select data-audit-check="${key}">
-                ${setOptions(["Yes", "No", "N/A"], "N/A")}
-              </select>
-            </label>
-          `).join("")}
-        </div>
-        <label class="section-gap">Notes / corrective action<span class="es">Notas / accion correctiva</span><textarea id="auditNotes" placeholder="What was found, what was corrected, who was notified"></textarea></label>
+        ${selectedType.id === fieldAuditTypes.reliableRebarGeneral.id ? renderReliableRebarAuditForm() : renderStandardFieldAuditForm()}
         <div class="action-row section-gap">
           <button class="primary-action" id="saveFieldAudit" type="button" ${canSubmit ? "" : "disabled"}>${t("Save audit", "Guardar auditoria")}</button>
         </div>
@@ -7972,6 +8086,7 @@ function renderFieldAudits() {
 }
 
 function fieldAuditCard(audit) {
+  if (audit.auditType === fieldAuditTypes.reliableRebarGeneral.id) return reliableRebarAuditCard(audit);
   const summary = auditStatusSummary(audit.checks);
   const files = audit.files || [];
   return `
@@ -7987,6 +8102,43 @@ function fieldAuditCard(audit) {
       <ul class="audit-result-list">
         ${fieldAuditChecks.map(([key, en, es]) => `<li><strong>${escapeHtml(auditCheckValue(audit.checks?.[key]))}</strong> · ${en}<span class="es">${es}</span></li>`).join("")}
       </ul>
+      ${files.length ? `<div class="attachment-list">${files.map((file) => attachmentRow("audit", audit.id, file)).join("")}</div>` : ""}
+    </article>
+  `;
+}
+
+function reliableRebarAuditSummary(responses = {}) {
+  return reliableRebarSafetyInspectionChecks.reduce((totals, item) => {
+    const value = responses[item.code]?.answer || "N/A";
+    if (value === "Meets Expectations") totals.meets += 1;
+    else if (value === "Needs Improvement") totals.needsImprovement += 1;
+    else totals.na += 1;
+    return totals;
+  }, { meets: 0, needsImprovement: 0, na: 0 });
+}
+
+function reliableRebarAuditCard(audit) {
+  const summary = reliableRebarAuditSummary(audit.responses);
+  const files = audit.files || [];
+  const findings = reliableRebarSafetyInspectionChecks.filter((item) => audit.responses?.[item.code]?.answer === "Needs Improvement");
+  return `
+    <article class="audit-card reliable-audit-card">
+      <header>
+        <div>
+          <strong>${escapeHtml(audit.templateName || fieldAuditTypes.reliableRebarGeneral.label)}</strong>
+          <span>${escapeHtml(jobName(audit.jobId))} · ${escapeHtml(audit.date)} · ${escapeHtml(audit.createdBy || "")}</span>
+        </div>
+        <span class="tag">${summary.meets} Meets · ${summary.needsImprovement} Improve · ${summary.na} N/A</span>
+      </header>
+      <p>${escapeHtml(audit.location || "No inspection location")} · ${escapeHtml(audit.inspectorCompany || "")}</p>
+      ${audit.notes ? `<p>${escapeHtml(audit.notes)}</p>` : ""}
+      <details>
+        <summary>${findings.length} findings requiring follow-up / hallazgos</summary>
+        ${findings.length ? `<div class="reliable-audit-findings">${findings.map((item) => `<div><strong>${escapeHtml(item.code)} · ${escapeHtml(item.en)}</strong><p><b>Finding:</b> ${escapeHtml(audit.responses[item.code]?.finding || "")}</p><p><b>Action:</b> ${escapeHtml(audit.responses[item.code]?.action || "")}</p></div>`).join("")}</div>` : `<p>No items marked Needs Improvement.</p>`}
+      </details>
+      <div class="action-row section-gap">
+        <button class="secondary-action table-action" data-print-audit="${audit.id}" type="button">Print / Save PDF<span class="es">Imprimir / Guardar PDF</span></button>
+      </div>
       ${files.length ? `<div class="attachment-list">${files.map((file) => attachmentRow("audit", audit.id, file)).join("")}</div>` : ""}
     </article>
   `;
@@ -9339,7 +9491,18 @@ function bindTabEvents() {
       render();
     });
   }
+  if ($("fieldAuditTypeSelect")) {
+    $("fieldAuditTypeSelect").addEventListener("change", (event) => {
+      state.selectedFieldAuditType = event.target.value;
+      saveState();
+      render();
+    });
+  }
+  bindSignaturePad("auditSignaturePad", "clearAuditSignature");
   if ($("saveFieldAudit")) $("saveFieldAudit").addEventListener("click", saveFieldAuditRecord);
+  document.querySelectorAll("[data-print-audit]").forEach((button) => {
+    button.addEventListener("click", () => printFieldAudit(button.dataset.printAudit));
+  });
   document.querySelectorAll("[data-audit-file]").forEach((button) => {
     button.addEventListener("click", () => openRecordFile("fieldAudits", button.dataset.auditFile, button.dataset.fileId));
   });
@@ -11175,20 +11338,45 @@ async function saveFieldAuditRecord() {
   const jobId = $("auditJobSelect")?.value;
   const job = state.jobs.find((entry) => entry.id === jobId);
   if (!job) return showToast("Choose a job first");
-  const files = await filesToStoredAttachments($("auditFiles")?.files);
-  if (!files) return;
+  const auditType = activeFieldAuditType();
   const checks = {};
   document.querySelectorAll("[data-audit-check]").forEach((input) => {
     checks[input.dataset.auditCheck] = input.value || "N/A";
   });
-  const summary = auditStatusSummary(checks);
+  const responses = {};
+  if (auditType.id === fieldAuditTypes.reliableRebarGeneral.id) {
+    for (const item of reliableRebarSafetyInspectionChecks) {
+      const answer = document.querySelector(`[data-reliable-audit-answer="${item.code}"]`)?.value || "N/A";
+      const finding = document.querySelector(`[data-reliable-audit-finding="${item.code}"]`)?.value.trim() || "";
+      const action = document.querySelector(`[data-reliable-audit-action="${item.code}"]`)?.value.trim() || "";
+      if (answer === "Needs Improvement" && (!finding || !action)) {
+        return showToast(`${item.code} needs a finding and corrective action`);
+      }
+      if (finding && !action) return showToast(`${item.code} needs a corrective action for the finding`);
+      responses[item.code] = { answer, finding, action };
+    }
+    if (!$("auditInspectorCompany")?.value.trim() || !$("auditLocation")?.value.trim()) {
+      return showToast("Inspector company and inspection location are required");
+    }
+    if (!signaturePadHasInk("auditSignaturePad")) return showToast("Inspector signature is required");
+  }
+  const files = await filesToStoredAttachments($("auditFiles")?.files);
+  if (!files) return;
+  const summary = auditType.id === fieldAuditTypes.reliableRebarGeneral.id ? reliableRebarAuditSummary(responses) : auditStatusSummary(checks);
   const record = {
     id: `audit-${Date.now()}`,
     area: state.selectedArea,
     jobId,
+    auditType: auditType.id,
+    templateName: auditType.id === fieldAuditTypes.reliableRebarGeneral.id ? "Reliable Rebar General Safety Inspection" : auditType.label,
     date: $("auditDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
     createdBy: $("auditUser")?.value.trim() || actorName(),
     checks,
+    responses,
+    inspectorCompany: $("auditInspectorCompany")?.value.trim() || "",
+    location: $("auditLocation")?.value.trim() || "",
+    attendees: $("auditAttendees")?.value.trim() || "",
+    signature: signaturePadHasInk("auditSignaturePad") ? $("auditSignaturePad").toDataURL("image/png") : "",
     notes: $("auditNotes")?.value.trim() || "",
     files,
     createdAt: timestamp(),
@@ -11196,10 +11384,77 @@ async function saveFieldAuditRecord() {
   };
   state.fieldAudits.unshift(record);
   state.selectedAuditJob = jobId;
-  logActivity("Field audit saved", { area: state.selectedArea, job: job.name, field: `${summary.yes} Yes / ${summary.no} No / ${summary.na} N/A` });
+  const summaryText = auditType.id === fieldAuditTypes.reliableRebarGeneral.id
+    ? `${summary.meets} Meets / ${summary.needsImprovement} Needs Improvement / ${summary.na} N/A`
+    : `${summary.yes} Yes / ${summary.no} No / ${summary.na} N/A`;
+  logActivity("Field audit saved", { area: state.selectedArea, job: job.name, field: `${auditType.label}: ${summaryText}` });
   saveState();
   render();
   showToast("Field audit saved");
+}
+
+function printFieldAudit(recordId) {
+  const audit = state.fieldAudits.find((entry) => entry.id === recordId);
+  if (!audit || audit.auditType !== fieldAuditTypes.reliableRebarGeneral.id) return;
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print this audit");
+  const companyBrand = currentCompanyPrintBrand();
+  const logoUrl = new URL(companyBrand.logo, window.location.href).href;
+  const summary = reliableRebarAuditSummary(audit.responses);
+  const rows = reliableRebarSafetyInspectionChecks.map((item) => {
+    const response = audit.responses?.[item.code] || { answer: "N/A", finding: "", action: "" };
+    return `<tr>
+      <td><strong>${escapeHtml(item.code)}</strong></td>
+      <td>${escapeHtml(item.en)}<small>${escapeHtml(item.es)}</small></td>
+      <td>${escapeHtml(response.answer)}</td>
+      <td>${escapeHtml(response.finding || "")}</td>
+      <td>${escapeHtml(response.action || "")}</td>
+    </tr>`;
+  }).join("");
+  const files = audit.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments / Sin archivos adjuntos</li>";
+  win.document.write(`<!doctype html>
+    <html><head><title>${escapeHtml(audit.templateName)} - ${escapeHtml(jobName(audit.jobId))}</title><style>
+      @page { size: landscape; margin: 0.45in; }
+      body { font-family: Arial, sans-serif; margin: 24px; color: #0b1828; }
+      header { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; border-bottom: 3px solid #0b1828; padding-bottom: 12px; }
+      h1 { margin: 0; font-size: 24px; } h2 { margin: 18px 0 8px; font-size: 15px; text-transform: uppercase; }
+      p, li, td, th { font-size: 10px; line-height: 1.35; }
+      .company-name { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+      .company-logo { width: 170px; max-height: 66px; object-fit: contain; object-position: right top; }
+      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+      .meta div { border: 1px solid #9aa5ad; padding: 8px; min-height: 34px; }
+      .meta strong { display: block; font-size: 9px; text-transform: uppercase; }
+      .summary { font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #9aa5ad; padding: 6px; text-align: left; vertical-align: top; }
+      th { background: #0b3654; color: #fff; }
+      td:nth-child(1) { width: 6%; } td:nth-child(2) { width: 38%; } td:nth-child(3) { width: 14%; } td:nth-child(4), td:nth-child(5) { width: 21%; }
+      td small { display: block; margin-top: 3px; color: #26769a; font-weight: 700; }
+      tr { break-inside: avoid; }
+      .signature-block { display: grid; grid-template-columns: minmax(250px, 420px) 1fr; gap: 28px; align-items: end; margin-top: 22px; }
+      .signature-block img { display: block; max-width: 320px; max-height: 80px; border-bottom: 1px solid #0b1828; }
+      .signature-line { border-bottom: 1px solid #0b1828; min-height: 62px; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+      <header><div><p class="company-name">${escapeHtml(companyBrand.name)}</p><h1>${escapeHtml(audit.templateName)}</h1><p>${escapeHtml(jobName(audit.jobId))}</p></div><img class="company-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(companyBrand.name)} logo" /></header>
+      <div class="meta">
+        <div><strong>Inspector / Inspector</strong>${escapeHtml(audit.createdBy || "")}</div>
+        <div><strong>Company / Compania</strong>${escapeHtml(audit.inspectorCompany || "")}</div>
+        <div><strong>Date / Fecha</strong>${escapeHtml(audit.date || "")}</div>
+        <div><strong>Location / Lugar</strong>${escapeHtml(audit.location || "")}</div>
+        <div><strong>Department / Departamento</strong>${escapeHtml(areas[audit.area]?.label || audit.area || "")}</div>
+        <div><strong>Project / Proyecto</strong>${escapeHtml(jobName(audit.jobId))}</div>
+        <div><strong>Other attendees / Otros asistentes</strong>${escapeHtml(audit.attendees || "None / Ninguno")}</div>
+        <div class="summary"><strong>Results / Resultados</strong>${summary.meets} Meets · ${summary.needsImprovement} Improve · ${summary.na} N/A</div>
+      </div>
+      <table><thead><tr><th>Code<br>Codigo</th><th>Question / Pregunta</th><th>Result<br>Resultado</th><th>Finding / Hallazgo</th><th>Corrective action / Accion correctiva</th></tr></thead><tbody>${rows}</tbody></table>
+      ${audit.notes ? `<h2>Overall Notes / Notas generales</h2><p>${escapeHtml(audit.notes)}</p>` : ""}
+      <h2>Evidence / Evidencia</h2><ul>${files}</ul>
+      <p>I acknowledge that the information above is accurate as reported and may be distributed to appropriate company and project resources.<br><strong>Reconozco que la informacion anterior es correcta segun lo reportado y puede distribuirse a los recursos correspondientes de la compania y del proyecto.</strong></p>
+      <div class="signature-block"><div>${audit.signature ? `<img src="${audit.signature}" alt="Inspector signature" />` : `<div class="signature-line"></div>`}<strong>Inspector signature / Firma del inspector</strong></div><div><div class="signature-line"></div><strong>Date / Fecha: ${escapeHtml(audit.date || "")}</strong></div></div>
+      <script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));<\/script>
+    </body></html>`);
+  win.document.close();
 }
 
 function openRecordFile(collectionName, recordId, fileId) {

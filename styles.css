@@ -1980,6 +1980,72 @@ textarea {
   resize: vertical;
 }
 
+.reliable-audit-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reliable-audit-item {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.7fr) minmax(190px, 0.7fr) minmax(220px, 1fr) minmax(220px, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.reliable-audit-question {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: center;
+}
+
+.reliable-audit-question strong,
+.reliable-audit-question .reliable-audit-es {
+  grid-column: 1 / -1;
+}
+
+.audit-item-number {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.reliable-audit-es {
+  color: #26769a;
+  font-weight: 800;
+}
+
+.reliable-audit-item textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.reliable-audit-card details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.reliable-audit-card summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.reliable-audit-findings {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.reliable-audit-findings > div {
+  border-left: 4px solid var(--gold);
+  padding-left: 10px;
+}
+
 .audit-result-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3248,6 +3314,10 @@ tr:last-child td {
   .mini-grid,
   .day-grid,
   .audit-check-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reliable-audit-item {
     grid-template-columns: 1fr;
   }
 
