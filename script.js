@@ -162,6 +162,64 @@ const accidentInjuryTypes = [
   ["Sprain", "Torcedura"],
   ["Other", "Otro"]
 ];
+const accidentBodyPartCatalog = {
+  head: ["Head / face", "Cabeza / cara"],
+  neck: ["Neck", "Cuello"],
+  chest: ["Chest", "Pecho"],
+  abdomen: ["Abdomen", "Abdomen"],
+  pelvis: ["Pelvis / groin", "Pelvis / ingle"],
+  leftShoulder: ["Left shoulder", "Hombro izquierdo"],
+  rightShoulder: ["Right shoulder", "Hombro derecho"],
+  leftUpperArm: ["Left upper arm", "Brazo superior izquierdo"],
+  rightUpperArm: ["Right upper arm", "Brazo superior derecho"],
+  leftElbow: ["Left elbow", "Codo izquierdo"],
+  rightElbow: ["Right elbow", "Codo derecho"],
+  leftForearm: ["Left forearm", "Antebrazo izquierdo"],
+  rightForearm: ["Right forearm", "Antebrazo derecho"],
+  leftHand: ["Left hand / fingers", "Mano / dedos izquierdos"],
+  rightHand: ["Right hand / fingers", "Mano / dedos derechos"],
+  leftThigh: ["Left thigh", "Muslo izquierdo"],
+  rightThigh: ["Right thigh", "Muslo derecho"],
+  leftKnee: ["Left knee", "Rodilla izquierda"],
+  rightKnee: ["Right knee", "Rodilla derecha"],
+  leftLowerLeg: ["Left lower leg", "Pierna inferior izquierda"],
+  rightLowerLeg: ["Right lower leg", "Pierna inferior derecha"],
+  leftFoot: ["Left ankle / foot", "Tobillo / pie izquierdo"],
+  rightFoot: ["Right ankle / foot", "Tobillo / pie derecho"],
+  upperBack: ["Upper back", "Espalda superior"],
+  lowerBack: ["Lower back", "Espalda baja"],
+  buttocks: ["Buttocks / tailbone", "Gluteos / coxis"],
+  leftPalm: ["Left palm", "Palma izquierda"],
+  leftFingers: ["Left fingers", "Dedos izquierdos"],
+  leftWrist: ["Left wrist", "Muneca izquierda"],
+  rightPalm: ["Right palm", "Palma derecha"],
+  rightFingers: ["Right fingers", "Dedos derechos"],
+  rightWrist: ["Right wrist", "Muneca derecha"]
+};
+const accidentBodyDiagramViews = [
+  {
+    id: "front", label: "Front", labelEs: "Frente", image: "./assets/accident-body-front.png",
+    regions: [
+      ["head", 50, 8], ["neck", 50, 17], ["chest", 50, 28], ["abdomen", 50, 39], ["pelvis", 50, 50],
+      ["leftShoulder", 63, 22], ["rightShoulder", 37, 22], ["leftUpperArm", 68, 31], ["rightUpperArm", 32, 31],
+      ["leftElbow", 72, 40], ["rightElbow", 28, 40], ["leftForearm", 76, 48], ["rightForearm", 24, 48],
+      ["leftHand", 79, 57], ["rightHand", 21, 57], ["leftThigh", 57, 64], ["rightThigh", 43, 64],
+      ["leftKnee", 58, 75], ["rightKnee", 42, 75], ["leftLowerLeg", 58, 84], ["rightLowerLeg", 42, 84],
+      ["leftFoot", 58, 95], ["rightFoot", 42, 95]
+    ]
+  },
+  {
+    id: "back", label: "Back", labelEs: "Espalda", image: "./assets/accident-body-back.png",
+    regions: [
+      ["head", 50, 8], ["neck", 50, 17], ["upperBack", 50, 29], ["lowerBack", 50, 43], ["buttocks", 50, 53],
+      ["leftShoulder", 37, 22], ["rightShoulder", 63, 22], ["leftElbow", 28, 40], ["rightElbow", 72, 40],
+      ["leftHand", 21, 57], ["rightHand", 79, 57], ["leftKnee", 42, 75], ["rightKnee", 58, 75],
+      ["leftFoot", 42, 94], ["rightFoot", 58, 94]
+    ]
+  },
+  { id: "left-hand", label: "Left hand", labelEs: "Mano izquierda", image: "./assets/accident-left-hand.png", regions: [["leftFingers", 49, 27], ["leftPalm", 48, 56], ["leftWrist", 48, 82]] },
+  { id: "right-hand", label: "Right hand", labelEs: "Mano derecha", image: "./assets/accident-right-hand.png", regions: [["rightFingers", 51, 27], ["rightPalm", 52, 56], ["rightWrist", 52, 82]] }
+];
 const qcMachineTypes = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender"];
 const employeeCertOptions = ["Forklift", "Scissor lift", "Boom lift", "Skid steer", "Telehandler", "Rigging", "Signal person", "First aid/CPR", "Hot work", "Confined space"];
 const employeeMachineOptions = ["Bender", "Double Bender", "Shear Line", "Automatic Bender", "Radius Bender", "Spiral Bender", "Shear", "Forklift", "Loader", "Telehandler"];
@@ -7692,8 +7750,9 @@ function renderAccidentReportFields() {
           `).join("")}
         </div>
       </div>
+      ${renderAccidentBodySelector()}
       <div class="form-grid">
-        <label class="wide-field">Affected body part(s)<span class="es">Partes del cuerpo afectadas</span><input id="accidentBodyParts" placeholder="Back, hand, knee, shoulder..." /></label>
+        <label class="wide-field">Other body-part details<span class="es">Otros detalles de la parte del cuerpo</span><input id="accidentBodyParts" placeholder="Example: tip of left index finger / Ejemplo: punta del indice izquierdo" /></label>
         <label class="wide-field">Treatment / doctor / hospital<span class="es">Tratamiento / doctor / hospital</span><input id="accidentTreatment" placeholder="First aid, clinic, ER, doctor name..." /></label>
       </div>
       <div class="form-grid">
@@ -7703,6 +7762,42 @@ function renderAccidentReportFields() {
         <label class="wide-field">Witnesses<span class="es">Testigos</span><textarea id="accidentWitnesses" placeholder="Names and contact details"></textarea></label>
       </div>
     </div>
+  `;
+}
+
+function accidentBodyPartLabel(key) {
+  return accidentBodyPartCatalog[key] || [key, key];
+}
+
+function renderAccidentBodySelector() {
+  return `
+    <section class="accident-body-selector" aria-labelledby="accidentBodySelectorTitle">
+      <div class="split">
+        <div>
+          <h4 id="accidentBodySelectorTitle">Affected body part(s)<span class="es">Partes del cuerpo afectadas</span></h4>
+          <p class="sub">Tap every injured area. Tap it again to remove it.</p>
+          <p class="sub es">Toque cada area lesionada. Toquela otra vez para quitarla.</p>
+        </div>
+        <button class="secondary-action accident-body-clear" id="clearAccidentBodyParts" type="button">Clear selection<span class="es">Borrar seleccion</span></button>
+      </div>
+      <div class="accident-body-diagram-grid">
+        ${accidentBodyDiagramViews.map((view) => `
+          <article class="accident-body-panel">
+            <div class="accident-body-panel-heading"><strong>${escapeHtml(view.label)}</strong><span class="es">${escapeHtml(view.labelEs)}</span></div>
+            <div class="accident-body-canvas">
+              <img src="${asset(view.image)}" alt="${escapeHtml(view.label)} body diagram" />
+              ${view.regions.map(([key, x, y]) => {
+                const [en, es] = accidentBodyPartLabel(key);
+                return `<button class="accident-body-region" type="button" data-accident-body-region="${escapeHtml(key)}" style="left:${x}%;top:${y}%;" aria-pressed="false" title="${escapeHtml(`${en} / ${es}`)}"><span class="visually-hidden">${escapeHtml(`${en} / ${es}`)}</span></button>`;
+              }).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+      <div class="accident-body-selection-summary" id="accidentBodySelectionSummary" aria-live="polite">
+        <strong>No body parts selected<span class="es">No hay partes seleccionadas</span></strong>
+      </div>
+    </section>
   `;
 }
 
@@ -9201,6 +9296,7 @@ function bindTabEvents() {
       render();
     });
   }
+  bindAccidentBodySelector();
   if ($("useSafetyGps")) $("useSafetyGps").addEventListener("click", useSafetyGpsLocation);
   if ($("addSafetyForm")) $("addSafetyForm").addEventListener("click", addSafetyFormRecord);
   document.querySelectorAll("[data-safety-file]").forEach((button) => {
@@ -11018,6 +11114,7 @@ function collectAccidentReportData(defaultLocation = "") {
     yesNo[input.dataset.accidentYn] = input.value || "N/A";
   });
   const injuryTypes = [...document.querySelectorAll("[data-accident-injury]:checked")].map((input) => input.dataset.accidentInjury);
+  const bodyPartSelections = [...new Set([...document.querySelectorAll('[data-accident-body-region][aria-pressed="true"]')].map((button) => button.dataset.accidentBodyRegion))];
   const employee = $("accidentManualEmployee")?.value.trim() || $("accidentEmployee")?.value || "";
   return {
     employee,
@@ -11029,6 +11126,7 @@ function collectAccidentReportData(defaultLocation = "") {
     status: $("accidentStatus")?.value || "Draft",
     yesNo,
     injuryTypes,
+    bodyPartSelections,
     bodyParts: $("accidentBodyParts")?.value.trim() || "",
     treatment: $("accidentTreatment")?.value.trim() || "",
     whatHappened: $("accidentWhatHappened")?.value.trim() || "",
@@ -11036,6 +11134,30 @@ function collectAccidentReportData(defaultLocation = "") {
     correctiveAction: $("accidentCorrectiveAction")?.value.trim() || "",
     witnesses: $("accidentWitnesses")?.value.trim() || ""
   };
+}
+
+function bindAccidentBodySelector() {
+  const buttons = [...document.querySelectorAll("[data-accident-body-region]")];
+  if (!buttons.length) return;
+  const updateSummary = () => {
+    const selected = [...new Set(buttons.filter((button) => button.getAttribute("aria-pressed") === "true").map((button) => button.dataset.accidentBodyRegion))];
+    const summary = $("accidentBodySelectionSummary");
+    if (!summary) return;
+    summary.innerHTML = selected.length
+      ? `<strong>${selected.length} selected<span class="es">${selected.length} seleccionadas</span></strong><div class="accident-body-selection-tags">${selected.map((key) => { const [en, es] = accidentBodyPartLabel(key); return `<span class="tag">${escapeHtml(en)}<small>${escapeHtml(es)}</small></span>`; }).join("")}</div>`
+      : `<strong>No body parts selected<span class="es">No hay partes seleccionadas</span></strong>`;
+  };
+  buttons.forEach((button) => button.addEventListener("click", () => {
+    const key = button.dataset.accidentBodyRegion;
+    const selected = button.getAttribute("aria-pressed") !== "true";
+    buttons.filter((entry) => entry.dataset.accidentBodyRegion === key).forEach((entry) => entry.setAttribute("aria-pressed", String(selected)));
+    updateSummary();
+  }));
+  $("clearAccidentBodyParts")?.addEventListener("click", () => {
+    buttons.forEach((button) => button.setAttribute("aria-pressed", "false"));
+    updateSummary();
+  });
+  updateSummary();
 }
 
 async function saveFieldAuditRecord() {
@@ -11144,6 +11266,7 @@ function printAccidentReport(record) {
     const match = accidentInjuryTypes.find(([en]) => en === type);
     return match ? `${match[0]} / ${match[1]}` : type;
   });
+  const selectedBodyParts = (accident.bodyPartSelections || []).map((key) => accidentBodyPartLabel(key).join(" / "));
   win.document.write(`
     <!doctype html>
     <html>
@@ -11182,7 +11305,8 @@ function printAccidentReport(record) {
         <table>${ynRows}</table>
         <h2>Injury Information</h2>
         <div class="box"><strong>Type of injury / illness</strong><br>${injuryTypes.map(escapeHtml).join(", ") || "None selected"}</div>
-        <div class="box"><strong>Affected body part(s)</strong><br>${escapeHtml(accident.bodyParts || "")}</div>
+        <div class="box"><strong>Affected body part(s) / Partes del cuerpo afectadas</strong><br>${selectedBodyParts.map(escapeHtml).join(", ") || "None selected / Ninguna seleccionada"}</div>
+        ${accident.bodyParts ? `<div class="box"><strong>Other body-part details / Otros detalles</strong><br>${escapeHtml(accident.bodyParts)}</div>` : ""}
         <h2>Incident Details</h2>
         <div class="line-box"><strong>What happened</strong><br>${escapeHtml(accident.whatHappened || "")}</div>
         <div class="line-box"><strong>What directly caused the accident</strong><br>${escapeHtml(accident.cause || "")}</div>

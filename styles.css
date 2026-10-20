@@ -1836,6 +1836,130 @@ textarea {
   gap: 10px;
 }
 
+.accident-body-selector {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.accident-body-clear {
+  align-self: start;
+}
+
+.accident-body-diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.accident-body-panel {
+  min-width: 0;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.accident-body-panel-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #eef2f4;
+}
+
+.accident-body-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 816 / 1056;
+  touch-action: manipulation;
+}
+
+.accident-body-canvas img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.accident-body-region {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 3px solid #a77913;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 5px rgba(7, 20, 38, 0.35);
+}
+
+.accident-body-region:hover,
+.accident-body-region:focus-visible {
+  border-color: #0d6f98;
+  outline: 3px solid rgba(13, 111, 152, 0.22);
+}
+
+.accident-body-region[aria-pressed="true"] {
+  border-color: #a32626;
+  background: rgba(222, 55, 55, 0.72);
+  box-shadow: 0 0 0 4px rgba(163, 38, 38, 0.18);
+}
+
+.accident-body-selection-summary {
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.accident-body-selection-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.accident-body-selection-tags .tag {
+  display: grid;
+  gap: 1px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (max-width: 980px) {
+  .accident-body-diagram-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .accident-body-diagram-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accident-body-region {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 .audit-choice {
   display: grid;
   gap: 8px;
