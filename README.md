@@ -44,6 +44,8 @@ Tagline: Crew time and job progress, forged into one.
 - Admin/payroll can update job status or delete trial jobs from the Jobs table
 - Supabase-backed company workspaces so phone and office views can sync
 - Owner-only company and account administration
+- Rebar Installation IRA dashboard with active-apprentice registry, covered-job rosters, configurable percentage targets, CSV export, and a print/PDF owner report
+- Jobs can be marked as IRA-covered during creation or from the Jobs table
 - Separate offline browser storage for every company
 - Bilingual English/Spanish labels
 - Local demo data saved in the browser with `localStorage`
@@ -62,6 +64,7 @@ The CrewForge owner can use **Companies & Accounts / Companias y cuentas** to cr
 - `index.html` - app entry point
 - `styles.css` - visual styling
 - `script.js` - app behavior and demo data
+- `ira-compliance.js` - IRA name matching, percentage calculations, and CSV parsing
 - `service-worker.js` - PWA offline cache (holds the `crewforge-vNN` cache name)
 - `manifest.webmanifest` - PWA install metadata
 - `assets/crewforge-app-icon.png` - app/sidebar icon

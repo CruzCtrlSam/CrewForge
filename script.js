@@ -762,6 +762,7 @@ function defaultLaurelFoundationMap() {
   };
 }
 function trialWindFarmJobRecord(job) {
+  const iraRequired = ["wind-longspur", "wind-four-horizons-ira"].includes(job.id);
   return {
     ...job,
     area: "rebarInstall",
@@ -770,6 +771,13 @@ function trialWindFarmJobRecord(job) {
     foundationIds: [],
     customTracking: [],
     documents: [],
+    iraRequired,
+    iraMinimumPercent: 15,
+    iraMaximumPercent: 20,
+    iraRosterSourceDate: iraRequired ? defaultIraRostersByJob[job.id]?.sourceDate || "" : "",
+    iraRoster: iraRequired
+      ? (defaultIraRostersByJob[job.id]?.workers || []).map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
+      : [],
     trialSchedule: true
   };
 }
@@ -993,12 +1001,71 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "foundationMaps", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
+const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "foundationMaps", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "iraApprentices", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
 
 const defaultPeople = [];
+
+const defaultIraApprentices = [
+  ["TX2025011389", "Simon Garcia", "Construction Craft Laborer", "2025-07-14", "2025-07-14", "2027-07-14"],
+  ["TX2025012718", "Adelfo Vargas Isidro", "Construction Craft Laborer", "2025-08-01", "2025-08-01", "2027-08-03"],
+  ["TX2025014280", "Luis Cabrera Salinas", "Construction Craft Laborer", "2025-08-18", "2025-08-18", "2026-11-13"],
+  ["TX2025014383", "Samuel Najera", "Construction Craft Laborer", "2025-08-18", "2025-08-18", "2028-02-29"],
+  ["TX2025014384", "Ricardo Castillo", "Construction Craft Laborer", "2025-08-18", "2025-08-18", "2027-02-09"],
+  ["TX2025018402", "Jorge Azua", "Construction Craft Laborer", "2025-09-21", "2025-09-21", "2027-03-15"],
+  ["TX2025018403", "Francisco Vargas", "Construction Craft Laborer", "2025-09-21", "2025-09-21", "2027-03-15"],
+  ["TX2025018507", "Felipe Nunez", "Construction Craft Laborer", "2025-09-23", "2025-09-23", "2027-03-17"],
+  ["TX2026015242", "Jorge Villalobos Bocanegra", "Reinforcing Ironworker Concrete", "2026-08-03", "2026-08-03", "2028-08-03"],
+  ["TX2026015243", "Felipe Jimenez Vazquez", "Reinforcing Ironworker Concrete", "2026-08-03", "2026-08-03", "2028-08-03"],
+  ["TX2026016532", "Martin Andrade", "Reinforcing Ironworker Concrete", "2026-08-13", "2026-08-13", "2028-08-14"],
+  ["TX2026016535", "Juan Cano Lopez", "Reinforcing Ironworker Concrete", "2026-08-13", "2026-08-13", "2028-08-14"],
+  ["TX2026026217", "David Contreras", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026218", "Francisco Ibarra", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026219", "Miguel Segura Zapata", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026220", "Carlos Tapia Morales", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026222", "Isaias Vargas Isidoro", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026223", "Jonathan Vazquez Castro", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026224", "Geovany Venegas Garcia", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026225", "Arturo Perez", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026227", "Israel Macias", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026229", "Jesus Abraham Saldana Calderon", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026230", "Aiden Lee Hurley", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026231", "Terry Joe", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"],
+  ["TX2026026232", "Rapheal Towne", "Reinforcing Ironworker Concrete", "2026-10-27", "2026-10-27", "2028-10-27"]
+].map(([apprenticeNumber, name, occupation, startDate, registrationDate, expectedCompletionDate]) => ({
+  id: `ira-apprentice-${apprenticeNumber.toLowerCase()}`,
+  apprenticeNumber,
+  name,
+  occupation,
+  status: "RE",
+  active: true,
+  employerNumber: "20374030",
+  employerName: "Reliable Rebar LLC",
+  startDate,
+  registrationDate,
+  expectedCompletionDate
+}));
+
+const defaultIraRostersByJob = {
+  "wind-longspur": {
+    sourceDate: "2026-10-25",
+    workers: [
+      "Adelfo Vargas Isidro", "Carlos Tapia Morales", "Francisco Ibarra", "Julio Cesar Lugo Hernandez", "Jorge Azua",
+      "Jesus Abraham Saldana Calderon", "Jorge Villalobos Bocanegra", "Daniel Marquez", "Luis Perez Leon", "Alberto Hernandez",
+      "Alexis Sosa", "Terry Joe", "David Saucedo", "Justin Hendon", "Tyler Henter Hurley", "Aiden Lee Hurley",
+      "Rapheal Towne", "Skyler Elias Lee Burty"
+    ]
+  },
+  "wind-four-horizons-ira": {
+    sourceDate: "2026-09-20",
+    workers: [
+      "Lidio Barron", "Cruz Orosco", "Luis A. Hernandez", "Simon Garcia", "Mauricio Frias", "Gilberto Frias",
+      "Israel Macias", "Leobardo Reina", "Eduardo Romero", "Miguel Segura Zapata", "Francis J. Garcia", "Juan A. Sanchez", "Delmar Rivera"
+    ]
+  }
+};
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -1034,7 +1101,12 @@ const fourHorizonsJob = {
   customer: "Mortenson",
   area: "rebarInstall",
   jobType: "T-line Substation",
-  status: "Active"
+  status: "Active",
+  iraRequired: true,
+  iraMinimumPercent: 15,
+  iraMaximumPercent: 20,
+  iraRosterSourceDate: "",
+  iraRoster: []
 };
 
 const fourHorizonsControlCodes = [
@@ -1386,6 +1458,8 @@ const defaultState = {
   selectedSafetyFormType: "JHA",
   selectedTrainingCourse: "",
   selectedTrainingTab: "library",
+  selectedIraTab: "dashboard",
+  selectedIraJob: "wind-longspur",
   selectedDrugTestingDepartment: "Rebar Fabrication",
   selectedAuditJob: "",
   selectedFieldAuditType: "",
@@ -1427,6 +1501,7 @@ const defaultState = {
   fieldAudits: [],
   trainingCourses: [],
   trainingResults: [],
+  iraApprentices: structuredClone(defaultIraApprentices),
   drugTestingRoster: [],
   drugTestingDraws: [],
   employeeDirectoryLinkedV141: false,
@@ -1787,6 +1862,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedSafetyFormType = next.selectedSafetyFormType || "JHA";
   next.selectedTrainingCourse = next.selectedTrainingCourse || "";
   next.selectedTrainingTab = next.selectedTrainingTab || "library";
+  next.selectedIraTab = ["dashboard", "apprentices", "rosters"].includes(next.selectedIraTab) ? next.selectedIraTab : "dashboard";
+  next.selectedIraJob = next.selectedIraJob || "wind-longspur";
   if (!next.selectedDrugTestingDepartment || next.selectedDrugTestingDepartment === "Rebar") next.selectedDrugTestingDepartment = "Rebar Fabrication";
   if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar Fabrication";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
@@ -1844,6 +1921,19 @@ function upgradeState(next, resetToCurrentWeek = false) {
     accreditedBy: result.accreditedBy || "",
     accreditedAt: result.accreditedAt || ""
   }));
+  next.iraApprentices = (next.iraApprentices || structuredClone(defaultIraApprentices)).map((apprentice, index) => ({
+    id: apprentice.id || `ira-apprentice-${Date.now()}-${index}`,
+    apprenticeNumber: String(apprentice.apprenticeNumber || "").trim(),
+    name: String(apprentice.name || "").trim(),
+    occupation: String(apprentice.occupation || "").trim(),
+    status: String(apprentice.status || "RE").trim(),
+    active: apprentice.active !== false,
+    employerNumber: String(apprentice.employerNumber || "").trim(),
+    employerName: String(apprentice.employerName || "").trim(),
+    startDate: dateInputValue(apprentice.startDate || "", ""),
+    registrationDate: dateInputValue(apprentice.registrationDate || "", ""),
+    expectedCompletionDate: dateInputValue(apprentice.expectedCompletionDate || "", "")
+  })).filter((apprentice) => apprentice.name);
   next.drugTestingRoster = (next.drugTestingRoster || []).map((employee) => ({
     id: employee.id || `drug-employee-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: String(employee.name || "").trim(),
@@ -1996,8 +2086,23 @@ function upgradeState(next, resetToCurrentWeek = false) {
     jobType: job.jobType || defaultJobTypeForArea(job.area),
     foundationIds: job.foundationIds || [],
     customTracking: job.customTracking || [],
-    documents: job.documents || []
+    documents: job.documents || [],
+    iraRequired: job.iraRequired ?? ["wind-longspur", "wind-four-horizons-ira", "four-horizons-west"].includes(job.id),
+    iraMinimumPercent: Number(job.iraMinimumPercent ?? 15),
+    iraMaximumPercent: Number(job.iraMaximumPercent ?? 20),
+    iraRosterSourceDate: job.iraRosterSourceDate || defaultIraRostersByJob[job.id]?.sourceDate || "",
+    iraRoster: Array.isArray(job.iraRoster)
+      ? job.iraRoster.map((worker, index) => ({
+          id: worker.id || `ira-worker-${job.id}-${index}`,
+          name: String(worker.name || "").trim(),
+          addedAt: worker.addedAt || "",
+          addedBy: worker.addedBy || ""
+        })).filter((worker) => worker.name)
+      : (defaultIraRostersByJob[job.id]?.workers || []).map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
   }));
+  if (!next.jobs.some((job) => job.id === next.selectedIraJob && job.iraRequired)) {
+    next.selectedIraJob = next.jobs.find((job) => job.iraRequired)?.id || "";
+  }
   if (seedTrialData) seedTrialWindFarmJobs(next);
   next.foundationMaps = (next.foundationMaps || []).map((map) => ({
     ...map,
@@ -2542,6 +2647,7 @@ function availableTabs() {
   if (state.selectedRole === "Safety") {
     return [
       ["training", "Training & Competency", "Capacitacion"],
+      ...(state.selectedArea === "rebarInstall" ? [["iraCompliance", "IRA Compliance", "Cumplimiento IRA"]] : []),
       ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
       ["audits", "Field Audits", "Auditorias de campo"],
       ["safety", "Safety Forms", "Documentos de seguridad"],
@@ -2556,6 +2662,7 @@ function availableTabs() {
   }
   return [
     ["training", "Training & Competency", "Capacitacion"],
+    ...(state.selectedRole === "Admin" && state.selectedArea === "rebarInstall" ? [["iraCompliance", "IRA Compliance", "Cumplimiento IRA"]] : []),
     ...(hasWindFarmJobsForArea() ? [["foundationProgress", "Foundation Progress", "Avance de cimentaciones"]] : []),
     ["audits", "Field Audits", "Auditorias de campo"],
     ["safety", "Safety Forms", "Documentos de seguridad"],
@@ -3703,6 +3810,7 @@ function renderActiveTab() {
   if (state.activeTab === "qualityControl") return renderQualityControl();
   if (state.activeTab === "reimbursements") return renderReimbursements();
   if (state.activeTab === "training") return renderTraining();
+  if (state.activeTab === "iraCompliance") return renderIraCompliance();
   if (state.activeTab === "safety") return renderSafetyForms();
   if (state.activeTab === "employeeIncidents") return renderEmployeeIncidents();
   if (state.activeTab === "drugTesting") return renderDrugTesting();
@@ -7343,6 +7451,333 @@ async function uploadFoundationMapImage(event) {
   }
 }
 
+function canManageIraCompliance() {
+  return ["Admin", "Safety"].includes(state.selectedRole);
+}
+
+function iraCoveredJobs() {
+  return (state.jobs || []).filter((job) => job.iraRequired).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function iraJobSummary(job) {
+  return window.IRACompliance.calculate(job, state.iraApprentices || []);
+}
+
+function iraStatusMeta(status) {
+  return {
+    compliant: { label: "In target range", es: "Dentro del rango", className: "compliant" },
+    below: { label: "Below target", es: "Debajo del rango", className: "below" },
+    above: { label: "Above target", es: "Encima del rango", className: "above" },
+    "needs-roster": { label: "Roster needed", es: "Falta la lista", className: "needs-roster" }
+  }[status] || { label: status, es: status, className: "needs-roster" };
+}
+
+function iraRequiredCountText(summary) {
+  if (!summary.workerCount) return "Add roster / Agregue lista";
+  if (summary.minimumCount === summary.maximumCount) return `${summary.minimumCount} apprentice(s) / aprendiz(ces)`;
+  if (summary.maximumCount < summary.minimumCount) return `${summary.minimumCount} minimum / minimo`;
+  return `${summary.minimumCount}-${summary.maximumCount} apprentice(s) / aprendiz(ces)`;
+}
+
+function renderIraDashboard() {
+  const jobs = iraCoveredJobs();
+  const summaries = jobs.map((job) => ({ job, summary: iraJobSummary(job) }));
+  const compliantCount = summaries.filter(({ summary }) => summary.status === "compliant").length;
+  const assignedApprentices = summaries.reduce((sum, { summary }) => sum + summary.apprenticeCount, 0);
+  return `
+    <section class="panel ira-dashboard-panel">
+      <div class="split">
+        <div>
+          <h2>${t("IRA compliance dashboard", "Panel de cumplimiento IRA")}</h2>
+          <p class="sub">Monitor each covered job against its configured apprentice target. Percentages use active apprentices divided by the full job roster.</p>
+          <p class="sub es">Supervise cada trabajo cubierto segun su meta configurada. El porcentaje usa aprendices activos dividido entre toda la lista del trabajo.</p>
+        </div>
+        <div class="history-actions no-print">
+          <button class="secondary-action" type="button" onclick="exportIraComplianceCsv()">${t("Download CSV", "Descargar CSV")}</button>
+          <button class="primary-action" type="button" onclick="printIraDashboard()">${t("Owner report / PDF", "Informe / PDF")}</button>
+        </div>
+      </div>
+      <div class="metric-grid ira-metric-grid section-gap">
+        <div class="metric"><span>IRA-covered jobs</span><strong>${jobs.length}</strong><small>Trabajos cubiertos</small></div>
+        <div class="metric"><span>Within target</span><strong>${compliantCount} / ${jobs.length}</strong><small>Dentro del rango</small></div>
+        <div class="metric"><span>Active apprentices</span><strong>${(state.iraApprentices || []).filter((apprentice) => apprentice.active).length}</strong><small>Aprendices activos</small></div>
+        <div class="metric"><span>Job assignments</span><strong>${assignedApprentices}</strong><small>Asignaciones de aprendices</small></div>
+      </div>
+      <div class="ira-job-grid section-gap">
+        ${summaries.map(({ job, summary }) => {
+          const status = iraStatusMeta(summary.status);
+          return `
+            <article class="ira-job-card ${status.className}">
+              <header>
+                <div><span class="eyebrow">${escapeHtml(job.jobType || "IRA job")}</span><h3>${escapeHtml(job.name)}</h3><p class="sub">${escapeHtml(job.foreman || jobAssignedForeman(job) || "Foreman not assigned")}</p></div>
+                <span class="ira-status ${status.className}">${status.label}<small>${status.es}</small></span>
+              </header>
+              <div class="ira-percentage"><strong>${summary.workerCount ? `${preciseNumber(summary.percentage)}%` : "--"}</strong><span>Target / Meta ${summary.minimumPercent}-${summary.maximumPercent}%</span></div>
+              <div class="ira-job-facts">
+                <span><strong>${summary.workerCount}</strong> workers<small>trabajadores</small></span>
+                <span><strong>${summary.apprenticeCount}</strong> apprentices<small>aprendices</small></span>
+                <span><strong>${iraRequiredCountText(summary)}</strong><small>target count / cantidad meta</small></span>
+              </div>
+              <div class="ira-progress" aria-label="${preciseNumber(summary.percentage)} percent"><span style="width:${Math.min(100, summary.percentage)}%"></span><i style="left:${summary.minimumPercent}%"></i><i style="left:${summary.maximumPercent}%"></i></div>
+              <footer><span>${job.iraRosterSourceDate ? `Roster dated ${escapeHtml(job.iraRosterSourceDate)}` : "Roster date not recorded"}</span><button class="table-button no-print" type="button" onclick="openIraJobRoster('${job.id}')">${t("Manage roster", "Administrar lista")}</button></footer>
+            </article>
+          `;
+        }).join("") || `<div class="empty-state">No jobs are marked as IRA-covered yet.<span class="es">Todavia no hay trabajos marcados para cumplimiento IRA.</span><button class="primary-action no-print" type="button" onclick="changeTab('jobs')">${t("Add or mark a job", "Agregar o marcar trabajo")}</button></div>`}
+      </div>
+      <div class="notice section-gap">This planning dashboard uses the target configured for each job. Confirm the applicable contract and regulatory requirements for the project.<span class="es">Este panel usa la meta configurada para cada trabajo. Confirme los requisitos del contrato y reglamentos aplicables al proyecto.</span></div>
+    </section>
+  `;
+}
+
+function renderIraApprentices() {
+  const apprentices = (state.iraApprentices || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const canManage = canManageIraCompliance();
+  return `
+    <section class="panel">
+      <div class="split">
+        <div><h2>${t("Active apprentice registry", "Registro de aprendices activos")}</h2><p class="sub">Import an Apprentice Search CSV or maintain individual records here. Job rosters match against this registry.</p></div>
+        ${canManage ? `<label class="file-action no-print">${t("Import apprentice CSV", "Importar CSV de aprendices")}<input type="file" accept=".csv,text/csv" onchange="importIraApprenticesCsv(event)" /></label>` : ""}
+      </div>
+      ${canManage ? `
+        <div class="form-grid compact-form-grid section-gap no-print">
+          <label>Apprentice number<span class="es">Numero de aprendiz</span><input id="iraApprenticeNumber" placeholder="TX2026..." /></label>
+          <label>Full name<span class="es">Nombre completo</span><input id="iraApprenticeName" /></label>
+          <label>Occupation<span class="es">Ocupacion</span><input id="iraApprenticeOccupation" placeholder="Reinforcing Ironworker Concrete" /></label>
+          <label>Expected completion<span class="es">Finalizacion esperada</span><input id="iraApprenticeCompletion" type="date" /></label>
+          <button class="primary-action" type="button" onclick="addIraApprentice()">${t("Add apprentice", "Agregar aprendiz")}</button>
+        </div>
+      ` : ""}
+      <div class="table-wrap section-gap">
+        <table class="ira-apprentice-table"><thead><tr><th>Active<span class="es">Activo</span></th><th>Apprentice<span class="es">Aprendiz</span></th><th>Registration<span class="es">Registro</span></th><th>Occupation<span class="es">Ocupacion</span></th><th>Start<span class="es">Inicio</span></th><th>Expected completion<span class="es">Finalizacion</span></th></tr></thead><tbody>
+          ${apprentices.map((apprentice) => `<tr><td><input type="checkbox" ${apprentice.active ? "checked" : ""} ${canManage ? `onchange="setIraApprenticeActive('${apprentice.id}', this.checked)"` : "disabled"} aria-label="Active apprentice" /></td><td><strong>${escapeHtml(apprentice.name)}</strong><small>${escapeHtml(apprentice.status || "")}</small></td><td>${escapeHtml(apprentice.apprenticeNumber || "")}</td><td>${escapeHtml(apprentice.occupation || "")}</td><td>${escapeHtml(apprentice.startDate || "")}</td><td>${escapeHtml(apprentice.expectedCompletionDate || "")}</td></tr>`).join("") || `<tr><td colspan="6"><div class="empty-state">No apprentices recorded.<span class="es">No hay aprendices registrados.</span></div></td></tr>`}
+        </tbody></table>
+      </div>
+    </section>
+  `;
+}
+
+function renderIraRosters() {
+  const jobs = iraCoveredJobs();
+  const selected = jobs.find((job) => job.id === state.selectedIraJob) || jobs[0];
+  const canManage = canManageIraCompliance();
+  if (!selected) return `<section class="panel"><div class="empty-state">Mark a job as IRA-covered in Jobs / Sites first.<span class="es">Primero marque un trabajo como cubierto por IRA en Trabajos / sitios.</span><button class="primary-action" type="button" onclick="changeTab('jobs')">${t("Open Jobs / Sites", "Abrir Trabajos / sitios")}</button></div></section>`;
+  const summary = iraJobSummary(selected);
+  const status = iraStatusMeta(summary.status);
+  const suggestions = [...new Set([...(state.people || []).map((person) => person.name), ...(state.iraApprentices || []).map((apprentice) => apprentice.name)])].sort((a, b) => a.localeCompare(b));
+  return `
+    <section class="panel">
+      <div class="split"><div><h2>${t("IRA job rosters", "Listas de trabajos IRA")}</h2><p class="sub">The denominator is everyone on the selected roster. Active apprentice matches are identified automatically.</p></div><span class="ira-status ${status.className}">${summary.workerCount ? `${preciseNumber(summary.percentage)}%` : status.label}<small>${status.es}</small></span></div>
+      <div class="form-grid compact-form-grid section-gap">
+        <label>IRA job<span class="es">Trabajo IRA</span><select onchange="selectIraJob(this.value)">${jobs.map((job) => `<option value="${job.id}" ${job.id === selected.id ? "selected" : ""}>${escapeHtml(job.name)}</option>`).join("")}</select></label>
+        <label>Roster date<span class="es">Fecha de la lista</span><input type="date" value="${escapeHtml(selected.iraRosterSourceDate || "")}" ${canManage ? `onchange="updateIraRosterDate('${selected.id}', this.value)"` : "disabled"} /></label>
+        <label>Minimum %<span class="es">Minimo %</span><input type="number" min="0" max="100" step="0.1" value="${selected.iraMinimumPercent}" ${canManage ? `onchange="updateIraJobTarget('${selected.id}', 'iraMinimumPercent', this.value)"` : "disabled"} /></label>
+        <label>Maximum %<span class="es">Maximo %</span><input type="number" min="0" max="100" step="0.1" value="${selected.iraMaximumPercent}" ${canManage ? `onchange="updateIraJobTarget('${selected.id}', 'iraMaximumPercent', this.value)"` : "disabled"} /></label>
+      </div>
+      ${canManage ? `<div class="form-grid compact-form-grid section-gap no-print"><label>Add worker<span class="es">Agregar trabajador</span><input id="iraRosterWorkerName" list="iraWorkerSuggestions" placeholder="Full name / Nombre completo" /></label><datalist id="iraWorkerSuggestions">${suggestions.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist><button class="primary-action" type="button" onclick="addIraRosterWorker('${selected.id}')">${t("Add to roster", "Agregar a lista")}</button></div>` : ""}
+      <div class="ira-roster-summary section-gap"><strong>${summary.workerCount}</strong><span>workers / trabajadores</span><strong>${summary.apprenticeCount}</strong><span>active apprentices / aprendices activos</span><strong>${preciseNumber(summary.percentage)}%</strong><span>current percentage / porcentaje actual</span></div>
+      <div class="table-wrap section-gap"><table><thead><tr><th>Worker<span class="es">Trabajador</span></th><th>IRA status<span class="es">Estado IRA</span></th><th>Apprentice registration<span class="es">Registro de aprendiz</span></th><th class="no-print">Action<span class="es">Accion</span></th></tr></thead><tbody>
+        ${(selected.iraRoster || []).map((worker) => {
+          const apprentice = window.IRACompliance.matchingApprentice(worker.name, state.iraApprentices || []);
+          return `<tr><td><strong>${escapeHtml(worker.name)}</strong></td><td>${apprentice ? `<span class="tag ira-apprentice-match">Active apprentice / Aprendiz activo</span>` : `<span class="sub">Worker / Trabajador</span>`}</td><td>${escapeHtml(apprentice?.apprenticeNumber || "")}</td><td class="no-print"><button class="danger-action table-action" type="button" onclick="removeIraRosterWorker('${selected.id}', '${worker.id}')" ${canManage ? "" : "disabled"}>${t("Remove", "Quitar")}</button></td></tr>`;
+        }).join("") || `<tr><td colspan="4"><div class="empty-state">This job needs a roster.<span class="es">Este trabajo necesita una lista.</span></div></td></tr>`}
+      </tbody></table></div>
+    </section>
+  `;
+}
+
+function renderIraCompliance() {
+  const tabs = [
+    ["dashboard", "Dashboard", "Panel"],
+    ["apprentices", "Active apprentices", "Aprendices activos"],
+    ["rosters", "Job rosters", "Listas de trabajos"]
+  ];
+  return `
+    <div class="assessment-tabs ira-tabs no-print" role="tablist">${tabs.map(([id, en, es]) => `<button class="assessment-tab-button ${state.selectedIraTab === id ? "active" : ""}" type="button" onclick="setIraTab('${id}')">${en}<span class="es">${es}</span></button>`).join("")}</div>
+    ${state.selectedIraTab === "apprentices" ? renderIraApprentices() : state.selectedIraTab === "rosters" ? renderIraRosters() : renderIraDashboard()}
+  `;
+}
+
+function setIraTab(tab) {
+  if (!["dashboard", "apprentices", "rosters"].includes(tab)) return;
+  state.selectedIraTab = tab;
+  saveState();
+  render();
+}
+
+function openIraJobRoster(jobId) {
+  state.selectedIraJob = jobId;
+  state.selectedIraTab = "rosters";
+  saveState();
+  render();
+}
+
+function selectIraJob(jobId) {
+  if (!iraCoveredJobs().some((job) => job.id === jobId)) return;
+  state.selectedIraJob = jobId;
+  saveState();
+  render();
+}
+
+function addIraApprentice() {
+  if (!canManageIraCompliance()) return;
+  const name = $("iraApprenticeName")?.value.trim() || "";
+  const apprenticeNumber = $("iraApprenticeNumber")?.value.trim() || "";
+  if (!name) return showToast("Enter the apprentice's name / Escriba el nombre del aprendiz");
+  if ((state.iraApprentices || []).some((apprentice) => window.IRACompliance.namesMatch(apprentice.name, name) || (apprenticeNumber && apprentice.apprenticeNumber === apprenticeNumber))) return showToast("That apprentice already exists / Ese aprendiz ya existe");
+  state.iraApprentices.push({
+    id: `ira-apprentice-${Date.now()}`,
+    apprenticeNumber,
+    name,
+    occupation: $("iraApprenticeOccupation")?.value.trim() || "",
+    status: "RE",
+    active: true,
+    employerNumber: "",
+    employerName: state.companyName || "",
+    startDate: "",
+    registrationDate: "",
+    expectedCompletionDate: $("iraApprenticeCompletion")?.value || ""
+  });
+  logActivity("IRA apprentice added", { employee: name, field: apprenticeNumber });
+  saveState();
+  render();
+  showToast(`${name} added`);
+}
+
+function setIraApprenticeActive(apprenticeId, active) {
+  if (!canManageIraCompliance()) return;
+  const apprentice = state.iraApprentices.find((entry) => entry.id === apprenticeId);
+  if (!apprentice) return;
+  apprentice.active = Boolean(active);
+  logActivity("IRA apprentice status changed", { employee: apprentice.name, to: active ? "Active" : "Inactive" });
+  saveState();
+  render();
+}
+
+function iraDateValue(value) {
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return "";
+  return `${match[3]}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`;
+}
+
+async function importIraApprenticesCsv(event) {
+  if (!canManageIraCompliance()) return;
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const records = window.IRACompliance.parseCsv(await file.text());
+  let imported = 0;
+  records.forEach((record) => {
+    const name = [record["first name"], record["middle name"], record["last name"]].filter(Boolean).join(" ").trim();
+    if (!name) return;
+    const apprenticeNumber = record["apprentice number"] || "";
+    const existing = state.iraApprentices.find((apprentice) => (apprenticeNumber && apprentice.apprenticeNumber === apprenticeNumber) || window.IRACompliance.namesMatch(apprentice.name, name));
+    const values = {
+      apprenticeNumber,
+      name,
+      occupation: record["occupation title"] || "",
+      status: record.status || "RE",
+      active: !/cancel|complete|inactive/i.test(record.status || ""),
+      employerNumber: record["employer number"] || "",
+      employerName: record["employer name"] || "",
+      startDate: iraDateValue(record["date apprenticeship begins"]),
+      registrationDate: iraDateValue(record["registration date"]),
+      expectedCompletionDate: iraDateValue(record["expected completion date"])
+    };
+    if (existing) Object.assign(existing, values);
+    else state.iraApprentices.push({ id: `ira-apprentice-${Date.now()}-${imported}`, ...values });
+    imported += 1;
+  });
+  logActivity("IRA apprentice CSV imported", { field: file.name, count: imported });
+  saveState();
+  render();
+  showToast(`${imported} apprentice record(s) imported`);
+}
+
+function addIraRosterWorker(jobId) {
+  if (!canManageIraCompliance()) return;
+  const job = jobById(jobId);
+  const name = $("iraRosterWorkerName")?.value.trim() || "";
+  if (!job || !name) return showToast("Enter a worker name / Escriba el nombre del trabajador");
+  job.iraRoster = job.iraRoster || [];
+  if (job.iraRoster.some((worker) => window.IRACompliance.namesMatch(worker.name, name))) return showToast("That worker is already on this roster / Ese trabajador ya esta en la lista");
+  job.iraRoster.push({ id: `ira-worker-${Date.now()}`, name, addedAt: timestamp(), addedBy: actorName() });
+  logActivity("IRA roster worker added", { job: job.name, employee: name });
+  saveState();
+  render();
+}
+
+function removeIraRosterWorker(jobId, workerId) {
+  if (!canManageIraCompliance()) return;
+  const job = jobById(jobId);
+  const worker = job?.iraRoster?.find((entry) => entry.id === workerId);
+  if (!job || !worker || !confirm(`Remove ${worker.name} from ${job.name}?`)) return;
+  job.iraRoster = job.iraRoster.filter((entry) => entry.id !== workerId);
+  logActivity("IRA roster worker removed", { job: job.name, employee: worker.name });
+  saveState();
+  render();
+}
+
+function updateIraRosterDate(jobId, value) {
+  if (!canManageIraCompliance()) return;
+  const job = jobById(jobId);
+  if (!job) return;
+  job.iraRosterSourceDate = dateInputValue(value, "");
+  saveState();
+  render();
+}
+
+function updateIraJobTarget(jobId, field, value) {
+  if (!canManageIraCompliance() || !["iraMinimumPercent", "iraMaximumPercent"].includes(field)) return;
+  const job = jobById(jobId);
+  if (!job) return;
+  job[field] = Math.max(0, Math.min(100, Number(value) || 0));
+  if (job.iraMinimumPercent > job.iraMaximumPercent) {
+    if (field === "iraMinimumPercent") job.iraMaximumPercent = job.iraMinimumPercent;
+    else job.iraMinimumPercent = job.iraMaximumPercent;
+  }
+  saveState();
+  render();
+}
+
+function setJobIraRequirement(jobId, required) {
+  if (!["Admin", "Safety"].includes(state.selectedRole)) return;
+  const job = jobById(jobId);
+  if (!job) return;
+  job.iraRequired = Boolean(required);
+  job.iraMinimumPercent = Number(job.iraMinimumPercent ?? 15);
+  job.iraMaximumPercent = Number(job.iraMaximumPercent ?? 20);
+  job.iraRoster = Array.isArray(job.iraRoster) ? job.iraRoster : [];
+  if (required) state.selectedIraJob = job.id;
+  logActivity(required ? "Job marked IRA-covered" : "IRA coverage removed from job", { job: job.name });
+  saveState();
+  render();
+}
+
+function exportIraComplianceCsv() {
+  const lines = [["Job", "Job type", "Roster date", "Total workers", "Active apprentices", "Apprentice percentage", "Target minimum", "Target maximum", "Status"]];
+  iraCoveredJobs().forEach((job) => {
+    const summary = iraJobSummary(job);
+    lines.push([job.name, job.jobType || "", job.iraRosterSourceDate || "", summary.workerCount, summary.apprenticeCount, preciseNumber(summary.percentage), summary.minimumPercent, summary.maximumPercent, iraStatusMeta(summary.status).label]);
+  });
+  downloadFile(`crewforge-ira-compliance-${localDateInputValue()}.csv`, `\ufeff${lines.map((line) => line.map(csvCell).join(",")).join("\n")}`);
+}
+
+function printIraDashboard() {
+  const jobs = iraCoveredJobs();
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to create the PDF report / Permita ventanas emergentes");
+  const logo = new URL(asset("./assets/valor-steel-logo.png"), window.location.href).href;
+  const generated = new Date().toLocaleString();
+  win.document.write(`<!doctype html><html><head><title>IRA Compliance Dashboard</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#102033;margin:0;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #b98717;padding-bottom:16px;margin-bottom:22px}header img{max-width:150px;max-height:70px}h1{margin:0 0 5px;font-size:26px}p{margin:4px 0;color:#536170}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.metric{border:1px solid #aab5bf;padding:12px}.metric strong{display:block;font-size:24px}.job{border:1px solid #9ba8b3;margin:14px 0;break-inside:avoid}.job header{border:0;background:#e8edf1;margin:0;padding:10px 12px}.job h2{font-size:18px;margin:0}.job-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#b6c0c8}.job-grid div{background:white;padding:12px}.job-grid strong{display:block;font-size:18px}.status{font-weight:bold}.compliant{color:#126c3b}.below,.above{color:#a23b15}.needs-roster{color:#6c7780}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #b6c0c8;text-align:left;padding:7px;font-size:11px}th{background:#edf1f4}footer{margin-top:22px;border-top:1px solid #c8d0d6;padding-top:12px;font-size:10px;color:#5c6872}@media print{body{padding:10mm}@page{size:letter landscape;margin:10mm}}
+  </style></head><body><header><div><h1>IRA Compliance Dashboard</h1><p>Panel de cumplimiento IRA</p><strong>${escapeHtml(state.companyName || "Valor Steel")}</strong><p>Generated / Generado: ${escapeHtml(generated)}</p></div><img src="${logo}" alt="Company logo" /></header>
+  <div class="summary"><div class="metric"><span>Covered jobs / Trabajos</span><strong>${jobs.length}</strong></div><div class="metric"><span>Active apprentices / Aprendices activos</span><strong>${(state.iraApprentices || []).filter((entry) => entry.active).length}</strong></div><div class="metric"><span>Within target / Dentro del rango</span><strong>${jobs.filter((job) => iraJobSummary(job).status === "compliant").length} / ${jobs.length}</strong></div></div>
+  ${jobs.map((job) => { const summary = iraJobSummary(job); const status = iraStatusMeta(summary.status); return `<section class="job"><header><h2>${escapeHtml(job.name)}</h2><p>${escapeHtml(job.jobType || "")} · Roster / Lista: ${escapeHtml(job.iraRosterSourceDate || "Not recorded")}</p></header><div class="job-grid"><div><span>Workers<br>Trabajadores</span><strong>${summary.workerCount}</strong></div><div><span>Apprentices<br>Aprendices</span><strong>${summary.apprenticeCount}</strong></div><div><span>Percentage<br>Porcentaje</span><strong>${preciseNumber(summary.percentage)}%</strong></div><div><span>Target<br>Meta</span><strong>${summary.minimumPercent}-${summary.maximumPercent}%</strong></div><div><span>Status<br>Estado</span><strong class="status ${status.className}">${status.label}</strong><small>${status.es}</small></div></div><table><thead><tr><th>Active apprentices assigned / Aprendices activos asignados</th><th>Registration / Registro</th></tr></thead><tbody>${summary.apprenticeWorkers.map((worker) => { const apprentice = window.IRACompliance.matchingApprentice(worker.name, state.iraApprentices); return `<tr><td>${escapeHtml(worker.name)}</td><td>${escapeHtml(apprentice?.apprenticeNumber || "")}</td></tr>`; }).join("") || `<tr><td colspan="2">None matched / Ninguno identificado</td></tr>`}</tbody></table></section>`; }).join("")}
+  <footer>This report reflects CrewForge roster data and each job's configured target range. Verify all applicable contract, program, and regulatory requirements. / Este informe refleja las listas de CrewForge y la meta configurada de cada trabajo. Verifique todos los requisitos aplicables.</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`);
+  win.document.close();
+}
+
 function renderJobs() {
   const admin = ["Admin", "Payroll"].includes(state.selectedRole);
   const areaOptions = visibleAreaEntries().map(([id, info]) => ({ id, name: info.label }));
@@ -7370,6 +7805,9 @@ function renderJobs() {
           <label>Customer<span class="es">Cliente</span><input id="jobCustomerInput" placeholder="Optional" ${!admin ? "disabled" : ""} /></label>
         `}
         <label>Status<span class="es">Estado</span><select id="jobStatusInput" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, "Active")}</select></label>
+        <label class="checkbox-tile ira-job-form-toggle"><input id="jobIraRequired" type="checkbox" ${!admin ? "disabled" : ""} /><span>IRA compliance required<small>Requiere cumplimiento IRA</small></span></label>
+        <label>IRA minimum %<span class="es">Minimo IRA %</span><input id="jobIraMinimum" type="number" min="0" max="100" step="0.1" value="15" ${!admin ? "disabled" : ""} /></label>
+        <label>IRA maximum %<span class="es">Maximo IRA %</span><input id="jobIraMaximum" type="number" min="0" max="100" step="0.1" value="20" ${!admin ? "disabled" : ""} /></label>
         <button class="primary-action" id="saveJob" type="button" ${!admin ? "disabled" : ""}>${t("Add job", "Agregar trabajo")}</button>
       </div>
       ${admin && state.selectedArea === "rebarInstall" && selectedJobType === "Wind Farm" ? `
@@ -7423,13 +7861,14 @@ function renderJobs() {
       ` : ""}
       <div class="table-wrap section-gap">
         <table>
-          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Foreman</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Job</th><th>Area</th><th>Type</th><th>IRA</th><th>Foundations</th><th>Number</th><th>Customer</th><th>Foreman</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${visibleJobs.length ? visibleJobs
               .map((job) => `<tr>
                 <td>${admin ? `<input class="table-input" style="min-width:170px;" data-edit-job-name="${job.id}" value="${escapeHtml(job.name || "")}" />` : `<strong>${job.name}</strong>`}</td>
                 <td>${areas[job.area]?.label || job.area}</td>
                 <td>${admin ? `<select class="table-select" data-edit-job-type="${job.id}">${setOptions(jobTypeOptionsForArea(job.area), job.jobType || "")}</select>` : (job.jobType || "")}</td>
+                <td><label class="ira-table-check"><input type="checkbox" ${job.iraRequired ? "checked" : ""} ${admin ? `onchange="setJobIraRequirement('${job.id}', this.checked)"` : "disabled"} /><span>${job.iraRequired ? `${job.iraMinimumPercent ?? 15}-${job.iraMaximumPercent ?? 20}%` : "No"}</span></label></td>
                 <td>${job.jobType === "Wind Farm" && admin ? `
                   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span class="tag">${job.foundationIds?.length || 0}</span>
@@ -7444,7 +7883,7 @@ function renderJobs() {
                 <td><select class="table-select" data-job-status="${job.id}" ${!admin ? "disabled" : ""}>${setOptions(jobStatuses, job.status || "Active")}</select></td>
                 <td>${job.jobType === "Wind Farm" ? `<button class="table-button" data-open-foundation-map="${job.id}" type="button">Progress map<span class="es">Mapa de avance</span></button> ` : ""}${admin && job.jobType === "T-line Substation" ? `<button class="secondary-action table-action" data-edit-codes="${job.id}" type="button">Edit codes<span class="es">Editar codigos</span></button> ` : ""}<button class="danger-action table-action" data-delete-job="${job.id}" type="button" ${!admin ? "disabled" : ""}>Delete<span class="es">Borrar</span></button></td>
               </tr>`)
-              .join("") : `<tr><td colspan="9"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
+              .join("") : `<tr><td colspan="10"><strong>No jobs for ${areas[state.selectedArea]?.label || "this area"} yet.</strong><span class="es">No hay trabajos para esta area.</span></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -11719,6 +12158,13 @@ function saveJob() {
   const parsedQuantity = quantityFromDescription(productionDescription);
   const productionQuantityValue = Number($("jobProdQuantity")?.value) || parsedQuantity || 0;
   const productionWeight = Number($("jobProdWeight")?.value) || 0;
+  const iraRequired = Boolean($("jobIraRequired")?.checked);
+  const iraMinimumPercent = Math.max(0, Math.min(100, Number($("jobIraMinimum")?.value) || 15));
+  const iraMaximumPercent = Math.max(0, Math.min(100, Number($("jobIraMaximum")?.value) || 20));
+  if (iraRequired && iraMinimumPercent > iraMaximumPercent) {
+    showToast("IRA minimum cannot exceed maximum / El minimo IRA no puede superar el maximo");
+    return;
+  }
   const hasProductionSetup = productionCode || productionDescription || productionQuantityValue || productionWeight;
   if (hasProductionSetup && !productionCode) {
     showToast("Optional production setup needs at least a control code");
@@ -11738,9 +12184,15 @@ function saveJob() {
     foundationIds,
     customTracking,
     documents: [],
+    iraRequired,
+    iraMinimumPercent,
+    iraMaximumPercent,
+    iraRosterSourceDate: "",
+    iraRoster: [],
     status: $("jobStatusInput").value
   };
   state.jobs.push(job);
+  if (iraRequired) state.selectedIraJob = id;
   logActivity("Job added", { area: areaId, job: name, field: jobType || "Solar" });
   if (hasProductionSetup) {
     const productionItem = {

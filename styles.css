@@ -4362,3 +4362,228 @@ tr:last-child td {
     height: 6px;
   }
 }
+
+/* IRA compliance */
+.ira-tabs {
+  margin-bottom: 12px;
+}
+
+.ira-dashboard-panel .metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ira-job-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ira-job-card {
+  min-width: 0;
+  border: 1px solid #aeb9c2;
+  border-top: 5px solid #6c7780;
+  background: #fff;
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.ira-job-card.compliant { border-top-color: #126c3b; }
+.ira-job-card.below,
+.ira-job-card.above { border-top-color: #a23b15; }
+
+.ira-job-card > header,
+.ira-job-card > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ira-job-card h3 {
+  margin: 3px 0;
+  font-size: 18px;
+}
+
+.ira-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  max-width: 150px;
+  padding: 6px 8px;
+  border: 1px solid #aeb9c2;
+  border-radius: 5px;
+  background: #eef2f4;
+  color: #273642;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.ira-status small {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ira-status.compliant { border-color: #75a98a; background: #e6f3eb; color: #126c3b; }
+.ira-status.below,
+.ira-status.above { border-color: #d99c83; background: #fff0e9; color: #8b2f10; }
+
+.ira-percentage {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 15px 0 10px;
+}
+
+.ira-percentage strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.ira-percentage span {
+  color: #5b6872;
+  font-weight: 700;
+}
+
+.ira-job-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ira-job-facts > span {
+  min-width: 0;
+  border: 1px solid #d4dbe0;
+  background: #f5f7f8;
+  padding: 8px;
+  font-size: 11px;
+}
+
+.ira-job-facts strong,
+.ira-job-facts small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.ira-job-facts strong {
+  font-size: 15px;
+  color: #102033;
+}
+
+.ira-progress {
+  position: relative;
+  height: 14px;
+  margin: 13px 0;
+  overflow: hidden;
+  border: 1px solid #9eabb4;
+  background: #edf1f3;
+}
+
+.ira-progress span {
+  display: block;
+  height: 100%;
+  background: #2677a5;
+}
+
+.ira-progress i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #b98717;
+}
+
+.ira-job-card footer {
+  align-items: center;
+  color: #5b6872;
+  font-size: 11px;
+}
+
+.ira-roster-summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto 1fr;
+  align-items: baseline;
+  gap: 7px;
+  border: 1px solid #aeb9c2;
+  background: #eef2f4;
+  padding: 12px;
+}
+
+.ira-roster-summary strong {
+  font-size: 24px;
+}
+
+.ira-roster-summary span {
+  color: #52616c;
+  font-weight: 700;
+}
+
+.ira-apprentice-match {
+  background: #e6f3eb;
+  color: #126c3b;
+}
+
+.ira-apprentice-table small {
+  display: block;
+  color: #68757f;
+}
+
+.ira-job-form-toggle {
+  align-self: end;
+  min-height: 48px;
+}
+
+.ira-job-form-toggle small {
+  display: block;
+}
+
+.ira-table-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.file-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #0b1b30;
+  border-radius: 5px;
+  background: #0b1b30;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.file-action input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (max-width: 1100px) {
+  .ira-job-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ira-dashboard-panel .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .ira-job-grid,
+  .ira-dashboard-panel .metric-grid { grid-template-columns: 1fr; }
+  .ira-job-card > header { align-items: stretch; flex-direction: column; }
+  .ira-status { max-width: none; }
+  .ira-job-facts { grid-template-columns: 1fr; }
+  .ira-roster-summary { grid-template-columns: auto 1fr; }
+}
+
+@media print {
+  .ira-dashboard-panel .no-print,
+  .ira-tabs,
+  .no-print { display: none !important; }
+  .ira-job-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ira-job-card { break-inside: avoid; }
+}

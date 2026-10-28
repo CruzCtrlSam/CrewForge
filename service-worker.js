@@ -1,9 +1,10 @@
-const CACHE_NAME = "crewforge-v165";
+const CACHE_NAME = "crewforge-v166";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./foundation-progress.js",
+  "./ira-compliance.js",
   "./script.js",
   "./manifest.webmanifest",
   "./assets/crewforge-app-icon.png",
