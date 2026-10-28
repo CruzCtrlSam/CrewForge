@@ -57,4 +57,15 @@ assert.equal(fourHorizons.apprenticeCount, 3);
 assert.equal(Math.round(fourHorizons.percentage * 10) / 10, 23.1);
 assert.equal(fourHorizons.status, "above");
 
+const substation = IRACompliance.calculate({ iraMinimumPercent: 15, iraMaximumPercent: 20, iraRoster: [
+  "Wilfredo Vargas", "Juan Cano", "Jose Vargas", "Melquiel Gardozo", "Isaís Vargas"
+].map((name) => ({ name })) }, [
+  { name: "Juan Cano Lopez", active: true },
+  { name: "Isaias Vargas Isidoro", active: true }
+]);
+assert.equal(substation.workerCount, 5);
+assert.equal(substation.apprenticeCount, 1);
+assert.equal(substation.percentage, 20);
+assert.equal(substation.status, "compliant");
+
 console.log("IRA compliance tests passed");

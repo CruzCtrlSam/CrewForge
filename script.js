@@ -1064,6 +1064,10 @@ const defaultIraRostersByJob = {
       "Lidio Barron", "Cruz Orosco", "Luis A. Hernandez", "Simon Garcia", "Mauricio Frias", "Gilberto Frias",
       "Israel Macias", "Leobardo Reina", "Eduardo Romero", "Miguel Segura Zapata", "Francis J. Garcia", "Juan A. Sanchez", "Delmar Rivera"
     ]
+  },
+  "four-horizons-west": {
+    sourceDate: "2026-10-28",
+    workers: ["Wilfredo Vargas", "Juan Cano", "Jose Vargas", "Melquiel Gardozo", "Isaís Vargas"]
   }
 };
 
@@ -1105,8 +1109,13 @@ const fourHorizonsJob = {
   iraRequired: true,
   iraMinimumPercent: 15,
   iraMaximumPercent: 20,
-  iraRosterSourceDate: "",
-  iraRoster: []
+  iraRosterSourceDate: defaultIraRostersByJob["four-horizons-west"].sourceDate,
+  iraRoster: defaultIraRostersByJob["four-horizons-west"].workers.map((name, index) => ({
+    id: `ira-worker-four-horizons-west-${index + 1}`,
+    name,
+    addedAt: "Imported roster",
+    addedBy: "CrewForge"
+  }))
 };
 
 const fourHorizonsControlCodes = [
@@ -2100,6 +2109,17 @@ function upgradeState(next, resetToCurrentWeek = false) {
         })).filter((worker) => worker.name)
       : (defaultIraRostersByJob[job.id]?.workers || []).map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
   }));
+  const fourHorizonsSubstation = next.jobs.find((job) => job.id === "four-horizons-west");
+  if (!next.iraSubstationRosterSeededV167 && fourHorizonsSubstation && !fourHorizonsSubstation.iraRoster.length) {
+    fourHorizonsSubstation.iraRosterSourceDate = defaultIraRostersByJob["four-horizons-west"].sourceDate;
+    fourHorizonsSubstation.iraRoster = defaultIraRostersByJob["four-horizons-west"].workers.map((name, index) => ({
+      id: `ira-worker-four-horizons-west-${index + 1}`,
+      name,
+      addedAt: "Imported roster",
+      addedBy: "CrewForge"
+    }));
+  }
+  next.iraSubstationRosterSeededV167 = true;
   if (!next.jobs.some((job) => job.id === next.selectedIraJob && job.iraRequired)) {
     next.selectedIraJob = next.jobs.find((job) => job.iraRequired)?.id || "";
   }
