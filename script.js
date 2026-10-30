@@ -7499,6 +7499,42 @@ function iraRequiredCountText(summary) {
   return `${summary.minimumCount}-${summary.maximumCount} apprentice(s) / aprendiz(ces)`;
 }
 
+function iraPiePercent(summary) {
+  return Math.max(0, Math.min(100, Number(summary?.percentage) || 0));
+}
+
+function renderIraPieChart(summary) {
+  const percentage = iraPiePercent(summary);
+  const label = summary.workerCount ? `${preciseNumber(summary.percentage)}%` : "--";
+  return `
+    <div class="ira-pie-wrap">
+      <div class="ira-pie-chart" style="--ira-percent:${percentage}" role="img" aria-label="${summary.apprenticeCount} apprentices out of ${summary.workerCount} workers, ${label}">
+        <span><strong>${label}</strong><small>IRA</small></span>
+      </div>
+      <div class="ira-pie-legend">
+        <span><i class="apprentice"></i>${summary.apprenticeCount} ${t("apprentices", "aprendices")}</span>
+        <span><i class="worker"></i>${Math.max(0, summary.workerCount - summary.apprenticeCount)} ${t("other workers", "otros trabajadores")}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderIraDashboardRoster(job) {
+  const roster = job.iraRoster || [];
+  if (!roster.length) return `<div class="empty-state ira-roster-empty">This job needs a roster.<span class="es">Este trabajo necesita una lista.</span></div>`;
+  return `
+    <div class="ira-card-roster">
+      <h4>${t("Job roster", "Lista del trabajo")} <span>${roster.length}</span></h4>
+      <ul>
+        ${roster.map((worker) => {
+          const apprentice = window.IRACompliance.matchingApprentice(worker.name, state.iraApprentices || []);
+          return `<li class="${apprentice ? "is-apprentice" : ""}"><span><strong>${escapeHtml(worker.name)}</strong>${apprentice?.apprenticeNumber ? `<small>${escapeHtml(apprentice.apprenticeNumber)}</small>` : ""}</span><em>${apprentice ? t("Apprentice", "Aprendiz") : t("Worker", "Trabajador")}</em></li>`;
+        }).join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function renderIraDashboard() {
   const jobs = iraCoveredJobs();
   const summaries = jobs.map((job) => ({ job, summary: iraJobSummary(job) }));
@@ -7532,13 +7568,17 @@ function renderIraDashboard() {
                 <div><span class="eyebrow">${escapeHtml(job.jobType || "IRA job")}</span><h3>${escapeHtml(job.name)}</h3><p class="sub">${escapeHtml(job.foreman || jobAssignedForeman(job) || "Foreman not assigned")}</p></div>
                 <span class="ira-status ${status.className}">${status.label}<small>${status.es}</small></span>
               </header>
-              <div class="ira-percentage"><strong>${summary.workerCount ? `${preciseNumber(summary.percentage)}%` : "--"}</strong><span>Target / Meta ${summary.minimumPercent}-${summary.maximumPercent}%</span></div>
+              <div class="ira-job-visuals">
+                ${renderIraPieChart(summary)}
+                <div class="ira-percentage"><span>Target / Meta</span><strong>${summary.minimumPercent}-${summary.maximumPercent}%</strong><small>${iraRequiredCountText(summary)}</small></div>
+              </div>
               <div class="ira-job-facts">
                 <span><strong>${summary.workerCount}</strong> workers<small>trabajadores</small></span>
                 <span><strong>${summary.apprenticeCount}</strong> apprentices<small>aprendices</small></span>
                 <span><strong>${iraRequiredCountText(summary)}</strong><small>target count / cantidad meta</small></span>
               </div>
               <div class="ira-progress" aria-label="${preciseNumber(summary.percentage)} percent"><span style="width:${Math.min(100, summary.percentage)}%"></span><i style="left:${summary.minimumPercent}%"></i><i style="left:${summary.maximumPercent}%"></i></div>
+              ${renderIraDashboardRoster(job)}
               <footer><span>${job.iraRosterSourceDate ? `Roster dated ${escapeHtml(job.iraRosterSourceDate)}` : "Roster date not recorded"}</span><button class="table-button no-print" type="button" onclick="openIraJobRoster('${job.id}')">${t("Manage roster", "Administrar lista")}</button></footer>
             </article>
           `;
@@ -7790,10 +7830,10 @@ function printIraDashboard() {
   const logo = new URL(asset("./assets/valor-steel-logo.png"), window.location.href).href;
   const generated = new Date().toLocaleString();
   win.document.write(`<!doctype html><html><head><title>IRA Compliance Dashboard</title><style>
-    *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#102033;margin:0;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #b98717;padding-bottom:16px;margin-bottom:22px}header img{max-width:150px;max-height:70px}h1{margin:0 0 5px;font-size:26px}p{margin:4px 0;color:#536170}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.metric{border:1px solid #aab5bf;padding:12px}.metric strong{display:block;font-size:24px}.job{border:1px solid #9ba8b3;margin:14px 0;break-inside:avoid}.job header{border:0;background:#e8edf1;margin:0;padding:10px 12px}.job h2{font-size:18px;margin:0}.job-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#b6c0c8}.job-grid div{background:white;padding:12px}.job-grid strong{display:block;font-size:18px}.status{font-weight:bold}.compliant{color:#126c3b}.below,.above{color:#a23b15}.needs-roster{color:#6c7780}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #b6c0c8;text-align:left;padding:7px;font-size:11px}th{background:#edf1f4}footer{margin-top:22px;border-top:1px solid #c8d0d6;padding-top:12px;font-size:10px;color:#5c6872}@media print{body{padding:10mm}@page{size:letter landscape;margin:10mm}}
+    *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,sans-serif;color:#102033;margin:0;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #b98717;padding-bottom:16px;margin-bottom:22px}header img{max-width:150px;max-height:70px}h1{margin:0 0 5px;font-size:26px}p{margin:4px 0;color:#536170}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.metric{border:1px solid #aab5bf;padding:12px}.metric strong{display:block;font-size:24px}.job{border:1px solid #9ba8b3;margin:14px 0;break-inside:avoid}.job header{border:0;background:#e8edf1;margin:0;padding:10px 12px}.job h2{font-size:18px;margin:0}.job-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#b6c0c8}.job-grid div{background:white;padding:12px}.job-grid strong{display:block;font-size:18px}.status{font-weight:bold}.compliant{color:#126c3b}.below,.above{color:#a23b15}.needs-roster{color:#6c7780}.job-body{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:10px}.pie{width:120px;height:120px;border-radius:50%;background:conic-gradient(#126c3b calc(var(--p)*1%),#dfe5e9 0);display:grid;place-items:center;margin:auto}.pie:after{content:"";width:72px;height:72px;border-radius:50%;background:white}.pie-label{position:absolute;text-align:center;font-weight:bold;font-size:17px}.pie-wrap{position:relative;display:grid;place-items:center}.pie-wrap small{display:block;font-size:9px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #b6c0c8;text-align:left;padding:7px;font-size:11px}th{background:#edf1f4}.apprentice-row td{background:#e6f3eb}.badge{display:inline-block;border:1px solid #75a98a;background:#e6f3eb;color:#126c3b;padding:3px 5px;font-weight:bold}footer{margin-top:22px;border-top:1px solid #c8d0d6;padding-top:12px;font-size:10px;color:#5c6872}@media print{body{padding:10mm}@page{size:letter landscape;margin:10mm}}
   </style></head><body><header><div><h1>IRA Compliance Dashboard</h1><p>Panel de cumplimiento IRA</p><strong>${escapeHtml(state.companyName || "Valor Steel")}</strong><p>Generated / Generado: ${escapeHtml(generated)}</p></div><img src="${logo}" alt="Company logo" /></header>
   <div class="summary"><div class="metric"><span>Covered jobs / Trabajos</span><strong>${jobs.length}</strong></div><div class="metric"><span>Active apprentices / Aprendices activos</span><strong>${(state.iraApprentices || []).filter((entry) => entry.active).length}</strong></div><div class="metric"><span>Within target / Dentro del rango</span><strong>${jobs.filter((job) => iraJobSummary(job).status === "compliant").length} / ${jobs.length}</strong></div></div>
-  ${jobs.map((job) => { const summary = iraJobSummary(job); const status = iraStatusMeta(summary.status); return `<section class="job"><header><h2>${escapeHtml(job.name)}</h2><p>${escapeHtml(job.jobType || "")} · Roster / Lista: ${escapeHtml(job.iraRosterSourceDate || "Not recorded")}</p></header><div class="job-grid"><div><span>Workers<br>Trabajadores</span><strong>${summary.workerCount}</strong></div><div><span>Apprentices<br>Aprendices</span><strong>${summary.apprenticeCount}</strong></div><div><span>Percentage<br>Porcentaje</span><strong>${preciseNumber(summary.percentage)}%</strong></div><div><span>Target<br>Meta</span><strong>${summary.minimumPercent}-${summary.maximumPercent}%</strong></div><div><span>Status<br>Estado</span><strong class="status ${status.className}">${status.label}</strong><small>${status.es}</small></div></div><table><thead><tr><th>Active apprentices assigned / Aprendices activos asignados</th><th>Registration / Registro</th></tr></thead><tbody>${summary.apprenticeWorkers.map((worker) => { const apprentice = window.IRACompliance.matchingApprentice(worker.name, state.iraApprentices); return `<tr><td>${escapeHtml(worker.name)}</td><td>${escapeHtml(apprentice?.apprenticeNumber || "")}</td></tr>`; }).join("") || `<tr><td colspan="2">None matched / Ninguno identificado</td></tr>`}</tbody></table></section>`; }).join("")}
+  ${jobs.map((job) => { const summary = iraJobSummary(job); const status = iraStatusMeta(summary.status); const pie = iraPiePercent(summary); return `<section class="job"><header><h2>${escapeHtml(job.name)}</h2><p>${escapeHtml(job.jobType || "")} · Roster / Lista: ${escapeHtml(job.iraRosterSourceDate || "Not recorded")}</p></header><div class="job-grid"><div><span>Workers<br>Trabajadores</span><strong>${summary.workerCount}</strong></div><div><span>Apprentices<br>Aprendices</span><strong>${summary.apprenticeCount}</strong></div><div><span>Percentage<br>Porcentaje</span><strong>${preciseNumber(summary.percentage)}%</strong></div><div><span>Target<br>Meta</span><strong>${summary.minimumPercent}-${summary.maximumPercent}%</strong></div><div><span>Status<br>Estado</span><strong class="status ${status.className}">${status.label}</strong><small>${status.es}</small></div></div><div class="job-body"><div class="pie-wrap"><div class="pie" style="--p:${pie}"></div><div class="pie-label">${summary.workerCount ? `${preciseNumber(summary.percentage)}%` : "--"}<small>IRA</small></div></div><table><thead><tr><th>Worker / Trabajador</th><th>IRA status / Estado IRA</th><th>Registration / Registro</th></tr></thead><tbody>${(job.iraRoster || []).map((worker) => { const apprentice = window.IRACompliance.matchingApprentice(worker.name, state.iraApprentices || []); return `<tr class="${apprentice ? "apprentice-row" : ""}"><td>${escapeHtml(worker.name)}</td><td>${apprentice ? `<span class="badge">Apprentice / Aprendiz</span>` : "Worker / Trabajador"}</td><td>${escapeHtml(apprentice?.apprenticeNumber || "")}</td></tr>`; }).join("") || `<tr><td colspan="3">Roster needed / Falta la lista</td></tr>`}</tbody></table></div></section>`; }).join("")}
   <footer>This report reflects CrewForge roster data and each job's configured target range. Verify all applicable contract, program, and regulatory requirements. / Este informe refleja las listas de CrewForge y la meta configurada de cada trabajo. Verifique todos los requisitos aplicables.</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`);
   win.document.close();
 }
