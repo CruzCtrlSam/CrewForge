@@ -1910,6 +1910,8 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedTrainingTab = next.selectedTrainingTab || "library";
   next.selectedIraTab = ["dashboard", "apprentices", "rosters", "classification"].includes(next.selectedIraTab) ? next.selectedIraTab : "dashboard";
   next.selectedIraJob = next.selectedIraJob || "wind-longspur";
+  next.selectedIraClassificationArea = next.selectedIraClassificationArea || "rebarInstall";
+  if (next.selectedIraClassificationArea !== "all" && (!areas[next.selectedIraClassificationArea] || areas[next.selectedIraClassificationArea].archived)) next.selectedIraClassificationArea = "rebarInstall";
   if (!next.selectedDrugTestingDepartment || next.selectedDrugTestingDepartment === "Rebar") next.selectedDrugTestingDepartment = "Rebar Fabrication";
   if (!drugTestingDepartmentNames(next).includes(next.selectedDrugTestingDepartment)) next.selectedDrugTestingDepartment = "Rebar Fabrication";
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
@@ -7687,21 +7689,24 @@ function renderIraRosters() {
 }
 
 function renderIraJobClassification() {
-  const jobs = (state.jobs || []).slice().sort((a, b) => {
+  const allJobs = state.jobs || [];
+  const jobs = allJobs.filter((job) => state.selectedIraClassificationArea === "all" || job.area === state.selectedIraClassificationArea).slice().sort((a, b) => {
     const areaCompare = String(areas[a.area]?.label || a.area || "").localeCompare(String(areas[b.area]?.label || b.area || ""));
     return areaCompare || a.name.localeCompare(b.name);
   });
   const canManage = canManageIraCompliance();
+  const areaOptions = [{ id: "all", name: "All departments / Todos los departamentos" }, ...visibleAreaEntries().map(([id, info]) => ({ id, name: `${info.label} / ${info.es}` }))];
   return `
     <section class="panel">
       <div class="split">
         <div>
           <h2>${t("Classify IRA jobs", "Clasificar trabajos IRA")}</h2>
-          <p class="sub">Mark any job that must track apprentice participation. Its roster and compliance chart will appear immediately in the IRA dashboard.</p>
-          <p class="sub es">Marque cualquier trabajo que deba controlar la participacion de aprendices. Su lista y grafica apareceran inmediatamente en el panel IRA.</p>
+          <p class="sub">Only jobs you classify as IRA will receive a target, roster, and compliance chart.</p>
+          <p class="sub es">Solo los trabajos que clasifique como IRA tendran meta, lista y grafica de cumplimiento.</p>
         </div>
-        <span class="tag">${jobs.filter((job) => job.iraRequired).length} IRA</span>
+        <span class="tag">${allJobs.filter((job) => job.iraRequired).length} IRA</span>
       </div>
+      <div class="form-grid compact-form-grid section-gap no-print"><label>Department filter<span class="es">Filtro de departamento</span><select onchange="setIraClassificationArea(this.value)">${areaOptions.map((option) => `<option value="${option.id}" ${option.id === state.selectedIraClassificationArea ? "selected" : ""}>${escapeHtml(option.name)}</option>`).join("")}</select></label></div>
       ${!canManage ? `<div class="notice section-gap">Only Admin or Safety can change IRA job classifications.<span class="es">Solo Admin o Seguridad puede cambiar la clasificacion IRA.</span></div>` : ""}
       <div class="table-wrap section-gap">
         <table class="ira-classification-table">
@@ -7711,8 +7716,8 @@ function renderIraJobClassification() {
               <td><strong>${escapeHtml(job.name)}</strong><small>${escapeHtml(job.number || "")}</small></td>
               <td>${escapeHtml(areas[job.area]?.label || job.area || "")}<small>${escapeHtml(job.jobType || "")}</small></td>
               <td>${escapeHtml(job.status || "Active")}</td>
-              <td><label class="ira-classification-toggle"><input type="checkbox" ${job.iraRequired ? "checked" : ""} ${canManage ? `onchange="setJobIraRequirement('${job.id}', this.checked)"` : "disabled"} /><span>${job.iraRequired ? t("IRA required", "Requiere IRA") : t("Not IRA", "No IRA")}</span></label></td>
-              <td><div class="ira-target-inputs"><label>Min<input type="number" min="0" max="100" step="0.1" value="${Number(job.iraMinimumPercent ?? 15)}" ${canManage && job.iraRequired ? `onchange="updateIraJobTarget('${job.id}', 'iraMinimumPercent', this.value)"` : "disabled"} /></label><label>Max<input type="number" min="0" max="100" step="0.1" value="${Number(job.iraMaximumPercent ?? 20)}" ${canManage && job.iraRequired ? `onchange="updateIraJobTarget('${job.id}', 'iraMaximumPercent', this.value)"` : "disabled"} /></label></div></td>
+              <td><label class="ira-classification-toggle"><input type="checkbox" ${job.iraRequired ? "checked" : ""} ${canManage ? `onchange="setJobIraRequirement('${job.id}', this.checked)"` : "disabled"} /><span>${job.iraRequired ? t("IRA job", "Trabajo IRA") : t("Classify as IRA", "Clasificar como IRA")}</span></label></td>
+              <td>${job.iraRequired ? `<div class="ira-target-inputs"><label>Min<input type="number" min="0" max="100" step="0.1" value="${Number(job.iraMinimumPercent ?? 15)}" ${canManage ? `onchange="updateIraJobTarget('${job.id}', 'iraMinimumPercent', this.value)"` : "disabled"} /></label><label>Max<input type="number" min="0" max="100" step="0.1" value="${Number(job.iraMaximumPercent ?? 20)}" ${canManage ? `onchange="updateIraJobTarget('${job.id}', 'iraMaximumPercent', this.value)"` : "disabled"} /></label></div>` : `<span class="sub">Not applicable<br><small>No aplica</small></span>`}</td>
               <td>${job.iraRequired ? `<button class="table-button" type="button" onclick="openIraJobRoster('${job.id}')">${t("Open roster", "Abrir lista")}</button>` : `<span class="sub">--</span>`}</td>
             </tr>`).join("") || `<tr><td colspan="6"><div class="empty-state">No jobs have been added yet.<span class="es">Todavia no hay trabajos.</span><button class="primary-action" type="button" onclick="changeTab('jobs')">${t("Add a job", "Agregar trabajo")}</button></div></td></tr>`}
           </tbody>
@@ -7721,6 +7726,13 @@ function renderIraJobClassification() {
       <div class="notice section-gap">Unclassifying a job removes it from the IRA dashboard but keeps its saved roster for later use.<span class="es">Quitar la clasificacion oculta el trabajo del panel IRA, pero conserva su lista para uso futuro.</span></div>
     </section>
   `;
+}
+
+function setIraClassificationArea(areaId) {
+  if (areaId !== "all" && (!areas[areaId] || areas[areaId].archived)) return;
+  state.selectedIraClassificationArea = areaId;
+  saveState();
+  render();
 }
 
 function renderIraCompliance() {
