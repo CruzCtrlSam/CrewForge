@@ -1071,6 +1071,9 @@ const defaultIraRostersByJob = {
     workers: ["Wilfredo Vargas", "Juan Cano", "Jose Vargas", "Melquiel Gardozo", "Isaís Vargas"]
   }
 };
+defaultIraRostersByJob.longspur = defaultIraRostersByJob["wind-longspur"];
+defaultIraRostersByJob["four-horizons-wind"] = defaultIraRostersByJob["wind-four-horizons-ira"];
+defaultIraRostersByJob["four-horizons-substation"] = defaultIraRostersByJob["four-horizons-west"];
 
 const bakersfieldControlCodes = [
   ["AFX", "DE6 / 4-78D", 18445],
@@ -1114,6 +1117,28 @@ const fourHorizonsJob = {
   iraRosterSourceDate: defaultIraRostersByJob["four-horizons-west"].sourceDate,
   iraRoster: defaultIraRostersByJob["four-horizons-west"].workers.map((name, index) => ({
     id: `ira-worker-four-horizons-west-${index + 1}`,
+    name,
+    addedAt: "Imported roster",
+    addedBy: "CrewForge"
+  }))
+};
+
+const fourHorizonsIraSubstationJob = {
+  id: "four-horizons-substation",
+  name: "Four Horizons Substation",
+  number: "FH-SUB-IRA",
+  customer: "Mortenson",
+  area: "rebarInstall",
+  jobType: "T-line Substation",
+  status: "Active",
+  foreman: "Wilfredo Vargas",
+  iraRequired: true,
+  iraMinimumPercent: 15,
+  iraMaximumPercent: 20,
+  iraRosterSeedVersion: 1,
+  iraRosterSourceDate: defaultIraRostersByJob["four-horizons-substation"].sourceDate,
+  iraRoster: defaultIraRostersByJob["four-horizons-substation"].workers.map((name, index) => ({
+    id: `ira-worker-four-horizons-substation-${index + 1}`,
     name,
     addedAt: "Imported roster",
     addedBy: "CrewForge"
@@ -1696,7 +1721,11 @@ function mergeSharedState(remoteData) {
 }
 
 function remoteNeedsIraRosterMigration(remoteData) {
-  return (remoteData?.jobs || []).some((job) => defaultIraRostersByJob[job.id] && Number(job.iraRosterSeedVersion || 0) < 1);
+  const jobs = remoteData?.jobs || [];
+  const substationDeleted = (remoteData?.deletedSeedIds || []).includes(fourHorizonsIraSubstationJob.id);
+  const hasSubstation = jobs.some((job) => job.id === fourHorizonsIraSubstationJob.id || sameName(job.name, fourHorizonsIraSubstationJob.name));
+  return jobs.some((job) => defaultIraRostersByJob[job.id] && Number(job.iraRosterSeedVersion || 0) < 1)
+    || (!substationDeleted && !hasSubstation);
 }
 
 function applyRemoteState(remoteData) {
@@ -2098,6 +2127,12 @@ function upgradeState(next, resetToCurrentWeek = false) {
   };
   next.currentForeman = aliasName(next.currentForeman);
   next.setupForeman = aliasName(next.setupForeman);
+  next.jobs = next.jobs || [];
+  if (seedTrialData
+    && !next.deletedSeedIds.includes(fourHorizonsIraSubstationJob.id)
+    && !(next.jobs || []).some((job) => job.id === fourHorizonsIraSubstationJob.id || sameName(job.name, fourHorizonsIraSubstationJob.name))) {
+    next.jobs.push(structuredClone(fourHorizonsIraSubstationJob));
+  }
   next.jobs = (next.jobs || []).map((job) => {
     const defaultRoster = defaultIraRostersByJob[job.id];
     const savedRoster = Array.isArray(job.iraRoster)
@@ -2108,14 +2143,15 @@ function upgradeState(next, resetToCurrentWeek = false) {
           addedBy: worker.addedBy || ""
         })).filter((worker) => worker.name)
       : [];
-    const shouldSeedRoster = defaultRoster && Number(job.iraRosterSeedVersion || 0) < 1 && !savedRoster.length;
+    const needsRosterMigration = defaultRoster && Number(job.iraRosterSeedVersion || 0) < 1;
+    const shouldSeedRoster = needsRosterMigration && !savedRoster.length;
     return {
       ...job,
       jobType: job.jobType || defaultJobTypeForArea(job.area),
       foundationIds: job.foundationIds || [],
       customTracking: job.customTracking || [],
       documents: job.documents || [],
-      iraRequired: job.iraRequired ?? ["wind-longspur", "wind-four-horizons-ira", "four-horizons-west"].includes(job.id),
+      iraRequired: needsRosterMigration ? true : (job.iraRequired ?? ["wind-longspur", "longspur", "wind-four-horizons-ira", "four-horizons-wind", "four-horizons-west", "four-horizons-substation"].includes(job.id)),
       iraMinimumPercent: Number(job.iraMinimumPercent ?? 15),
       iraMaximumPercent: Number(job.iraMaximumPercent ?? 20),
       iraRosterSeedVersion: defaultRoster ? 1 : Number(job.iraRosterSeedVersion || 0),
