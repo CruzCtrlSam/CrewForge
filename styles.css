@@ -4678,6 +4678,45 @@ tr:last-child td {
   white-space: nowrap;
 }
 
+.ira-classification-table td > small {
+  display: block;
+  margin-top: 3px;
+  color: #68757f;
+}
+
+.ira-classified-row td { background: #f2f8f4; }
+
+.ira-classification-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 115px;
+  font-weight: 800;
+}
+
+.ira-classification-toggle input {
+  width: 19px;
+  height: 19px;
+}
+
+.ira-target-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(68px, 1fr));
+  gap: 6px;
+  min-width: 145px;
+}
+
+.ira-target-inputs label {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ira-target-inputs input {
+  min-width: 0;
+  margin-top: 2px;
+  padding: 6px;
+}
+
 .file-action {
   display: inline-flex;
   align-items: center;
@@ -4713,6 +4752,7 @@ tr:last-child td {
   .ira-job-visuals { grid-template-columns: 1fr; }
   .ira-card-roster ul { grid-template-columns: 1fr; }
   .ira-roster-summary { grid-template-columns: auto 1fr; }
+  .ira-classification-table { min-width: 780px; }
 }
 
 @media print {
