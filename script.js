@@ -774,6 +774,7 @@ function trialWindFarmJobRecord(job) {
     iraRequired,
     iraMinimumPercent: 15,
     iraMaximumPercent: 20,
+    iraRosterSeedVersion: iraRequired ? 1 : 0,
     iraRosterSourceDate: iraRequired ? defaultIraRostersByJob[job.id]?.sourceDate || "" : "",
     iraRoster: iraRequired
       ? (defaultIraRostersByJob[job.id]?.workers || []).map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
@@ -1109,6 +1110,7 @@ const fourHorizonsJob = {
   iraRequired: true,
   iraMinimumPercent: 15,
   iraMaximumPercent: 20,
+  iraRosterSeedVersion: 1,
   iraRosterSourceDate: defaultIraRostersByJob["four-horizons-west"].sourceDate,
   iraRoster: defaultIraRostersByJob["four-horizons-west"].workers.map((name, index) => ({
     id: `ira-worker-four-horizons-west-${index + 1}`,
@@ -1693,8 +1695,13 @@ function mergeSharedState(remoteData) {
   return upgradeState({ ...structuredClone(state), ...shared });
 }
 
+function remoteNeedsIraRosterMigration(remoteData) {
+  return (remoteData?.jobs || []).some((job) => defaultIraRostersByJob[job.id] && Number(job.iraRosterSeedVersion || 0) < 1);
+}
+
 function applyRemoteState(remoteData) {
   if (!remoteData) return;
+  const shouldPushIraRosterMigration = remoteNeedsIraRosterMigration(remoteData);
   const next = mergeSharedState(remoteData);
   const active = document.activeElement;
   const isEditing = active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName);
@@ -1707,6 +1714,7 @@ function applyRemoteState(remoteData) {
   persistLocalState();
   render();
   restoreFoundationView(foundationView);
+  if (shouldPushIraRosterMigration) pushCloud(true);
 }
 
 function pushCloud(immediate = false) {
@@ -2090,36 +2098,33 @@ function upgradeState(next, resetToCurrentWeek = false) {
   };
   next.currentForeman = aliasName(next.currentForeman);
   next.setupForeman = aliasName(next.setupForeman);
-  next.jobs = (next.jobs || []).map((job) => ({
-    ...job,
-    jobType: job.jobType || defaultJobTypeForArea(job.area),
-    foundationIds: job.foundationIds || [],
-    customTracking: job.customTracking || [],
-    documents: job.documents || [],
-    iraRequired: job.iraRequired ?? ["wind-longspur", "wind-four-horizons-ira", "four-horizons-west"].includes(job.id),
-    iraMinimumPercent: Number(job.iraMinimumPercent ?? 15),
-    iraMaximumPercent: Number(job.iraMaximumPercent ?? 20),
-    iraRosterSourceDate: job.iraRosterSourceDate || defaultIraRostersByJob[job.id]?.sourceDate || "",
-    iraRoster: Array.isArray(job.iraRoster)
+  next.jobs = (next.jobs || []).map((job) => {
+    const defaultRoster = defaultIraRostersByJob[job.id];
+    const savedRoster = Array.isArray(job.iraRoster)
       ? job.iraRoster.map((worker, index) => ({
           id: worker.id || `ira-worker-${job.id}-${index}`,
           name: String(worker.name || "").trim(),
           addedAt: worker.addedAt || "",
           addedBy: worker.addedBy || ""
         })).filter((worker) => worker.name)
-      : (defaultIraRostersByJob[job.id]?.workers || []).map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
-  }));
-  const fourHorizonsSubstation = next.jobs.find((job) => job.id === "four-horizons-west");
-  if (!next.iraSubstationRosterSeededV167 && fourHorizonsSubstation && !fourHorizonsSubstation.iraRoster.length) {
-    fourHorizonsSubstation.iraRosterSourceDate = defaultIraRostersByJob["four-horizons-west"].sourceDate;
-    fourHorizonsSubstation.iraRoster = defaultIraRostersByJob["four-horizons-west"].workers.map((name, index) => ({
-      id: `ira-worker-four-horizons-west-${index + 1}`,
-      name,
-      addedAt: "Imported roster",
-      addedBy: "CrewForge"
-    }));
-  }
-  next.iraSubstationRosterSeededV167 = true;
+      : [];
+    const shouldSeedRoster = defaultRoster && Number(job.iraRosterSeedVersion || 0) < 1 && !savedRoster.length;
+    return {
+      ...job,
+      jobType: job.jobType || defaultJobTypeForArea(job.area),
+      foundationIds: job.foundationIds || [],
+      customTracking: job.customTracking || [],
+      documents: job.documents || [],
+      iraRequired: job.iraRequired ?? ["wind-longspur", "wind-four-horizons-ira", "four-horizons-west"].includes(job.id),
+      iraMinimumPercent: Number(job.iraMinimumPercent ?? 15),
+      iraMaximumPercent: Number(job.iraMaximumPercent ?? 20),
+      iraRosterSeedVersion: defaultRoster ? 1 : Number(job.iraRosterSeedVersion || 0),
+      iraRosterSourceDate: job.iraRosterSourceDate || defaultRoster?.sourceDate || "",
+      iraRoster: shouldSeedRoster
+        ? defaultRoster.workers.map((name, index) => ({ id: `ira-worker-${job.id}-${index + 1}`, name, addedAt: "Imported roster", addedBy: "CrewForge" }))
+        : savedRoster
+    };
+  });
   if (!next.jobs.some((job) => job.id === next.selectedIraJob && job.iraRequired)) {
     next.selectedIraJob = next.jobs.find((job) => job.iraRequired)?.id || "";
   }
