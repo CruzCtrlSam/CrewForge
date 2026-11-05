@@ -2796,6 +2796,12 @@ function isWindFarmJob(jobId) {
   return jobById(jobId)?.jobType === "Wind Farm";
 }
 
+function isMortensonProject(job) {
+  if (!job) return false;
+  if (/\bmortenson\b/i.test(String(job.customer || ""))) return true;
+  return ["wind-longspur", "longspur", "wind-four-horizons-ira", "four-horizons-wind"].includes(String(job.id || ""));
+}
+
 function generateFoundationIds(prefix, from, to) {
   const start = Number(from);
   const end = Number(to);
@@ -7034,6 +7040,7 @@ function exportMortensonWeeklyCsv() {
   const map = foundationMapForJob();
   const job = jobById(map?.jobId);
   if (!map || !job) return showToast("Select a configured foundation map first");
+  if (!isMortensonProject(job)) return showToast("This export is only available for Mortenson projects / Esta exportacion es solo para proyectos Mortenson");
   if (!state.foundationReportFrom || !state.foundationReportTo) return showToast("Choose the weekly From and Through dates first / Seleccione las fechas semanales primero");
   if (state.foundationReportFrom > state.foundationReportTo) return showToast("The report start date must be before the end date / La fecha inicial debe ser anterior a la final");
   const roster = Array.isArray(job.iraRoster) ? job.iraRoster : [];
@@ -7166,7 +7173,7 @@ function renderFoundationProgress() {
         <div class="foundation-map-actions">
           ${canManageFoundationMaps() ? `<button class="primary-action" id="openFoundationProjectWizard" type="button">${t("Add project map", "Agregar mapa")}</button>` : ""}
           ${map && canManageFoundationMaps() ? `<span class="tag">${map.published ? "Published / Publicado" : "Draft / Borrador"}</span>` : ""}
-          ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="secondary-action no-print" id="exportFoundationCsv" type="button">${t("History CSV", "CSV historial")}</button><button class="primary-action no-print" id="exportMortensonWeeklyCsv" type="button">${t("Mortenson weekly CSV", "CSV semanal Mortenson")}</button>` : ""}
+          ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="secondary-action no-print" id="exportFoundationCsv" type="button">${t("History CSV", "CSV historial")}</button>${isMortensonProject(job) ? `<button class="primary-action no-print" id="exportMortensonWeeklyCsv" type="button">${t("Mortenson weekly CSV", "CSV semanal Mortenson")}</button>` : ""}` : ""}
           ${canManageFoundationMaps() && map ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Finish editing", "Terminar edicion") : t("Edit map", "Editar mapa")}</button>` : ""}
         </div>
       </div>
