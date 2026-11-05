@@ -74,6 +74,21 @@ assert.equal(FoundationProgress.progressRows(datedFoundations).length, 2);
 assert.equal(FoundationProgress.progressRows(datedFoundations, "2026-10-02", "2026-10-02").length, 1);
 assert.equal(FoundationProgress.progressRows(datedFoundations, "2026-10-03", "").length, 0);
 
+assert.equal(FoundationProgress.mortensonLocationLabel("T001"), "1");
+assert.equal(FoundationProgress.mortensonLocationLabel("WTG-070"), "70");
+assert.equal(FoundationProgress.mortensonLocationLabel("A-12"), "A-12");
+const weeklyExport = FoundationProgress.mortensonWeeklyExport([
+  { foundationId: "T002", at: "2026-10-28T12:00:00.000Z" },
+  { foundationId: "T001", at: "2026-10-27T12:00:00.000Z" },
+  { foundationId: "T001", at: "2026-10-29T12:00:00.000Z" }
+], [{ name: "Worker One" }, { name: "Worker Two" }], "Reliable Rebar");
+assert.deepEqual(weeklyExport.locations, ["1", "2"]);
+assert.equal(weeklyExport.rows.length, 2);
+assert.deepEqual(weeklyExport.rows[0].slice(0, 4), ["Worker One", "Reliable Rebar", "1", "2"]);
+assert.equal(weeklyExport.headers[2], "L1");
+assert.equal(weeklyExport.headers[31], "L30");
+assert.equal(weeklyExport.overflowCount, 0);
+
 assert.deepEqual(FoundationProgress.generateMapIds("", 1, 3), ["1", "2", "3"]);
 assert.deepEqual(FoundationProgress.generateMapIds("WTG-", 1, 3), ["WTG-001", "WTG-002", "WTG-003"]);
 assert.deepEqual(FoundationProgress.generateMapIds("T", 4, 2), []);

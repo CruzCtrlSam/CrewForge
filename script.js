@@ -7030,6 +7030,27 @@ function exportFoundationCsv() {
   showToast("Foundation history CSV exported");
 }
 
+function exportMortensonWeeklyCsv() {
+  const map = foundationMapForJob();
+  const job = jobById(map?.jobId);
+  if (!map || !job) return showToast("Select a configured foundation map first");
+  if (!state.foundationReportFrom || !state.foundationReportTo) return showToast("Choose the weekly From and Through dates first / Seleccione las fechas semanales primero");
+  if (state.foundationReportFrom > state.foundationReportTo) return showToast("The report start date must be before the end date / La fecha inicial debe ser anterior a la final");
+  const roster = Array.isArray(job.iraRoster) ? job.iraRoster : [];
+  if (!roster.length) return showToast("Add the employees to this job roster first / Agregue empleados a la lista del trabajo primero");
+  const reportRows = foundationReportRows(map);
+  if (!reportRows.length) return showToast("No progress was recorded in that date range / No hay avance en esas fechas");
+  const employerName = job.weeklyTrackingEmployer || (job.area === "rebarInstall" ? "Reliable Rebar" : state.companyName || "");
+  const report = window.FoundationProgress.mortensonWeeklyExport(reportRows, roster, employerName);
+  const csv = [report.headers, ...report.rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const project = (job.name || "wind-project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const range = `${state.foundationReportFrom || "start"}-to-${state.foundationReportTo || "present"}`;
+  downloadFile(`crewforge-mortenson-weekly-locations-${project}-${range}.csv`, `\ufeff${csv}`);
+  showToast(report.overflowCount
+    ? `CSV exported. ${report.overflowCount} locations are listed in Additional Locations.`
+    : "Mortenson weekly location CSV exported");
+}
+
 function foundationHistoryTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -7145,7 +7166,7 @@ function renderFoundationProgress() {
         <div class="foundation-map-actions">
           ${canManageFoundationMaps() ? `<button class="primary-action" id="openFoundationProjectWizard" type="button">${t("Add project map", "Agregar mapa")}</button>` : ""}
           ${map && canManageFoundationMaps() ? `<span class="tag">${map.published ? "Published / Publicado" : "Draft / Borrador"}</span>` : ""}
-          ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="primary-action no-print" id="exportFoundationCsv" type="button">${t("Export CSV", "Exportar CSV")}</button>` : ""}
+          ${map ? `<button class="secondary-action no-print" data-print="foundation-progress" type="button">${t("Export PDF", "Exportar PDF")}</button><button class="secondary-action no-print" id="exportFoundationCsv" type="button">${t("History CSV", "CSV historial")}</button><button class="primary-action no-print" id="exportMortensonWeeklyCsv" type="button">${t("Mortenson weekly CSV", "CSV semanal Mortenson")}</button>` : ""}
           ${canManageFoundationMaps() && map ? `<button class="secondary-action" id="toggleFoundationSetup" type="button">${state.foundationMapSetupMode ? t("Finish editing", "Terminar edicion") : t("Edit map", "Editar mapa")}</button>` : ""}
         </div>
       </div>
@@ -9576,6 +9597,7 @@ function deleteBundleItem(itemId) {
 function bindFoundationProgressEvents() {
   if (state.activeTab !== "foundationProgress") return;
   if ($("exportFoundationCsv")) $("exportFoundationCsv").addEventListener("click", exportFoundationCsv);
+  if ($("exportMortensonWeeklyCsv")) $("exportMortensonWeeklyCsv").addEventListener("click", exportMortensonWeeklyCsv);
   if ($("openFoundationProjectWizard")) {
     $("openFoundationProjectWizard").addEventListener("click", () => {
       state.foundationProjectWizardOpen = true;

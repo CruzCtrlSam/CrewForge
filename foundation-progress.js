@@ -152,6 +152,37 @@
     });
   }
 
+  function mortensonLocationLabel(value) {
+    const clean = String(value || "").trim();
+    const turbine = clean.match(/^(?:T|WTG[-\s]*)?0*(\d+)$/i);
+    return turbine ? String(Number(turbine[1])) : clean;
+  }
+
+  function mortensonWeeklyExport(reportRows = [], roster = [], employerName = "") {
+    const ordered = reportRows
+      .filter((row) => row?.foundationId && row?.at)
+      .slice()
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)) || String(a.foundationId).localeCompare(String(b.foundationId), undefined, { numeric: true }));
+    const seen = new Set();
+    const locations = [];
+    ordered.forEach((row) => {
+      const location = mortensonLocationLabel(row.foundationId);
+      const key = location.toLowerCase();
+      if (!location || seen.has(key)) return;
+      seen.add(key);
+      locations.push(location);
+    });
+    const locationHeaders = Array.from({ length: 30 }, (_, index) => `L${index + 1}`);
+    const headers = ["Employee Name", "Employee ID", ...locationHeaders, "Apprentice Total Hours", "Total Hours", "Allocation", "Additional Locations"];
+    const primaryLocations = locations.slice(0, 30);
+    const additionalLocations = locations.slice(30).join("; ");
+    const rows = (Array.isArray(roster) ? roster : [])
+      .map((worker) => String(worker?.name || worker || "").trim())
+      .filter(Boolean)
+      .map((name) => [name, employerName, ...primaryLocations, ...Array(Math.max(0, 30 - primaryLocations.length)).fill(""), "", "", "", additionalLocations]);
+    return { headers, rows, locations, overflowCount: Math.max(0, locations.length - 30) };
+  }
+
   function generateMapIds(prefix, from, to) {
     const start = Number(from);
     const end = Number(to);
@@ -173,5 +204,5 @@
     return errors;
   }
 
-  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, positionFromClient, mergeDeletedHotspotIds, excludeDeletedHotspots, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, generateMapIds, validateMapping };
+  return { STATUSES, validStatus, nextStatus, canAdvance, clampCoordinate, positionFromClient, mergeDeletedHotspotIds, excludeDeletedHotspots, counts, transition, shouldAcceptTap, permissions, canAccessJob, historyRows, progressRows, mortensonLocationLabel, mortensonWeeklyExport, generateMapIds, validateMapping };
 });
