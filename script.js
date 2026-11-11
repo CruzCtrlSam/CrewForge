@@ -8636,35 +8636,43 @@ function renderStandardFieldAuditForm() {
 }
 
 function renderReliableRebarAuditForm() {
+  const currentTime = new Date().toTimeString().slice(0, 5);
   return `
-    <div class="notice section-gap">
-      <strong>Reliable Rebar General Safety Inspection</strong><br>
-      Choose Meets Expectations, Needs Improvement, or N/A. A finding and corrective action are required for every item marked Needs Improvement.
-      <span class="es">Elija Cumple las expectativas, Necesita mejorar o N/A. Cada punto marcado Necesita mejorar requiere un hallazgo y una accion correctiva.</span>
+    <div class="safety-audit-form-heading section-gap">
+      <div><span class="eyebrow">Safety Audit Form</span><h3>General Safety Inspection</h3><span class="es">Formato de inspeccion de seguridad · Inspeccion general de seguridad</span></div>
+      <div class="safety-audit-key"><span><i class="audit-dot meets"></i>Meets / Cumple</span><span><i class="audit-dot improve"></i>Improve / Mejorar</span><span><i class="audit-dot na"></i>N/A</span></div>
     </div>
-    <div class="form-grid section-gap">
+    <div class="form-grid safety-audit-info section-gap">
       <label>Inspector company<span class="es">Compania del inspector</span><input id="auditInspectorCompany" value="${escapeHtml(state.companyName || "Valor Steel")}" /></label>
+      <label>Inspection time<span class="es">Hora de inspeccion</span><input id="auditTime" type="time" value="${currentTime}" /></label>
       <label>Inspection location<span class="es">Lugar de inspeccion</span><input id="auditLocation" placeholder="Jobsite area, turbine, or GPS location" /></label>
       <label class="wide-field">Other attendees<span class="es">Otros asistentes</span><input id="auditAttendees" placeholder="Names or none / Nombres o ninguno" /></label>
     </div>
-    <div class="reliable-audit-list section-gap">
+    <div class="safety-audit-results section-gap" aria-live="polite">
+      <div><span>Meets expectations<small>Cumple</small></span><strong id="auditMeetsTotal">0</strong></div>
+      <div><span>Needs improvement<small>Necesita mejorar</small></span><strong id="auditImproveTotal">0</strong></div>
+      <div><span>Number of findings<small>Numero de hallazgos</small></span><strong id="auditFindingTotal">0</strong></div>
+      <div><span>Number of actions<small>Numero de acciones</small></span><strong id="auditActionTotal">0</strong></div>
+    </div>
+    <div class="notice section-gap">Every item marked Needs Improvement requires both a finding and corrective action.<span class="es">Cada punto marcado Necesita mejorar requiere un hallazgo y una accion correctiva.</span></div>
+    <div class="reliable-audit-form-table section-gap">
+      <div class="reliable-audit-table-head"><span>Question<br><small>Pregunta</small></span><span>Answer<br><small>Respuesta</small></span><span>Finding?<br><small>Hallazgo?</small></span><span>Action?<br><small>Accion?</small></span></div>
       ${reliableRebarSafetyInspectionChecks.map((item, index) => `
-        <article class="reliable-audit-item">
+        <article class="reliable-audit-item" data-reliable-audit-row="${escapeHtml(item.code)}">
           <div class="reliable-audit-question">
-            <span class="tag">${escapeHtml(item.code)}</span>
-            <span class="audit-item-number">${index + 1} / ${reliableRebarSafetyInspectionChecks.length}</span>
+            <span class="audit-item-number">${index + 1}</span>
             <strong>${escapeHtml(item.en)}</strong>
             <span class="es reliable-audit-es">${escapeHtml(item.es)}</span>
+            <small>${escapeHtml(item.code)}</small>
           </div>
-          <label>Result<span class="es">Resultado</span>
-            <select data-reliable-audit-answer="${escapeHtml(item.code)}">
-              <option value="Meets Expectations">Meets Expectations / Cumple las expectativas</option>
-              <option value="Needs Improvement">Needs Improvement / Necesita mejorar</option>
-              <option value="N/A" selected>N/A</option>
-            </select>
-          </label>
-          <label>Finding<span class="es">Hallazgo</span><textarea data-reliable-audit-finding="${escapeHtml(item.code)}" placeholder="Describe the condition found / Describa la condicion"></textarea></label>
-          <label>Corrective action<span class="es">Accion correctiva</span><textarea data-reliable-audit-action="${escapeHtml(item.code)}" placeholder="How was the issue addressed? / Como se corrigio?"></textarea></label>
+          <fieldset class="audit-answer-options" aria-label="Result for question ${index + 1}">
+            <legend class="mobile-audit-cell-label">Answer / Respuesta</legend>
+            <label><input type="radio" name="audit-answer-${index}" value="Meets Expectations" data-reliable-audit-answer="${escapeHtml(item.code)}" /><i class="audit-dot meets"></i><span>Meets<small>Cumple</small></span></label>
+            <label><input type="radio" name="audit-answer-${index}" value="Needs Improvement" data-reliable-audit-answer="${escapeHtml(item.code)}" /><i class="audit-dot improve"></i><span>Improve<small>Mejorar</small></span></label>
+            <label><input type="radio" name="audit-answer-${index}" value="N/A" data-reliable-audit-answer="${escapeHtml(item.code)}" checked /><i class="audit-dot na"></i><span>N/A</span></label>
+          </fieldset>
+          <label class="audit-table-textarea"><span class="mobile-audit-cell-label">Finding / Hallazgo</span><textarea data-reliable-audit-finding="${escapeHtml(item.code)}" placeholder="Condition found / Condicion encontrada"></textarea></label>
+          <label class="audit-table-textarea"><span class="mobile-audit-cell-label">Action / Accion</span><textarea data-reliable-audit-action="${escapeHtml(item.code)}" placeholder="Correction made / Correccion realizada"></textarea></label>
         </article>
       `).join("")}
     </div>
@@ -8676,6 +8684,30 @@ function renderReliableRebarAuditForm() {
       </div>
     </label>
   `;
+}
+
+function updateReliableAuditFormSummary() {
+  const checked = [...document.querySelectorAll("[data-reliable-audit-answer]:checked")];
+  const meets = checked.filter((input) => input.value === "Meets Expectations").length;
+  const improve = checked.filter((input) => input.value === "Needs Improvement").length;
+  const findings = [...document.querySelectorAll("[data-reliable-audit-finding]")].filter((input) => input.value.trim()).length;
+  const actions = [...document.querySelectorAll("[data-reliable-audit-action]")].filter((input) => input.value.trim()).length;
+  if ($("auditMeetsTotal")) $("auditMeetsTotal").textContent = meets;
+  if ($("auditImproveTotal")) $("auditImproveTotal").textContent = improve;
+  if ($("auditFindingTotal")) $("auditFindingTotal").textContent = findings;
+  if ($("auditActionTotal")) $("auditActionTotal").textContent = actions;
+  document.querySelectorAll("[data-reliable-audit-row]").forEach((row) => {
+    const selected = row.querySelector("[data-reliable-audit-answer]:checked")?.value || "N/A";
+    row.classList.toggle("needs-improvement", selected === "Needs Improvement");
+    row.classList.toggle("meets-expectations", selected === "Meets Expectations");
+  });
+}
+
+function bindReliableAuditForm() {
+  document.querySelectorAll("[data-reliable-audit-answer], [data-reliable-audit-finding], [data-reliable-audit-action]").forEach((input) => {
+    input.addEventListener(input.matches("textarea") ? "input" : "change", updateReliableAuditFormSummary);
+  });
+  updateReliableAuditFormSummary();
 }
 
 function renderFieldAudits() {
@@ -10128,6 +10160,7 @@ function bindTabEvents() {
     });
   }
   bindSignaturePad("auditSignaturePad", "clearAuditSignature");
+  bindReliableAuditForm();
   if ($("saveFieldAudit")) $("saveFieldAudit").addEventListener("click", saveFieldAuditRecord);
   document.querySelectorAll("[data-print-audit]").forEach((button) => {
     button.addEventListener("click", () => printFieldAudit(button.dataset.printAudit));
@@ -11975,7 +12008,7 @@ async function saveFieldAuditRecord() {
   const responses = {};
   if (auditType.id === fieldAuditTypes.reliableRebarGeneral.id) {
     for (const item of reliableRebarSafetyInspectionChecks) {
-      const answer = document.querySelector(`[data-reliable-audit-answer="${item.code}"]`)?.value || "N/A";
+      const answer = document.querySelector(`[data-reliable-audit-answer="${item.code}"]:checked`)?.value || "N/A";
       const finding = document.querySelector(`[data-reliable-audit-finding="${item.code}"]`)?.value.trim() || "";
       const action = document.querySelector(`[data-reliable-audit-action="${item.code}"]`)?.value.trim() || "";
       if (answer === "Needs Improvement" && (!finding || !action)) {
@@ -11999,6 +12032,7 @@ async function saveFieldAuditRecord() {
     auditType: auditType.id,
     templateName: auditType.id === fieldAuditTypes.reliableRebarGeneral.id ? "Reliable Rebar General Safety Inspection" : auditType.label,
     date: $("auditDate")?.value || dateInputValue(state.selectedWeek, state.selectedWeek),
+    time: $("auditTime")?.value || "",
     createdBy: $("auditUser")?.value.trim() || actorName(),
     checks,
     responses,
@@ -12029,58 +12063,92 @@ function printFieldAudit(recordId) {
   if (!win) return showToast("Allow popups to print this audit");
   const companyBrand = currentCompanyPrintBrand();
   const logoUrl = new URL(companyBrand.logo, window.location.href).href;
-  const summary = reliableRebarAuditSummary(audit.responses);
-  const rows = reliableRebarSafetyInspectionChecks.map((item) => {
+  const findingsCount = reliableRebarSafetyInspectionChecks.filter((item) => audit.responses?.[item.code]?.finding).length;
+  const actionsCount = reliableRebarSafetyInspectionChecks.filter((item) => audit.responses?.[item.code]?.action).length;
+  const answerMarks = (answer) => [
+    ["Meets Expectations", "Meets", "meets"],
+    ["Needs Improvement", "Improve", "improve"],
+    ["N/A", "N/A", "na"]
+  ].map(([value, label, className]) => `<span class="answer-option ${answer === value ? "selected" : ""}"><i class="${className}"></i>${label}</span>`).join("");
+  const rowHtml = (item) => {
     const response = audit.responses?.[item.code] || { answer: "N/A", finding: "", action: "" };
     return `<tr>
-      <td><strong>${escapeHtml(item.code)}</strong></td>
       <td>${escapeHtml(item.en)}<small>${escapeHtml(item.es)}</small></td>
-      <td>${escapeHtml(response.answer)}</td>
+      <td class="answer-cell">${answerMarks(response.answer)}</td>
       <td>${escapeHtml(response.finding || "")}</td>
       <td>${escapeHtml(response.action || "")}</td>
     </tr>`;
-  }).join("");
+  };
+  const firstPageRows = reliableRebarSafetyInspectionChecks.slice(0, 11).map(rowHtml).join("");
+  const secondPageRows = reliableRebarSafetyInspectionChecks.slice(11).map(rowHtml).join("");
   const files = audit.files?.map((file) => `<li>${escapeHtml(file.name)} · ${fileSize(file.size)}</li>`).join("") || "<li>No attachments / Sin archivos adjuntos</li>";
   win.document.write(`<!doctype html>
     <html><head><title>${escapeHtml(audit.templateName)} - ${escapeHtml(jobName(audit.jobId))}</title><style>
-      @page { size: landscape; margin: 0.45in; }
-      body { font-family: Arial, sans-serif; margin: 24px; color: #0b1828; }
-      header { display: flex; justify-content: space-between; align-items: flex-start; gap: 22px; border-bottom: 3px solid #0b1828; padding-bottom: 12px; }
-      h1 { margin: 0; font-size: 24px; } h2 { margin: 18px 0 8px; font-size: 15px; text-transform: uppercase; }
-      p, li, td, th { font-size: 10px; line-height: 1.35; }
-      .company-name { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-      .company-logo { width: 170px; max-height: 66px; object-fit: contain; object-position: right top; }
-      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
-      .meta div { border: 1px solid #9aa5ad; padding: 8px; min-height: 34px; }
-      .meta strong { display: block; font-size: 9px; text-transform: uppercase; }
-      .summary { font-weight: 700; }
+      @page { size: letter portrait; margin: 0.34in; }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: Arial, sans-serif; margin: 0; color: #17191c; }
+      .page { width: 100%; }
+      .page-break { break-before: page; page-break-before: always; }
+      .audit-header { display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; gap: 12px; margin-bottom: 12px; }
+      .audit-header h1 { margin: 0; color: #555b62; font-size: 18px; text-align: center; text-transform: uppercase; }
+      .audit-header h1 small { display: block; color: #3d559b; font-size: 11px; text-transform: none; }
+      .reliable-mark { color: #153ad1; font-size: 22px; font-weight: 900; line-height: .9; }
+      .reliable-mark small { display: block; font-size: 8px; letter-spacing: .08em; }
+      .company-logo { justify-self: end; width: 112px; max-height: 54px; object-fit: contain; object-position: right center; }
+      h2 { margin: 10px 0 4px; font-size: 10px; }
+      h2 small { display: block; color: #5e6268; }
+      p, li, td, th { font-size: 8px; line-height: 1.18; }
+      .info-table { margin-bottom: 8px; }
+      .info-table th { width: 24%; background: #3d559b; color: #fff; text-align: left; }
+      .info-table td { height: 24px; }
+      .results-table { width: 45%; margin: 6px auto 10px; }
+      .results-table th { background: #3d559b; color: #fff; text-align: left; }
+      .results-table td { height: 24px; font-size: 13px; font-weight: 700; text-align: center; }
+      .instructions { margin: 5px 0; font-size: 8px; }
+      .instructions em { display: block; color: #5e6268; }
+      .key { display: flex; gap: 12px; margin: 6px 0 8px; font-size: 8px; font-weight: 700; }
       table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #9aa5ad; padding: 6px; text-align: left; vertical-align: top; }
-      th { background: #0b3654; color: #fff; }
-      td:nth-child(1) { width: 6%; } td:nth-child(2) { width: 38%; } td:nth-child(3) { width: 14%; } td:nth-child(4), td:nth-child(5) { width: 21%; }
-      td small { display: block; margin-top: 3px; color: #26769a; font-weight: 700; }
+      th, td { border: 1px solid #b6bbc0; padding: 3px 4px; text-align: left; vertical-align: middle; }
+      .question-table th { background: #3d559b; color: #fff; font-size: 9px; text-align: center; }
+      .question-table td:nth-child(1) { width: 55%; } .question-table td:nth-child(2) { width: 12%; } .question-table td:nth-child(3), .question-table td:nth-child(4) { width: 16.5%; }
+      .question-table td small { display: block; margin-top: 1px; font-style: italic; }
+      .question-table tr:nth-child(even) td { background: #f2f3f4; }
       tr { break-inside: avoid; }
-      .signature-block { display: grid; grid-template-columns: minmax(250px, 420px) 1fr; gap: 28px; align-items: end; margin-top: 22px; }
-      .signature-block img { display: block; max-width: 320px; max-height: 80px; border-bottom: 1px solid #0b1828; }
-      .signature-line { border-bottom: 1px solid #0b1828; min-height: 62px; }
-      @media print { body { margin: 0; } }
+      .answer-cell { text-align: center; white-space: nowrap; }
+      .answer-option { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; color: #9ca2a8; font-size: 6px; }
+      .answer-option i, .key i { display: inline-block; width: 6px; height: 6px; border: 1px solid #616970; border-radius: 50%; }
+      .answer-option.selected { color: #111; font-weight: 700; }
+      .answer-option.selected i.meets, .key i.meets { border-color: #16a65a; background: #16a65a; }
+      .answer-option.selected i.improve, .key i.improve { border-color: #e5a400; background: #e5a400; }
+      .answer-option.selected i.na, .key i.na { border-color: #5e6870; background: #5e6870; }
+      .signoff { margin-top: 12px; }
+      .signoff h2 { font-size: 11px; }
+      .signoff p { font-size: 8px; }
+      .signature-block { margin-top: 16px; width: 52%; }
+      .signature-block img { display: block; max-width: 260px; max-height: 62px; border-bottom: 1px solid #0b1828; }
+      .signature-line { border-bottom: 1px solid #0b1828; min-height: 46px; }
+      .attachments { margin-top: 8px; font-size: 7px; }
     </style></head><body>
-      <header><div><p class="company-name">${escapeHtml(companyBrand.name)}</p><h1>${escapeHtml(audit.templateName)}</h1><p>${escapeHtml(jobName(audit.jobId))}</p></div><img class="company-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(companyBrand.name)} logo" /></header>
-      <div class="meta">
-        <div><strong>Inspector / Inspector</strong>${escapeHtml(audit.createdBy || "")}</div>
-        <div><strong>Company / Compania</strong>${escapeHtml(audit.inspectorCompany || "")}</div>
-        <div><strong>Date / Fecha</strong>${escapeHtml(audit.date || "")}</div>
-        <div><strong>Location / Lugar</strong>${escapeHtml(audit.location || "")}</div>
-        <div><strong>Department / Departamento</strong>${escapeHtml(areas[audit.area]?.label || audit.area || "")}</div>
-        <div><strong>Project / Proyecto</strong>${escapeHtml(jobName(audit.jobId))}</div>
-        <div><strong>Other attendees / Otros asistentes</strong>${escapeHtml(audit.attendees || "None / Ninguno")}</div>
-        <div class="summary"><strong>Results / Resultados</strong>${summary.meets} Meets · ${summary.needsImprovement} Improve · ${summary.na} N/A</div>
-      </div>
-      <table><thead><tr><th>Code<br>Codigo</th><th>Question / Pregunta</th><th>Result<br>Resultado</th><th>Finding / Hallazgo</th><th>Corrective action / Accion correctiva</th></tr></thead><tbody>${rows}</tbody></table>
-      ${audit.notes ? `<h2>Overall Notes / Notas generales</h2><p>${escapeHtml(audit.notes)}</p>` : ""}
-      <h2>Evidence / Evidencia</h2><ul>${files}</ul>
-      <p>I acknowledge that the information above is accurate as reported and may be distributed to appropriate company and project resources.<br><strong>Reconozco que la informacion anterior es correcta segun lo reportado y puede distribuirse a los recursos correspondientes de la compania y del proyecto.</strong></p>
-      <div class="signature-block"><div>${audit.signature ? `<img src="${audit.signature}" alt="Inspector signature" />` : `<div class="signature-line"></div>`}<strong>Inspector signature / Firma del inspector</strong></div><div><div class="signature-line"></div><strong>Date / Fecha: ${escapeHtml(audit.date || "")}</strong></div></div>
+      <section class="page">
+        <header class="audit-header"><div class="reliable-mark">RR<small>RELIABLE RE-BAR</small></div><h1>Safety Audit Form<small>Formato de Inspeccion de Seguridad</small></h1><img class="company-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(companyBrand.name)} logo" /></header>
+        <h2>Inspection Information<small>Informacion de la inspeccion</small></h2>
+        <table class="info-table"><tbody><tr><th>Inspector Name<br>Nombre del inspector</th><td>${escapeHtml(audit.createdBy || "")}</td></tr><tr><th>Time & Date of Inspection<br>Hora y fecha de la inspeccion</th><td>${escapeHtml([audit.time, audit.date].filter(Boolean).join(" · "))}</td></tr><tr><th>Location of Inspection<br>Lugar de la inspeccion</th><td>${escapeHtml(audit.location || "")}</td></tr></tbody></table>
+        <h2>Inspection<small>Inspeccion</small></h2>
+        <table class="info-table"><tbody><tr><th>Name<br>Nombre</th><td>General Safety Inspection<br>Inspeccion General de Seguridad</td></tr><tr><th>Project<br>Proyecto</th><td>${escapeHtml(jobName(audit.jobId))}</td></tr></tbody></table>
+        <h2>Results - include totals after completing your inspection.<small>Resultados: incluya los totales despues de completar la inspeccion.</small></h2>
+        <table class="results-table"><thead><tr><th>Number of Findings<br>Numero de hallazgos</th><th>Number of Actions<br>Numero de acciones</th></tr></thead><tbody><tr><td>${findingsCount}</td><td>${actionsCount}</td></tr></tbody></table>
+        <p class="instructions">For each question, use Meets Expectations, Needs Improvement, or N/A if not applicable.<em>Para cada pregunta, use Cumple con las expectativas, Necesita mejorar o N/A si no aplica.</em></p>
+        <p class="instructions">A Needs Improvement response requires a finding, and every finding requires a corrective action.<em>Una respuesta Necesita mejorar requiere un hallazgo y cada hallazgo requiere una accion correctiva.</em></p>
+        <div class="key"><span><i class="meets"></i> Meets / Cumple</span><span><i class="improve"></i> Improve / Mejorar</span><span><i class="na"></i> N/A / No aplica</span></div>
+        <table class="question-table"><thead><tr><th>Question<br>Pregunta</th><th>Answer<br>Respuesta</th><th>Finding?<br>Hallazgo?</th><th>Action?<br>Accion?</th></tr></thead><tbody>${firstPageRows}</tbody></table>
+      </section>
+      <section class="page page-break">
+        <header class="audit-header"><div class="reliable-mark">RR<small>RELIABLE RE-BAR</small></div><h1>Safety Audit Form<small>Formato de Inspeccion de Seguridad</small></h1><img class="company-logo" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(companyBrand.name)} logo" /></header>
+        <table class="question-table"><thead><tr><th>Question<br>Pregunta</th><th>Answer<br>Respuesta</th><th>Finding?<br>Hallazgo?</th><th>Action?<br>Accion?</th></tr></thead><tbody>${secondPageRows}</tbody></table>
+        ${audit.notes ? `<h2>Overall Notes<small>Notas generales</small></h2><p>${escapeHtml(audit.notes)}</p>` : ""}
+        <div class="signoff"><h2>Inspection Sign-Off<small>Firma de la inspeccion</small></h2><p>I acknowledge that the information above is accurate as reported and authorize distribution to appropriate company and project resources.<br><em>Reconozco que la informacion anterior es correcta segun lo reportado y autorizo su distribucion a los recursos correspondientes.</em></p><div class="signature-block">${audit.signature ? `<img src="${audit.signature}" alt="Inspector signature" />` : `<div class="signature-line"></div>`}<strong>Inspector Signature / Firma del inspector</strong></div></div>
+        <div class="attachments"><strong>Evidence / Evidencia:</strong><ul>${files}</ul></div>
+      </section>
       <script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));<\/script>
     </body></html>`);
   win.document.close();
