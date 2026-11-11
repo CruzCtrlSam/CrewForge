@@ -1002,7 +1002,7 @@ const trialSeedWeek = "2026-07-03";
 
 const SUPABASE_URL = "https://ehexrdmtqoxjywahqjmh.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_6Nal5T6ZOVJpI-yzzvGOxw_Ypre8otF";
-const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "foundationMaps", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "qualityChecks", "trainingCourses", "trainingResults", "iraApprentices", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
+const SHARED_STATE_KEYS = ["weeks", "people", "customDepartments", "workerPositions", "jobs", "foundationMaps", "sheets", "production", "jobLists", "bundlePlanner", "safetyForms", "employeeIncidents", "fieldAudits", "shopInspections", "qualityChecks", "trainingCourses", "trainingResults", "iraApprentices", "drugTestingRoster", "drugTestingDraws", "reimbursementRequests", "foremanAliases", "hiddenForemen", "activityLog", "deletedSeedIds", "employeeRosterClearedV126", "employeeDirectoryLinkedV141"];
 const MAX_DEMO_DOCUMENT_BYTES = 25 * 1024 * 1024;
 const SYNC_STATUS_KEY = "crewforge-sync-status";
 const publicTrainingId = new URLSearchParams(window.location.search).get("training") || "";
@@ -1499,6 +1499,11 @@ const defaultState = {
   selectedDrugTestingDepartment: "Rebar Fabrication",
   selectedAuditJob: "",
   selectedFieldAuditType: "",
+  selectedAuditSection: "shop",
+  selectedShopInspectionTemplate: "",
+  shopInspectionFrom: "",
+  shopInspectionTo: "",
+  shopInspectionFilterTemplate: "",
   selectedQualityJob: "",
   selectedQualityArea: "rebarFab",
   selectedEmployeeProfile: "",
@@ -1535,6 +1540,7 @@ const defaultState = {
   safetyForms: [],
   employeeIncidents: [],
   fieldAudits: [],
+  shopInspections: [],
   trainingCourses: [],
   trainingResults: [],
   iraApprentices: structuredClone(defaultIraApprentices),
@@ -1917,6 +1923,11 @@ function upgradeState(next, resetToCurrentWeek = false) {
   next.selectedTrainingTemplate = next.selectedTrainingTemplate || competencyTemplates[0]?.id || "";
   next.selectedAuditJob = next.selectedAuditJob || "";
   next.selectedFieldAuditType = next.selectedFieldAuditType || "";
+  next.selectedAuditSection = ["field", "shop"].includes(next.selectedAuditSection) ? next.selectedAuditSection : "shop";
+  next.selectedShopInspectionTemplate = next.selectedShopInspectionTemplate || "";
+  next.shopInspectionFrom = /^\d{4}-\d{2}-\d{2}$/.test(next.shopInspectionFrom || "") ? next.shopInspectionFrom : "";
+  next.shopInspectionTo = /^\d{4}-\d{2}-\d{2}$/.test(next.shopInspectionTo || "") ? next.shopInspectionTo : "";
+  next.shopInspectionFilterTemplate = next.shopInspectionFilterTemplate || "";
   next.selectedQualityJob = next.selectedQualityJob || "";
   next.selectedQualityArea = next.selectedQualityArea || "rebarFab";
   next.selectedEmployeeProfile = next.selectedEmployeeProfile || "";
@@ -1951,6 +1962,13 @@ function upgradeState(next, resetToCurrentWeek = false) {
     recommendedAction: incident.recommendedAction || "Coaching"
   }));
   next.fieldAudits = next.fieldAudits || [];
+  next.shopInspections = (next.shopInspections || []).map((record) => ({
+    ...record,
+    area: record.area || "",
+    ratings: record.ratings || {},
+    files: Array.isArray(record.files) ? record.files : [],
+    actionStatus: record.actionStatus || (record.correctiveActionRequired ? "Open" : "Not required")
+  }));
   next.trainingCourses = (next.trainingCourses || []).map((course) => ({
     ...course,
     files: course.files || [],
@@ -8596,6 +8614,149 @@ function incidentAttachmentRow(recordId, file) {
   `;
 }
 
+const shopInspectionAreas = ["rebarFab", "solarPiles", "skids"];
+const shopInspectionActionStatuses = ["Open", "In progress", "Closed", "Not required"];
+
+function shopInspectionTemplates(areaId = state.selectedArea) {
+  return window.ShopInspections?.templatesForArea(areaId) || [];
+}
+
+function selectedShopInspectionTemplate() {
+  const templates = shopInspectionTemplates();
+  return templates.find((entry) => entry.id === state.selectedShopInspectionTemplate) || templates[0] || null;
+}
+
+function renderShopInspectionQuestionRows(template) {
+  if (!template) return "";
+  return template.items.map((entry, index) => `
+    <article class="shop-rating-row" data-shop-rating-row="${index}">
+      <div class="shop-rating-question"><strong>${index + 1}. ${escapeHtml(entry.en)}</strong><span class="es">${escapeHtml(entry.es)}</span></div>
+      <fieldset class="shop-rating-options" aria-label="Rating for item ${index + 1}">
+        ${[[0, "0", "Unsafe / Inseguro"], [1, "1", "Deficient / Deficiente"], [2, "2", "OK / Sin defectos"], ["N/A", "N/A", "No aplica"]].map(([value, short, label]) => `<label title="${label}"><input type="radio" name="shop-rating-${index}" data-shop-rating="${index}" value="${value}" ${value === "N/A" ? "checked" : ""} /><strong>${short}</strong></label>`).join("")}
+      </fieldset>
+    </article>
+  `).join("");
+}
+
+function shopInspectionFilters() {
+  return {
+    area: state.selectedArea,
+    from: state.shopInspectionFrom || "",
+    to: state.shopInspectionTo || "",
+    templateId: state.shopInspectionFilterTemplate || ""
+  };
+}
+
+function shopInspectionAttachmentButtons(record) {
+  return (record.files || []).map((file) => `<button class="secondary-action table-action" data-shop-file="${record.id}" data-file-id="${file.id}" type="button">${escapeHtml(file.name)}<span class="es">Abrir original</span></button>`).join("");
+}
+
+function renderShopInspectionDashboard(records, summary) {
+  const totalRatings = summary.unsafe + summary.deficient + summary.ok;
+  const okPct = totalRatings ? Math.round((summary.ok / totalRatings) * 100) : 0;
+  const deficientPct = totalRatings ? Math.round((summary.deficient / totalRatings) * 100) : 0;
+  return `
+    <div class="metric-grid shop-kpi-grid">
+      <article class="metric"><span>Inspections<span class="es">Inspecciones</span></span><strong>${summary.inspections}</strong><small>Verified uploads / Cargas verificadas</small></article>
+      <article class="metric"><span>Condition score<span class="es">Puntuacion</span></span><strong>${summary.score}%</strong><small>Excludes N/A / Excluye N/A</small></article>
+      <article class="metric danger-metric"><span>Unsafe ratings<span class="es">Calificaciones inseguras</span></span><strong>${summary.unsafe}</strong><small>Items rated 0 / Puntos con 0</small></article>
+      <article class="metric"><span>Deficiencies<span class="es">Deficiencias</span></span><strong>${summary.deficient}</strong><small>Items rated 1 / Puntos con 1</small></article>
+      <article class="metric ${summary.openActions ? "danger-metric" : ""}"><span>Open actions<span class="es">Acciones abiertas</span></span><strong>${summary.openActions}</strong><small>Require follow-up / Requieren seguimiento</small></article>
+    </div>
+    <div class="shop-kpi-layout section-gap">
+      <section class="shop-kpi-visual">
+        <div class="shop-donut ${totalRatings ? "" : "empty"}" style="--shop-ok:${okPct};--shop-deficient:${deficientPct}"><span><strong>${summary.score}%</strong>score<small>puntuacion</small></span></div>
+        <div class="shop-kpi-legend"><span><i class="ok"></i>${summary.ok} OK / Sin defectos</span><span><i class="deficient"></i>${summary.deficient} Deficient / Deficiente</span><span><i class="unsafe"></i>${summary.unsafe} Unsafe / Inseguro</span></div>
+      </section>
+      <section class="table-wrap">
+        <table><thead><tr><th>Inspection type<span class="es">Tipo</span></th><th>Completed<span class="es">Completadas</span></th><th>Score<span class="es">Puntuacion</span></th></tr></thead><tbody>
+          ${summary.byTemplate.length ? summary.byTemplate.map((entry) => `<tr><td>${escapeHtml(entry.label)}</td><td>${entry.count}</td><td><strong>${entry.score}%</strong></td></tr>`).join("") : `<tr><td colspan="3">No verified inspections in this range.<span class="es">No hay inspecciones verificadas en este periodo.</span></td></tr>`}
+        </tbody></table>
+      </section>
+    </div>
+  `;
+}
+
+function renderShopInspectionHistory(records) {
+  return `
+    <div class="table-wrap section-gap">
+      <table class="shop-inspection-history"><thead><tr><th>Date<span class="es">Fecha</span></th><th>Inspection<span class="es">Inspeccion</span></th><th>Equipment<span class="es">Equipo</span></th><th>Inspector<span class="es">Inspector</span></th><th>Score<span class="es">Puntuacion</span></th><th>Action<span class="es">Accion</span></th><th>Record<span class="es">Registro</span></th></tr></thead><tbody>
+        ${records.length ? records.map((record) => {
+          const template = window.ShopInspections.templateById(record.templateId);
+          const metrics = window.ShopInspections.recordMetrics(record);
+          return `<tr>
+            <td><strong>${escapeHtml(record.date)}</strong><small>${escapeHtml(record.shift || "")}</small></td>
+            <td>${escapeHtml(template?.en || record.templateName || "Inspection")}<small>${escapeHtml(template?.es || "")}</small></td>
+            <td>${escapeHtml(record.equipmentId || "Not entered")}</td>
+            <td>${escapeHtml(record.operator || record.createdBy || "")}</td>
+            <td><strong>${metrics.score}%</strong><small>${metrics.unsafe} unsafe · ${metrics.deficient} deficient</small></td>
+            <td><select class="table-select" data-shop-action-status="${record.id}">${setOptions(shopInspectionActionStatuses, record.actionStatus || "Not required")}</select></td>
+            <td class="row-actions">${shopInspectionAttachmentButtons(record)}<button class="secondary-action table-action" data-print-shop-inspection="${record.id}" type="button">Print<span class="es">Imprimir</span></button><button class="danger-action table-action" data-delete-shop-inspection="${record.id}" type="button">Delete<span class="es">Borrar</span></button></td>
+          </tr>`;
+        }).join("") : `<tr><td colspan="7">No shop inspections saved yet.<span class="es">Todavia no hay inspecciones guardadas.</span></td></tr>`}
+      </tbody></table>
+    </div>
+  `;
+}
+
+function renderShopInspectionWorkspace() {
+  const templates = shopInspectionTemplates();
+  const selected = selectedShopInspectionTemplate();
+  const allAreaRecords = (state.shopInspections || []).filter((record) => record.area === state.selectedArea);
+  const summary = window.ShopInspections.dashboard(state.shopInspections || [], shopInspectionFilters());
+  const records = summary.records.slice().sort((a, b) => `${b.date || ""}${b.createdIso || ""}`.localeCompare(`${a.date || ""}${a.createdIso || ""}`));
+  const canManage = ["Admin", "Safety", "Quality"].includes(state.selectedRole);
+  return `
+    <section class="shop-inspection-workspace">
+      <div class="split">
+        <div><h2>${t("Shop Inspection KPIs", "Indicadores de inspecciones del taller")}</h2><p class="sub">Upload completed paper forms, verify every marked circle, and track equipment condition and corrective actions by department.</p><p class="sub es">Suba formularios completados, verifique cada circulo y controle la condicion del equipo y las acciones correctivas por departamento.</p></div>
+        <span class="tag">${escapeHtml(area().label)}</span>
+      </div>
+      <div class="form-grid section-gap shop-kpi-filters">
+        <label>From<span class="es">Desde</span><input id="shopInspectionFrom" type="date" value="${escapeHtml(state.shopInspectionFrom || "")}" /></label>
+        <label>Through<span class="es">Hasta</span><input id="shopInspectionTo" type="date" value="${escapeHtml(state.shopInspectionTo || "")}" /></label>
+        <label>Inspection type<span class="es">Tipo de inspeccion</span><select id="shopInspectionFilterTemplate"><option value="">All types / Todos</option>${templates.map((entry) => `<option value="${entry.id}" ${state.shopInspectionFilterTemplate === entry.id ? "selected" : ""}>${escapeHtml(entry.en)}</option>`).join("")}</select></label>
+        <div class="filter-action-row"><button class="secondary-action" id="exportShopInspectionCsv" type="button">Download CSV<span class="es">Descargar CSV</span></button><button class="secondary-action" id="printShopInspectionDashboard" type="button">Print / PDF<span class="es">Imprimir / PDF</span></button></div>
+      </div>
+      ${renderShopInspectionDashboard(records, summary)}
+      <details class="shop-inspection-entry section-gap" ${allAreaRecords.length ? "" : "open"}>
+        <summary><strong>Upload and verify inspection<span class="es">Subir y verificar inspeccion</span></strong></summary>
+        <div class="notice section-gap">CrewForge uses the file name to suggest a form. Confirm the form and every rating before saving; uncertain marks are never silently approved.<span class="es">CrewForge usa el nombre del archivo para sugerir un formulario. Confirme el formulario y cada calificacion antes de guardar.</span></div>
+        <div class="form-grid section-gap">
+          <label>Completed PDF or photo<span class="es">PDF o foto completada</span><input id="shopInspectionFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" ${canManage ? "" : "disabled"} /></label>
+          <label>Inspection template<span class="es">Plantilla</span><select id="shopInspectionTemplate" ${canManage ? "" : "disabled"}>${templates.map((entry) => `<option value="${entry.id}" ${selected?.id === entry.id ? "selected" : ""}>${escapeHtml(entry.en)} / ${escapeHtml(entry.es)}</option>`).join("")}</select></label>
+          <label>Operator / inspector<span class="es">Operador / inspector</span><input id="shopInspectionOperator" value="${escapeHtml(actorName())}" /></label>
+          <label>Phone<span class="es">Telefono</span><input id="shopInspectionPhone" inputmode="tel" /></label>
+          <label>Shift<span class="es">Turno</span><select id="shopInspectionShift">${setOptions(["Day", "Night"], "Day")}</select></label>
+          <label>Machine / station ID<span class="es">Numero de maquina / estacion</span><input id="shopInspectionEquipment" /></label>
+          <label>Inspection date<span class="es">Fecha</span><input id="shopInspectionDate" type="date" value="${localDateInputValue()}" /></label>
+          <label>Time<span class="es">Hora</span><input id="shopInspectionTime" type="time" value="${new Date().toTimeString().slice(0, 5)}" /></label>
+          <label>Supervisor review<span class="es">Revision del supervisor</span><input id="shopInspectionSupervisor" /></label>
+          <label>Supervisor review date<span class="es">Fecha de revision</span><input id="shopInspectionSupervisorDate" type="date" /></label>
+        </div>
+        <div class="shop-rating-toolbar section-gap"><strong id="shopInspectionFrequency">${escapeHtml(selected?.frequency || "")}</strong><span><button class="secondary-action table-action" id="shopMarkAllOk" type="button">Mark all 2 / Todos 2</button><button class="secondary-action table-action" id="shopMarkAllNa" type="button">Mark all N/A</button></span></div>
+        <div id="shopInspectionQuestionRows" class="shop-rating-grid">${renderShopInspectionQuestionRows(selected)}</div>
+        <div class="form-grid section-gap">
+          <label class="wide-field">Failure / deficiency description and item number<span class="es">Descripcion de falla o deficiencia y numero de punto</span><textarea id="shopInspectionFinding"></textarea></label>
+          <label class="wide-field">Corrective action taken<span class="es">Accion correctiva realizada</span><textarea id="shopInspectionAction"></textarea></label>
+          <label>Action status<span class="es">Estado de accion</span><select id="shopInspectionActionStatus">${setOptions(shopInspectionActionStatuses, "Not required")}</select></label>
+          <label class="wide-field">Additional notes<span class="es">Notas adicionales</span><textarea id="shopInspectionNotes"></textarea></label>
+        </div>
+        <button class="primary-action section-gap" id="saveShopInspection" type="button" ${canManage ? "" : "disabled"}>Save verified inspection<span class="es">Guardar inspeccion verificada</span></button>
+      </details>
+      <section class="section-gap"><h3>${t("Inspection history", "Historial de inspecciones")}</h3>${renderShopInspectionHistory(records)}</section>
+    </section>
+  `;
+}
+
+function renderAuditsWorkspaceTabs(content) {
+  const shopArea = shopInspectionAreas.includes(state.selectedArea);
+  if (!shopArea) return content;
+  const section = state.selectedAuditSection === "field" ? "field" : "shop";
+  const tabs = `<section class="panel audit-workspace-tab-panel"><div class="view-tabs audit-workspace-tabs"><button class="${section === "shop" ? "active" : ""}" data-audit-section="shop" type="button">Shop inspections<span class="es">Inspecciones del taller</span></button><button class="${section === "field" ? "active" : ""}" data-audit-section="field" type="button">Other audits<span class="es">Otras auditorias</span></button></div></section>`;
+  return `${tabs}${section === "shop" ? `<section class="panel">${renderShopInspectionWorkspace()}</section>` : content}`;
+}
+
 function availableFieldAuditTypes() {
   const types = [fieldAuditTypes.standard];
   if (state.selectedArea === "rebarInstall") types.push(fieldAuditTypes.reliableRebarGeneral);
@@ -8711,6 +8872,10 @@ function bindReliableAuditForm() {
 }
 
 function renderFieldAudits() {
+  return renderAuditsWorkspaceTabs(renderFieldAuditWorkspace());
+}
+
+function renderFieldAuditWorkspace() {
   const canSubmit = ["Admin", "Quality", "Safety"].includes(state.selectedRole);
   const { jobs, selectedJob } = selectedAreaJobsWithFallback(state.selectedAuditJob);
   const selectedType = activeFieldAuditType();
@@ -10159,6 +10324,14 @@ function bindTabEvents() {
       render();
     });
   }
+  document.querySelectorAll("[data-audit-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedAuditSection = button.dataset.auditSection;
+      saveState();
+      render();
+    });
+  });
+  bindShopInspectionEvents();
   bindSignaturePad("auditSignaturePad", "clearAuditSignature");
   bindReliableAuditForm();
   if ($("saveFieldAudit")) $("saveFieldAudit").addEventListener("click", saveFieldAuditRecord);
@@ -11994,6 +12167,177 @@ function bindAccidentBodySelector() {
     updateSummary();
   });
   updateSummary();
+}
+
+function setAllShopInspectionRatings(value) {
+  document.querySelectorAll(`[data-shop-rating][value="${value}"]`).forEach((input) => { input.checked = true; });
+}
+
+function updateShopInspectionTemplate(templateId) {
+  const template = window.ShopInspections?.templateById(templateId);
+  if (!template || !template.departments.includes(state.selectedArea)) return;
+  state.selectedShopInspectionTemplate = template.id;
+  if ($("shopInspectionTemplate")) $("shopInspectionTemplate").value = template.id;
+  if ($("shopInspectionQuestionRows")) $("shopInspectionQuestionRows").innerHTML = renderShopInspectionQuestionRows(template);
+  if ($("shopInspectionFrequency")) $("shopInspectionFrequency").textContent = template.frequency;
+  persistLocalState();
+}
+
+function handleShopInspectionFileSelection(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > MAX_DEMO_DOCUMENT_BYTES) {
+    showToast(`${file.name} is over the 25 MB limit`);
+    event.target.value = "";
+    return;
+  }
+  const inferred = window.ShopInspections?.inferTemplate(file.name, state.selectedArea);
+  if (inferred) updateShopInspectionTemplate(inferred);
+  const template = selectedShopInspectionTemplate();
+  showToast(`${template?.en || "Inspection form"} suggested. Verify every rating before saving.`);
+}
+
+function bindShopInspectionEvents() {
+  if ($("shopInspectionFrom")) $("shopInspectionFrom").addEventListener("change", (event) => { state.shopInspectionFrom = event.target.value; saveState(); render(); });
+  if ($("shopInspectionTo")) $("shopInspectionTo").addEventListener("change", (event) => { state.shopInspectionTo = event.target.value; saveState(); render(); });
+  if ($("shopInspectionFilterTemplate")) $("shopInspectionFilterTemplate").addEventListener("change", (event) => { state.shopInspectionFilterTemplate = event.target.value; saveState(); render(); });
+  if ($("shopInspectionTemplate")) $("shopInspectionTemplate").addEventListener("change", (event) => updateShopInspectionTemplate(event.target.value));
+  if ($("shopInspectionFile")) $("shopInspectionFile").addEventListener("change", handleShopInspectionFileSelection);
+  if ($("shopMarkAllOk")) $("shopMarkAllOk").addEventListener("click", () => setAllShopInspectionRatings("2"));
+  if ($("shopMarkAllNa")) $("shopMarkAllNa").addEventListener("click", () => setAllShopInspectionRatings("N/A"));
+  if ($("saveShopInspection")) $("saveShopInspection").addEventListener("click", saveShopInspectionRecord);
+  if ($("exportShopInspectionCsv")) $("exportShopInspectionCsv").addEventListener("click", exportShopInspectionCsv);
+  if ($("printShopInspectionDashboard")) $("printShopInspectionDashboard").addEventListener("click", printShopInspectionDashboard);
+  document.querySelectorAll("[data-shop-file]").forEach((button) => button.addEventListener("click", () => openRecordFile("shopInspections", button.dataset.shopFile, button.dataset.fileId)));
+  document.querySelectorAll("[data-print-shop-inspection]").forEach((button) => button.addEventListener("click", () => printShopInspectionRecord(button.dataset.printShopInspection)));
+  document.querySelectorAll("[data-delete-shop-inspection]").forEach((button) => button.addEventListener("click", () => deleteShopInspectionRecord(button.dataset.deleteShopInspection)));
+  document.querySelectorAll("[data-shop-action-status]").forEach((select) => select.addEventListener("change", () => updateShopInspectionActionStatus(select.dataset.shopActionStatus, select.value)));
+}
+
+async function saveShopInspectionRecord() {
+  if (!["Admin", "Safety", "Quality"].includes(state.selectedRole)) return showToast("Safety, Quality, or Admin access required");
+  const template = window.ShopInspections?.templateById($("shopInspectionTemplate")?.value);
+  if (!template || !template.departments.includes(state.selectedArea)) return showToast("Choose an inspection template");
+  const operator = $("shopInspectionOperator")?.value.trim() || "";
+  const equipmentId = $("shopInspectionEquipment")?.value.trim() || "";
+  const date = $("shopInspectionDate")?.value || "";
+  if (!operator || !equipmentId || !date) return showToast("Operator, equipment ID, and inspection date are required");
+  const selectedFile = $("shopInspectionFile")?.files?.[0];
+  if (!selectedFile) return showToast("Upload the completed PDF or photo before saving");
+  const ratings = {};
+  template.items.forEach((entry, index) => {
+    ratings[index] = document.querySelector(`[data-shop-rating="${index}"]:checked`)?.value || "N/A";
+  });
+  const values = Object.values(ratings);
+  if (!values.some((value) => value !== "N/A")) return showToast("Verify the marked circles; at least one applicable rating is required");
+  const correctiveActionRequired = values.some((value) => value === "0" || value === "1");
+  const finding = $("shopInspectionFinding")?.value.trim() || "";
+  const correctiveAction = $("shopInspectionAction")?.value.trim() || "";
+  if (correctiveActionRequired && (!finding || !correctiveAction)) return showToast("Every 0 or 1 requires a deficiency description and corrective action");
+  let actionStatus = $("shopInspectionActionStatus")?.value || "Not required";
+  if (correctiveActionRequired && actionStatus === "Not required") actionStatus = "Open";
+  if (!correctiveActionRequired) actionStatus = "Not required";
+  const files = await filesToStoredAttachments([selectedFile]);
+  if (!files) return;
+  const record = {
+    id: `shop-inspection-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    area: state.selectedArea,
+    templateId: template.id,
+    templateName: template.en,
+    operator,
+    phone: $("shopInspectionPhone")?.value.trim() || "",
+    shift: $("shopInspectionShift")?.value || "Day",
+    equipmentId,
+    date,
+    time: $("shopInspectionTime")?.value || "",
+    supervisor: $("shopInspectionSupervisor")?.value.trim() || "",
+    supervisorDate: $("shopInspectionSupervisorDate")?.value || "",
+    ratings,
+    finding,
+    correctiveAction,
+    correctiveActionRequired,
+    actionStatus,
+    notes: $("shopInspectionNotes")?.value.trim() || "",
+    files,
+    extractionStatus: "Human verified",
+    createdBy: actorName(),
+    createdRole: actorRole(),
+    createdAt: timestamp(),
+    createdIso: new Date().toISOString()
+  };
+  state.shopInspections.unshift(record);
+  logActivity("Shop inspection verified", { area: record.area, field: template.en, job: equipmentId, to: actionStatus });
+  saveState();
+  render();
+  showToast(`${template.en} saved and included in KPIs`);
+}
+
+function updateShopInspectionActionStatus(recordId, status) {
+  const record = state.shopInspections?.find((entry) => entry.id === recordId);
+  if (!record || !shopInspectionActionStatuses.includes(status)) return;
+  const previous = record.actionStatus;
+  record.actionStatus = status;
+  record.actionUpdatedAt = timestamp();
+  record.actionUpdatedBy = actorName();
+  logActivity("Shop inspection action updated", { area: record.area, field: record.equipmentId, from: previous, to: status });
+  saveState();
+  render();
+}
+
+function deleteShopInspectionRecord(recordId) {
+  const record = state.shopInspections?.find((entry) => entry.id === recordId);
+  if (!record || !confirm(`Delete the verified ${record.templateName || "inspection"} record for ${record.equipmentId}?`)) return;
+  state.shopInspections = state.shopInspections.filter((entry) => entry.id !== recordId);
+  logActivity("Shop inspection deleted", { area: record.area, field: record.templateName, job: record.equipmentId });
+  saveState();
+  render();
+  showToast("Inspection record deleted");
+}
+
+function shopInspectionFilteredRecords() {
+  return window.ShopInspections.dashboard(state.shopInspections || [], shopInspectionFilters()).records.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+function exportShopInspectionCsv() {
+  const records = shopInspectionFilteredRecords();
+  if (!records.length) return showToast("No inspections in the selected range");
+  const rows = [["Department", "Date", "Time", "Shift", "Inspection", "Equipment ID", "Operator", "Item #", "Inspection item", "Rating", "Finding", "Corrective action", "Action status", "Supervisor", "Verified by"]];
+  records.forEach((record) => {
+    const template = window.ShopInspections.templateById(record.templateId);
+    (template?.items || []).forEach((entry, index) => rows.push([areas[record.area]?.label || record.area, record.date, record.time, record.shift, template.en, record.equipmentId, record.operator, index + 1, entry.en, record.ratings?.[index] ?? "N/A", record.finding, record.correctiveAction, record.actionStatus, record.supervisor, record.createdBy]));
+  });
+  downloadFile(`CrewForge-${state.selectedArea}-shop-inspections-${localDateInputValue()}.csv`, rows.map((row) => row.map(csvCell).join(",")).join("\n"));
+}
+
+function shopInspectionPrintStyles() {
+  return `@page{size:letter portrait;margin:.45in}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:Arial,sans-serif;color:#101b2b;margin:0}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #b88618;padding-bottom:10px;margin-bottom:14px}header img{width:120px;max-height:55px;object-fit:contain}h1{margin:0;font-size:22px}h2{font-size:15px;margin:16px 0 7px}p,td,th{font-size:9px;line-height:1.3}.meta,.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.box{border:1px solid #98a2ab;padding:8px;min-height:42px}.box span{display:block;font-size:7px;text-transform:uppercase;color:#59636d}.box strong{font-size:14px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #aab2b9;padding:5px;text-align:left;vertical-align:top}th{background:#163651;color:white}tr:nth-child(even) td{background:#f2f4f5}.unsafe{color:#b42318;font-weight:bold}.deficient{color:#9a6700;font-weight:bold}.page-break{page-break-before:always}.sign{margin-top:24px;border-top:1px solid #111;padding-top:4px;width:45%}`;
+}
+
+function printShopInspectionRecord(recordId) {
+  const record = state.shopInspections?.find((entry) => entry.id === recordId);
+  const template = record && window.ShopInspections.templateById(record.templateId);
+  if (!record || !template) return;
+  const metrics = window.ShopInspections.recordMetrics(record);
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print this inspection");
+  const brand = currentCompanyPrintBrand();
+  const logo = new URL(brand.logo, window.location.href).href;
+  const rows = template.items.map((entry, index) => { const rating = record.ratings?.[index] ?? "N/A"; const cls = rating === "0" ? "unsafe" : rating === "1" ? "deficient" : ""; return `<tr><td>${index + 1}</td><td>${escapeHtml(entry.en)}<small style="display:block">${escapeHtml(entry.es)}</small></td><td class="${cls}">${escapeHtml(rating)}</td></tr>`; }).join("");
+  win.document.write(`<!doctype html><html><head><title>${escapeHtml(template.en)} - ${escapeHtml(record.equipmentId)}</title><style>${shopInspectionPrintStyles()}</style></head><body><header><div><h1>${escapeHtml(template.en)}</h1><p>${escapeHtml(template.es)} · ${escapeHtml(areas[record.area]?.label || "")}</p></div><img src="${escapeHtml(logo)}" alt="${escapeHtml(brand.name)} logo"></header><div class="meta"><div class="box"><span>Date / Fecha</span><strong>${escapeHtml(record.date)}</strong><br>${escapeHtml(record.time || "")}</div><div class="box"><span>Equipment / Equipo</span><strong>${escapeHtml(record.equipmentId)}</strong></div><div class="box"><span>Operator / Operador</span><strong>${escapeHtml(record.operator)}</strong></div><div class="box"><span>Shift / Turno</span><strong>${escapeHtml(record.shift)}</strong></div></div><div class="metrics"><div class="box"><span>Score / Puntuacion</span><strong>${metrics.score}%</strong></div><div class="box"><span>Unsafe / Inseguro</span><strong>${metrics.unsafe}</strong></div><div class="box"><span>Deficient / Deficiente</span><strong>${metrics.deficient}</strong></div><div class="box"><span>Action / Accion</span><strong>${escapeHtml(record.actionStatus)}</strong></div></div><table><thead><tr><th>#</th><th>Inspection item / Elemento</th><th>Rating / Calificacion</th></tr></thead><tbody>${rows}</tbody></table><h2>Finding / Hallazgo</h2><p>${escapeHtml(record.finding || "None / Ninguno")}</p><h2>Corrective action / Accion correctiva</h2><p>${escapeHtml(record.correctiveAction || "None / Ninguna")}</p><h2>Notes / Notas</h2><p>${escapeHtml(record.notes || "")}</p><div class="sign">Supervisor review / Revision: ${escapeHtml(record.supervisor || "")} · ${escapeHtml(record.supervisorDate || "")}</div><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),250));<\/script></body></html>`);
+  win.document.close();
+}
+
+function printShopInspectionDashboard() {
+  const records = shopInspectionFilteredRecords();
+  if (!records.length) return showToast("No inspections in the selected range");
+  const summary = window.ShopInspections.dashboard(records, { area: state.selectedArea });
+  const brand = currentCompanyPrintBrand();
+  const logo = new URL(brand.logo, window.location.href).href;
+  const win = window.open("", "_blank");
+  if (!win) return showToast("Allow popups to print the KPI report");
+  const recordRows = records.map((record) => { const template = window.ShopInspections.templateById(record.templateId); const metrics = window.ShopInspections.recordMetrics(record); return `<tr><td>${escapeHtml(record.date)}</td><td>${escapeHtml(template?.en || record.templateName)}</td><td>${escapeHtml(record.equipmentId)}</td><td>${escapeHtml(record.shift)}</td><td>${metrics.score}%</td><td>${metrics.unsafe}</td><td>${metrics.deficient}</td><td>${escapeHtml(record.actionStatus)}</td></tr>`; }).join("");
+  win.document.write(`<!doctype html><html><head><title>Shop Inspection KPI Report</title><style>${shopInspectionPrintStyles()}</style></head><body><header><div><h1>Shop Inspection KPI Report</h1><p>${escapeHtml(area().label)} · ${escapeHtml(state.shopInspectionFrom || "All dates")} through ${escapeHtml(state.shopInspectionTo || localDateInputValue())}</p></div><img src="${escapeHtml(logo)}" alt="${escapeHtml(brand.name)} logo"></header><div class="metrics"><div class="box"><span>Inspections</span><strong>${summary.inspections}</strong></div><div class="box"><span>Condition score</span><strong>${summary.score}%</strong></div><div class="box"><span>Unsafe ratings</span><strong>${summary.unsafe}</strong></div><div class="box"><span>Open actions</span><strong>${summary.openActions}</strong></div></div><table><thead><tr><th>Date</th><th>Inspection</th><th>Equipment</th><th>Shift</th><th>Score</th><th>0</th><th>1</th><th>Action</th></tr></thead><tbody>${recordRows}</tbody></table><p>Scores exclude N/A responses. Every uploaded form was verified by a CrewForge user before inclusion.</p><script>window.addEventListener("load",()=>setTimeout(()=>window.print(),250));<\/script></body></html>`);
+  win.document.close();
 }
 
 async function saveFieldAuditRecord() {
